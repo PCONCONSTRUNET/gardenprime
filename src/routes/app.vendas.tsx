@@ -502,27 +502,7 @@ function Vendas() {
 
             {/* Ações / Botões Movidos para o Topo */}
             <div className="flex flex-col gap-3 pt-6 border-t pb-2">
-              {/* Botão ASAAS */}
-              {selectedVenda?.cliente_id &&
-                selectedVenda?.status !== "Cancelado" &&
-                selectedVenda?.status !== "Pago" && (
-                  <Button
-                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700"
-                    onClick={async () => {
-                      const { data: cli } = await supabase
-                        .from("clientes")
-                        .select("id, nome, cpf_cnpj, email, telefone, asaas_customer_id")
-                        .eq("id", selectedVenda.cliente_id)
-                        .single();
-                      setAsaasCliente(cli);
-                      setOpenAsaas(true);
-                    }}
-                  >
-                    <Zap className="mr-2 h-4 w-4" />
-                    Cobrar via ASAAS
-                  </Button>
-                )}
-
+              {/* Botão ASAAS (Oculto a pedido) */}
               <div className="flex gap-3">
                 <Button
                   className="flex-1"
