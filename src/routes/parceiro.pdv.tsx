@@ -318,17 +318,18 @@ function ParceiroPDV() {
   };
 
   const updateQuantity = (id: string, delta: number) => {
-    setCart((prev) =>
-      prev.map((i) => {
+    setCart((prev) => {
+      const updated = prev.map((i) => {
         if (i.id === id) {
           const currentQ = typeof i.q === "number" ? i.q : 0;
           const newQ = currentQ + delta;
-          if (newQ <= 0) return i;
+          if (newQ <= 0) return null;
           return { ...i, q: newQ, t: newQ * i.u };
         }
         return i;
-      }),
-    );
+      });
+      return updated.filter((i) => i !== null) as typeof prev;
+    });
   };
 
   const setQuantity = (id: string, val: string) => {
@@ -875,7 +876,7 @@ function ParceiroPDV() {
                   <div className="flex items-center bg-emerald-700 rounded-lg overflow-hidden h-[30px] mb-2">
                     <button
                       onClick={() => {
-                        if (qtd === 0) return; // Se é 0 (input mostra 1), clicar - não deve fazer nada ou ir para 0? Ir para 0 não faz nada se já é 0
+                        if (qtd === 0) return;
                         updateQuantity(p.id, -1);
                       }}
                       className="w-7 h-full text-white flex items-center justify-center hover:bg-emerald-800"
