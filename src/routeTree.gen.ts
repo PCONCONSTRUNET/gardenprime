@@ -46,6 +46,7 @@ import { Route as AppDashboardRouteImport } from './routes/app.dashboard'
 import { Route as AppConfiguracoesRouteImport } from './routes/app.configuracoes'
 import { Route as AppComprasRouteImport } from './routes/app.compras'
 import { Route as AppCompraNovaRouteImport } from './routes/app.compra-nova'
+import { Route as AppCobrancasRouteImport } from './routes/app.cobrancas'
 import { Route as AppClientesRouteImport } from './routes/app.clientes'
 import { Route as AppClienteNovoRouteImport } from './routes/app.cliente-novo'
 import { Route as AppCatalogoRouteImport } from './routes/app.catalogo'
@@ -235,6 +236,11 @@ const AppCompraNovaRoute = AppCompraNovaRouteImport.update({
   path: '/compra-nova',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCobrancasRoute = AppCobrancasRouteImport.update({
+  id: '/cobrancas',
+  path: '/cobrancas',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppClientesRoute = AppClientesRouteImport.update({
   id: '/clientes',
   path: '/clientes',
@@ -259,6 +265,7 @@ export interface FileRoutesByFullPath {
   '/app/catalogo': typeof AppCatalogoRoute
   '/app/cliente-novo': typeof AppClienteNovoRoute
   '/app/clientes': typeof AppClientesRoute
+  '/app/cobrancas': typeof AppCobrancasRoute
   '/app/compra-nova': typeof AppCompraNovaRoute
   '/app/compras': typeof AppComprasRoute
   '/app/configuracoes': typeof AppConfiguracoesRoute
@@ -300,6 +307,7 @@ export interface FileRoutesByTo {
   '/app/catalogo': typeof AppCatalogoRoute
   '/app/cliente-novo': typeof AppClienteNovoRoute
   '/app/clientes': typeof AppClientesRoute
+  '/app/cobrancas': typeof AppCobrancasRoute
   '/app/compra-nova': typeof AppCompraNovaRoute
   '/app/compras': typeof AppComprasRoute
   '/app/configuracoes': typeof AppConfiguracoesRoute
@@ -343,6 +351,7 @@ export interface FileRoutesById {
   '/app/catalogo': typeof AppCatalogoRoute
   '/app/cliente-novo': typeof AppClienteNovoRoute
   '/app/clientes': typeof AppClientesRoute
+  '/app/cobrancas': typeof AppCobrancasRoute
   '/app/compra-nova': typeof AppCompraNovaRoute
   '/app/compras': typeof AppComprasRoute
   '/app/configuracoes': typeof AppConfiguracoesRoute
@@ -387,6 +396,7 @@ export interface FileRouteTypes {
     | '/app/catalogo'
     | '/app/cliente-novo'
     | '/app/clientes'
+    | '/app/cobrancas'
     | '/app/compra-nova'
     | '/app/compras'
     | '/app/configuracoes'
@@ -428,6 +438,7 @@ export interface FileRouteTypes {
     | '/app/catalogo'
     | '/app/cliente-novo'
     | '/app/clientes'
+    | '/app/cobrancas'
     | '/app/compra-nova'
     | '/app/compras'
     | '/app/configuracoes'
@@ -470,6 +481,7 @@ export interface FileRouteTypes {
     | '/app/catalogo'
     | '/app/cliente-novo'
     | '/app/clientes'
+    | '/app/cobrancas'
     | '/app/compra-nova'
     | '/app/compras'
     | '/app/configuracoes'
@@ -775,6 +787,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCompraNovaRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/cobrancas': {
+      id: '/app/cobrancas'
+      path: '/cobrancas'
+      fullPath: '/app/cobrancas'
+      preLoaderRoute: typeof AppCobrancasRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/clientes': {
       id: '/app/clientes'
       path: '/clientes'
@@ -803,6 +822,7 @@ interface AppRouteChildren {
   AppCatalogoRoute: typeof AppCatalogoRoute
   AppClienteNovoRoute: typeof AppClienteNovoRoute
   AppClientesRoute: typeof AppClientesRoute
+  AppCobrancasRoute: typeof AppCobrancasRoute
   AppCompraNovaRoute: typeof AppCompraNovaRoute
   AppComprasRoute: typeof AppComprasRoute
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
@@ -833,6 +853,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppCatalogoRoute: AppCatalogoRoute,
   AppClienteNovoRoute: AppClienteNovoRoute,
   AppClientesRoute: AppClientesRoute,
+  AppCobrancasRoute: AppCobrancasRoute,
   AppCompraNovaRoute: AppCompraNovaRoute,
   AppComprasRoute: AppComprasRoute,
   AppConfiguracoesRoute: AppConfiguracoesRoute,

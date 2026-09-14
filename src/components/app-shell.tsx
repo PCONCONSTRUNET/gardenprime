@@ -30,6 +30,7 @@ import {
   PlusCircle,
   CheckCheck,
   TrendingUp,
+  Zap,
 } from "lucide-react";
 import { GardenPrimeLogo } from "./garden-prime-logo";
 import { cn } from "@/lib/utils";
@@ -78,6 +79,7 @@ const NAV = [
     group: "Gestão",
     items: [
       { to: "/app/financeiro", label: "Financeiro", icon: Wallet },
+      // { to: "/app/cobrancas", label: "Cobranças ASAAS", icon: Zap },
       { to: "/app/logistica", label: "Logística", icon: Map },
       { to: "/app/fiscal", label: "Fiscal", icon: Receipt },
       { to: "/app/relatorios", label: "Relatórios", icon: BarChart3 },

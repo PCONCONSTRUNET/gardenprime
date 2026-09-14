@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Wallet, TrendingUp, TrendingDown, PiggyBank, Check, Plus, Trash2 } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, PiggyBank, Check, Plus, Trash2, Zap } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -26,6 +26,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/contexts/ConfirmContext";
+import { AsaasCobrancaModal } from "@/components/asaas-cobranca-modal";
 import {
   Dialog,
   DialogContent,
@@ -69,6 +70,16 @@ function Financeiro() {
     from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
     to: new Date(),
   });
+
+  // ASAAS Modal
+  const [openAsaas, setOpenAsaas] = useState(false);
+  const [asaasTarget, setAsaasTarget] = useState<{
+    cliente: any;
+    valor: number;
+    descricao: string;
+    vencimento: string;
+    conta_receber_id: string;
+  } | null>(null);
 
   const fetchFinanceiro = async () => {
     try {
@@ -495,6 +506,38 @@ function Financeiro() {
                   </TableCell>
                   <TableCell className="text-center">
                     <div className="flex items-center justify-center gap-2">
+                      {r.status === "Pendente" && r.tipo === "receber" && (
+                        <Button
+                          onClick={async () => {
+                            // Buscar cliente vinculado se existir
+                            let cli = null;
+                            if (r.cliente_id) {
+                              const { data } = await supabase
+                                .from("clientes")
+                                .select("id, nome, cpf_cnpj, email, telefone, asaas_customer_id")
+                                .eq("id", r.cliente_id)
+                                .single();
+                              cli = data;
+                            }
+                            setAsaasTarget({
+                              cliente: cli || { id: "avulso", nome: r.descricao },
+                              valor: Number(r.valor),
+                              descricao: r.descricao,
+                              vencimento: r.vencimento
+                                ? r.vencimento.split("T")[0]
+                                : new Date().toISOString().split("T")[0],
+                              conta_receber_id: r.id,
+                            });
+                            setOpenAsaas(true);
+                          }}
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8 text-blue-600 border-blue-200 hover:bg-blue-50"
+                          title="Cobrar via ASAAS"
+                        >
+                          <Zap className="h-4 w-4" />
+                        </Button>
+                      )}
                       {r.status === "Pendente" && (
                         <Button
                           onClick={() => handleBaixa(r.id, r.tipo)}
@@ -594,6 +637,20 @@ function Financeiro() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal ASAAS */}
+      {openAsaas && asaasTarget && (
+        <AsaasCobrancaModal
+          open={openAsaas}
+          onClose={() => { setOpenAsaas(false); setAsaasTarget(null); }}
+          cliente={asaasTarget.cliente}
+          valor={asaasTarget.valor}
+          descricao={asaasTarget.descricao}
+          vencimentoSugerido={asaasTarget.vencimento}
+          conta_receber_id={asaasTarget.conta_receber_id}
+          onSuccess={() => fetchFinanceiro()}
+        />
+      )}
     </>
   );
 }

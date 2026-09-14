@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Plus,
   Minus,
+  X,
   ArrowRight,
   ChevronRight,
   FileText,
@@ -87,7 +88,7 @@ function ParceiroPDV() {
       localStorage.setItem("pdv_client_parceiro", JSON.stringify(clientForm));
     }
   }, [clientForm]);
-  const [vendedorInfo, setVendedorInfo] = useState<{ id: string; nome: string } | null>(null);
+  const [vendedorInfo, setVendedorInfo] = useState<{ id: string; nome: string; tipo_comissao?: string; valor_comissao?: number } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [davGeradoId, setDavGeradoId] = useState<string | null>(null);
   const [davGeradoNumero, setDavGeradoNumero] = useState<string | number | null>(null);
@@ -125,7 +126,7 @@ function ParceiroPDV() {
         if (session) {
           const { data: vData, error } = await supabase
             .from("vendedores")
-            .select("id, status, nome, acrescimo_catalogo, acrescimo_catalogo_percentual")
+            .select("id, status, nome, acrescimo_catalogo, acrescimo_catalogo_percentual, tipo_comissao, valor_comissao")
             .eq("user_id", session.user.id)
             .maybeSingle();
 
@@ -139,7 +140,7 @@ function ParceiroPDV() {
 
           if (vData) {
             vendedorId = vData.id;
-            setVendedorInfo({ id: vData.id, nome: vData.nome });
+            setVendedorInfo({ id: vData.id, nome: vData.nome, tipo_comissao: vData.tipo_comissao, valor_comissao: vData.valor_comissao });
             aplicaAcrescimo = vData.acrescimo_catalogo;
             if (
               vData.acrescimo_catalogo_percentual !== null &&
@@ -864,154 +865,90 @@ function ParceiroPDV() {
         </div>
       </div>
 
-      {/* Fixed Bottom Bar */}
-      <div className="fixed bottom-0 left-0 right-0 md:left-64 bg-white border-t p-3 sm:p-4 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] z-40 flex items-center justify-between gap-3">
-        <Sheet>
-          <SheetTrigger asChild>
-            <button className="flex items-center gap-3 active:scale-95 transition-transform text-left">
-              <div className="relative">
-                <ShoppingCart className="w-7 h-7 text-brand" />
-                {cart.length > 0 && (
-                  <span className="absolute -top-1 -right-1.5 bg-rose-500 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full border-2 border-white">
-                    {cart.length}
-                  </span>
-                )}
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-800">{cart.length} itens</p>
-                <p className="text-[10px] text-muted-foreground flex items-center font-semibold">
-                  Ver carrinho <ChevronRight className="w-3 h-3 ml-0.5 -rotate-90" />
-                </p>
-              </div>
-            </button>
-          </SheetTrigger>
-          <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl p-0 flex flex-col">
-            <SheetHeader className="p-4 border-b text-left">
-              <div className="flex justify-between items-center">
-                <SheetTitle className="flex items-center gap-2 text-lg">
-                  <ShoppingCart className="w-5 h-5" /> Seu Carrinho
-                </SheetTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setCart([])}
-                  className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 h-8 text-xs"
-                >
-                  Esvaziar
-                </Button>
-              </div>
-            </SheetHeader>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {cart.length === 0 ? (
-                <div className="text-center py-10 text-muted-foreground text-sm">
-                  Seu carrinho está vazio.
-                </div>
-              ) : (
-                cart.map((i) => (
-                  <div
-                    key={i.id}
-                    className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100"
-                  >
-                    <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-white shadow-sm text-2xl">
-                      {i.imagem ? (
-                        <img src={i.imagem} alt={i.p} className="h-full w-full object-cover" />
-                      ) : (
-                        <span className="opacity-50">{i.emoji || "🪴"}</span>
-                      )}
+      {/* Resumo Flutuante (Floating Summary) */}
+      <div className="fixed bottom-[80px] lg:bottom-10 left-0 right-0 px-4 z-40 pointer-events-none pb-safe max-w-4xl lg:max-w-md mx-auto w-full">
+        <div className="pointer-events-auto">
+          {cart.length > 0 && (
+            <div className="animate-in slide-in-from-bottom-5 fade-in duration-300">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <div className="bg-white/85 backdrop-blur-xl rounded-[32px] shadow-2xl border border-white/60 p-3 pl-6 pr-3 flex items-center justify-between cursor-pointer ring-1 ring-black/5">
+                    <div>
+                      <p className="font-bold text-sm text-slate-800">Resumo do Pedido</p>
+                      <p className="text-xs text-slate-600 mt-0.5">
+                        {cart.length} itens | Total <span className="font-bold text-slate-900">R$ {subtotal.toFixed(2).replace(".", ",")}</span>
+                      </p>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-1">
-                        <p className="text-xs font-bold text-slate-800 leading-tight mb-1 truncate">
-                          {i.p}
-                        </p>
+                    <button className="bg-[#12794C] text-white px-6 py-3 rounded-full font-bold text-sm flex items-center gap-1 shadow-md active:scale-95 transition-transform pointer-events-none">
+                      Finalizar <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </SheetTrigger>
+                <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl p-0 flex flex-col pointer-events-auto">
+                  <SheetHeader className="p-4 border-b text-left">
+                    <div className="flex justify-between items-center">
+                      <SheetTitle className="flex items-center gap-2 text-lg">
+                        <ShoppingCart className="w-5 h-5" /> Seu Carrinho
+                      </SheetTitle>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setCart([])}
+                        className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 h-8 text-xs"
+                      >
+                        Esvaziar
+                      </Button>
+                    </div>
+                  </SheetHeader>
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                    {cart.map((i) => (
+                      <div key={i.id} className="flex gap-3 bg-white p-3 rounded-2xl border border-slate-100 shadow-sm relative">
                         <button
                           onClick={() => removeFromCart(i.id)}
-                          className="text-slate-400 hover:text-rose-500 transition-colors p-0.5"
-                          title="Remover item"
+                          className="absolute -top-2 -right-2 w-6 h-6 bg-white border shadow-sm rounded-full flex items-center justify-center text-rose-500 hover:bg-rose-50 z-10"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <X className="w-3 h-3" />
                         </button>
+                        <div className="w-16 h-16 bg-slate-50 rounded-xl flex items-center justify-center text-2xl shrink-0 overflow-hidden">
+                          {i.imagem ? <img src={i.imagem} alt={i.p} className="w-full h-full object-cover" /> : i.emoji}
+                        </div>
+                        <div className="flex-1 flex flex-col justify-between py-0.5">
+                          <div>
+                            <p className="text-xs font-bold text-slate-800 leading-tight line-clamp-2">{i.p}</p>
+                            <p className="text-[10px] text-slate-500 mt-1">R$ {i.u.toFixed(2).replace(".", ",")} un</p>
+                          </div>
+                          <div className="flex items-center justify-between mt-2">
+                            <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
+                              <button onClick={() => updateQuantity(i.id, -1)} className="w-6 h-6 flex items-center justify-center bg-white rounded-md shadow-sm"><Minus className="w-3 h-3" /></button>
+                              <span className="text-xs font-bold w-4 text-center">{i.q}</span>
+                              <button onClick={() => updateQuantity(i.id, 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded-md shadow-sm"><Plus className="w-3 h-3" /></button>
+                            </div>
+                            <p className="text-sm font-black text-slate-900">R$ {i.t.toFixed(2).replace(".", ",")}</p>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-muted-foreground line-through">
-                          R$ {Number(i.u).toFixed(2)}
-                        </span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={i.u}
-                          onChange={(e) => setUnitPrice(i.id, parseFloat(e.target.value) || 0)}
-                          className="w-14 bg-transparent border-b border-dashed border-slate-300 outline-none focus:border-brand p-0 text-xs font-bold text-brand [appearance:textfield]"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 shrink-0">
-                      <p className="text-xs font-extrabold text-slate-900">R$ {i.t.toFixed(2)}</p>
-                      <div className="flex items-center gap-1.5 bg-white border rounded-lg p-0.5">
-                        <button
-                          onClick={() => updateQuantity(i.id, -1)}
-                          className="w-5 h-5 flex items-center justify-center text-slate-600"
-                        >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <input
-                          type="number"
-                          min="0"
-                          className="w-8 text-center text-[10px] font-bold text-slate-800 bg-transparent outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          value={i.q}
-                          onChange={(e) => setQuantity(i.id, e.target.value)}
-                          onBlur={(e) => {
-                            if (e.target.value === "" || parseInt(e.target.value) <= 0)
-                              removeFromCart(i.id);
-                          }}
-                        />
-                        <button
-                          onClick={() => updateQuantity(i.id, 1)}
-                          className="w-5 h-5 flex items-center justify-center text-slate-600"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
+                    ))}
                   </div>
-                ))
-              )}
+                  <div className="p-4 border-t bg-slate-50 rounded-t-[32px] -mt-4 relative z-10 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
+                    <div className="flex justify-between items-center mb-4 px-2">
+                      <span className="text-sm font-semibold text-slate-600">Subtotal</span>
+                      <span className="font-bold text-lg text-slate-800">R$ {rawSubtotal.toFixed(2).replace(".", ",")}</span>
+                    </div>
+                    <Button
+                      onClick={() => {
+                        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+                        handleOpenClientModal();
+                      }}
+                      className="w-full h-14 bg-gradient-brand text-white font-bold text-base shadow-lg shadow-brand/25 rounded-2xl"
+                    >
+                      Avançar para Pagamento
+                    </Button>
+                  </div>
+                </SheetContent>
+              </Sheet>
             </div>
-            <div className="p-4 border-t bg-slate-50">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-semibold text-slate-600">Subtotal</span>
-                <span className="font-bold text-slate-800">R$ {rawSubtotal.toFixed(2)}</span>
-              </div>
-              <Button
-                onClick={() => {
-                  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-                  handleOpenClientModal();
-                }}
-                disabled={cart.length === 0}
-                className="w-full h-12 bg-gradient-brand text-white font-bold text-base shadow-lg shadow-brand/25"
-              >
-                Avançar para Pagamento
-              </Button>
-            </div>
-          </SheetContent>
-        </Sheet>
-
-        <div className="flex-1 flex flex-col items-center">
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-            Total
-          </span>
-          <span className="text-sm font-black text-emerald-600 font-display">
-            R$ {subtotal.toFixed(2).replace(".", ",")}
-          </span>
+          )}
         </div>
-
-        <Button
-          onClick={handleOpenClientModal}
-          disabled={cart.length === 0}
-          className="h-12 bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-4 sm:px-6 shadow-lg shadow-emerald-700/20 rounded-xl shrink-0 gap-2"
-        >
-          FINALIZAR PEDIDO <ArrowRight className="w-4 h-4" />
-        </Button>
       </div>
 
       {/* Modal de Sucesso */}

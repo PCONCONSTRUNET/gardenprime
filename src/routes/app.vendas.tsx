@@ -12,10 +12,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Calculator, Trash2, Check, X, Pencil, Search, Ban } from "lucide-react";
+import { Plus, Calculator, Trash2, Check, X, Pencil, Search, Ban, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useConfirm } from "@/contexts/ConfirmContext";
+import { AsaasCobrancaModal } from "@/components/asaas-cobranca-modal";
 import {
   Sheet,
   SheetContent,
@@ -50,6 +51,10 @@ function Vendas() {
 
   const [isEditingTotal, setIsEditingTotal] = useState(false);
   const [newTotalValue, setNewTotalValue] = useState("");
+
+  // ASAAS Modal
+  const [openAsaas, setOpenAsaas] = useState(false);
+  const [asaasCliente, setAsaasCliente] = useState<any>(null);
 
   const fetchVendas = async () => {
     try {
@@ -548,6 +553,28 @@ function Vendas() {
             </div>
 
             <div className="flex flex-col gap-3 pt-6 border-t">
+              {/* Botão ASAAS */}
+              {selectedVenda?.cliente_id &&
+                selectedVenda?.status !== "Cancelado" &&
+                selectedVenda?.status !== "Pago" && (
+                  <Button
+                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700"
+                    onClick={async () => {
+                      // Buscar cliente completo
+                      const { data: cli } = await supabase
+                        .from("clientes")
+                        .select("id, nome, cpf_cnpj, email, telefone, asaas_customer_id")
+                        .eq("id", selectedVenda.cliente_id)
+                        .single();
+                      setAsaasCliente(cli);
+                      setOpenAsaas(true);
+                    }}
+                  >
+                    <Zap className="mr-2 h-4 w-4" />
+                    Cobrar via ASAAS
+                  </Button>
+                )}
+
               <div className="flex gap-3">
                 <Button
                   className="flex-1"
@@ -621,6 +648,21 @@ function Vendas() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Modal ASAAS */}
+      {openAsaas && (
+        <AsaasCobrancaModal
+          open={openAsaas}
+          onClose={() => setOpenAsaas(false)}
+          cliente={asaasCliente}
+          valor={Number(selectedVenda?.valor_total || 0)}
+          descricao={`Venda #${selectedVenda?.numero_venda} — ${asaasCliente?.nome || ""}`}
+          vencimentoSugerido={new Date().toISOString().split("T")[0]}
+          metodoPagamentoSugerido={selectedVenda?.metodo_pagamento}
+          venda_id={selectedVenda?.id}
+          onSuccess={() => fetchVendas()}
+        />
+      )}
     </>
   );
 }

@@ -1,24 +1,27 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabaseParceiro as supabase } from "@/lib/supabase";
-import { Search, ShoppingCart, Package } from "lucide-react";
+import { ShoppingCart, PackageOpen, Search, X, Trash2, ArrowRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/parceiro/catalogo")({
-  head: () => ({ meta: [{ title: "Catálogo de Produtos — GARDEN PRIME" }] }),
-  component: ParceiroCatalogo,
+  head: () => ({ meta: [{ title: "Meus Carrinhos — GARDEN PRIME" }] }),
+  component: ParceiroCarrinhos,
 });
 
-function ParceiroCatalogo() {
+function ParceiroCarrinhos() {
   const navigate = useNavigate();
-  const [produtos, setProdutos] = useState<any[]>([]);
+  const [carrinhos, setCarrinhos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [addedId, setAddedId] = useState<string | null>(null);
+  const [selectedCarrinho, setSelectedCarrinho] = useState<any | null>(null);
+  const [carrinhoItens, setCarrinhoItens] = useState<any[]>([]);
+  const [loadingItens, setLoadingItens] = useState(false);
 
   useEffect(() => {
-    // Garante sessão ativa antes de buscar produtos (igual ao PDV)
-    const init = async () => {
+    const fetchCarrinhos = async () => {
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -28,91 +31,80 @@ function ParceiroCatalogo() {
         return;
       }
 
-      let aplicaAcrescimo = false;
-      let percentual = 20;
-      let vendedorId = null;
-      const { data: vData } = await supabase
+      const { data: vendedor } = await supabase
         .from("vendedores")
-        .select("id, acrescimo_catalogo, acrescimo_catalogo_percentual")
+        .select("id")
         .eq("user_id", session.user.id)
         .single();
 
-      if (vData) {
-        vendedorId = vData.id;
-        aplicaAcrescimo = vData.acrescimo_catalogo;
-        if (
-          vData.acrescimo_catalogo_percentual !== null &&
-          vData.acrescimo_catalogo_percentual !== undefined
-        ) {
-          percentual = Number(vData.acrescimo_catalogo_percentual);
-        }
-      }
+      if (vendedor) {
+        const { data, error } = await supabase
+          .from("vendas")
+          .select("*, clientes(nome)")
+          .eq("vendedor_id", vendedor.id)
+          .eq("tipo", "DAV")
+          .eq("status", "Rascunho")
+          .order("created_at", { ascending: false });
 
-      let customPricesMap: Record<string, number> = {};
-      if (vendedorId) {
-        const { data: precos } = await supabase
-          .from("parceiro_precos")
-          .select("produto_id, preco_personalizado")
-          .eq("vendedor_id", vendedorId);
-        if (precos) {
-          precos.forEach((p) => {
-            customPricesMap[p.produto_id] = Number(p.preco_personalizado);
-          });
-        }
-      }
-
-      // Mesma query usada no parceiro.pdv.tsx
-      const { data, error } = await supabase
-        .from("produtos")
-        .select("*")
-        .eq("status", "Ativo")
-        .order("nome");
-
-      if (error) console.error("[catalogo] erro ao buscar produtos:", error);
-      if (data) {
-        const multiplier = 1 + percentual / 100;
-        const produtosComPreco = data.map((prod: any) => {
-          let finalPrice = aplicaAcrescimo ? prod.valor * multiplier : prod.valor;
-          if (customPricesMap[prod.id] !== undefined) {
-            finalPrice = customPricesMap[prod.id];
-          }
-          return {
-            ...prod,
-            valor: finalPrice,
-          };
-        });
-        setProdutos(produtosComPreco);
+        if (data) setCarrinhos(data);
+        if (error) console.error("Erro ao buscar carrinhos:", error);
       }
       setLoading(false);
     };
-    init();
-  }, []);
+    fetchCarrinhos();
+  }, [navigate]);
 
-  const filtered = produtos.filter(
-    (p) =>
-      p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.codigo && p.codigo.toLowerCase().includes(searchTerm.toLowerCase())),
-  );
+  
+  useEffect(() => {
+    if (selectedCarrinho) {
+      setLoadingItens(true);
+      const fetchItens = async () => {
+        const { data, error } = await supabase
+          .from("vendas_itens")
+          .select("*, produtos(nome, imagem)")
+          .eq("venda_id", selectedCarrinho.id);
+        if (data) setCarrinhoItens(data);
+        setLoadingItens(false);
+      };
+      fetchItens();
+    } else {
+      setCarrinhoItens([]);
+    }
+  }, [selectedCarrinho]);
 
-  const handlePedir = (produto: any) => {
-    setAddedId(produto.id);
-    setTimeout(() => {
-      setAddedId(null);
-      // Passa o produto pela URL query — igual ao PDV espera
-      window.location.href = `/parceiro/pdv?produto=${produto.id}`;
-    }, 600);
+  const deleteCarrinho = async (id: string) => {
+    if (!window.confirm("Tem certeza que deseja excluir este carrinho salvo?")) return;
+
+    try {
+      await supabase.from("vendas_itens").delete().eq("venda_id", id);
+      const { error } = await supabase.from("vendas").delete().eq("id", id);
+      if (error) throw error;
+      setCarrinhos((prev) => prev.filter((c) => c.id !== id));
+    } catch (err: any) {
+      alert("Erro ao excluir carrinho: " + err.message);
+    }
   };
+
+  const continuarCarrinho = (id: string) => {
+    navigate({ to: "/parceiro/pdv", search: { draft_id: id } as any });
+  };
+
+  const filtered = carrinhos.filter((c) => {
+    if (!searchTerm) return true;
+    const nome = (c.clientes?.nome || "").toLowerCase();
+    return nome.includes(searchTerm.toLowerCase());
+  });
 
   return (
     <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
       {/* Page Title */}
       <div>
         <h1 className="text-2xl font-bold font-display text-slate-800 flex items-center gap-2">
-          <Package className="h-6 w-6 text-brand" />
-          Catálogo de Produtos
+          <ShoppingCart className="h-6 w-6 text-brand" />
+          Meus Carrinhos
         </h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Toque em um produto para iniciar um pedido.
+          Rascunhos e orçamentos salvos para finalizar depois.
         </p>
       </div>
 
@@ -120,122 +112,195 @@ function ParceiroCatalogo() {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Buscar por nome ou código…"
+          placeholder="Buscar por cliente…"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="h-12 pl-10 rounded-xl bg-white shadow-sm border-0 ring-1 ring-slate-900/5"
+          className="h-12 pl-10 pr-10 rounded-xl bg-white shadow-sm border-0 ring-1 ring-slate-900/5"
         />
+        {searchTerm && (
+          <button
+            onClick={() => setSearchTerm("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
-      {/* Count badge */}
-      {!loading && (
-        <p className="text-xs text-muted-foreground font-medium">
-          {filtered.length} produto{filtered.length !== 1 ? "s" : ""}
-        </p>
-      )}
-
-      {/* Loading skeleton */}
       {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
+        <div className="grid gap-3">
+          {Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
-              className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-900/5 overflow-hidden animate-pulse"
+              className="bg-white rounded-2xl p-4 shadow-sm ring-1 ring-slate-900/5 h-28 animate-pulse"
             >
-              <div className="bg-slate-100 aspect-square" />
-              <div className="p-3 space-y-2">
-                <div className="h-3 bg-slate-100 rounded w-3/4" />
-                <div className="h-4 bg-slate-100 rounded w-1/2" />
-                <div className="h-9 bg-slate-100 rounded-xl w-full mt-2" />
+              <div className="h-4 bg-slate-100 rounded w-1/2 mb-2" />
+              <div className="h-3 bg-slate-100 rounded w-1/4 mb-4" />
+              <div className="flex justify-between mt-auto">
+                <div className="h-6 bg-slate-100 rounded w-1/3" />
+                <div className="h-8 bg-slate-100 rounded-xl w-1/4" />
               </div>
             </div>
           ))}
         </div>
-      ) : filtered.length === 0 ? (
-        /* Empty state */
+      ) : carrinhos.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
           <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center text-3xl">
-            {searchTerm ? "🔍" : "📦"}
+            🛒
           </div>
-          <p className="font-semibold text-slate-700">
-            {searchTerm ? "Nenhum produto encontrado" : "Nenhum produto cadastrado"}
+          <p className="font-semibold text-slate-700">Nenhum carrinho salvo</p>
+          <p className="text-sm text-muted-foreground max-w-[250px]">
+            Inicie uma nova venda no PDV e clique em "Salvar Carrinho" para continuar depois.
           </p>
-          <p className="text-sm text-muted-foreground">
-            {searchTerm
-              ? "Tente buscar por outro nome ou código."
-              : "Os produtos serão exibidos aqui quando cadastrados no sistema."}
-          </p>
+          <button
+            onClick={() => navigate({ to: "/parceiro/pdv" })}
+            className="mt-4 px-6 py-2.5 bg-gradient-brand text-white font-bold rounded-xl shadow-sm active:scale-95 transition-transform"
+          >
+            Nova Venda
+          </button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+          <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center text-3xl">
+            🔍
+          </div>
+          <p className="font-semibold text-slate-700">Nenhum resultado</p>
+          <p className="text-sm text-muted-foreground">Tente buscar por outro nome de cliente.</p>
         </div>
       ) : (
-        /* Product Grid */
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {filtered.map((p) => (
+        <div className="grid gap-3">
+          {filtered.map((c) => (
             <div
-              key={p.id}
-              className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-900/5 overflow-hidden flex flex-col"
+              key={c.id}
+              className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col gap-3 cursor-pointer hover:border-[#12794C]/30 transition-colors"
+              onClick={() => setSelectedCarrinho(c)}
             >
-              {/* Imagem */}
-              <div className="aspect-square bg-slate-50 relative overflow-hidden">
-                {p.imagem ? (
-                  <img
-                    src={p.imagem}
-                    alt={p.nome}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-5xl select-none">
-                    {p.emoji || "🪴"}
-                  </div>
-                )}
-                {/* Código badge */}
-                {p.codigo && (
-                  <span className="absolute top-2 left-2 bg-black/50 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md backdrop-blur-sm">
-                    {p.codigo}
-                  </span>
-                )}
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-sm font-bold text-slate-800 leading-tight">
+                    {c.clientes?.nome || "Cliente não informado"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {new Date(c.created_at).toLocaleDateString("pt-BR")} às{" "}
+                    {new Date(c.created_at).toLocaleTimeString("pt-BR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); deleteCarrinho(c.id); }}
+                  className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                  title="Excluir Carrinho"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
 
-              {/* Info */}
-              <div className="p-3 flex flex-col flex-1 gap-1.5">
-                {/* Nome — somente leitura, não editável */}
-                <p className="text-sm font-semibold text-slate-800 leading-tight line-clamp-2 select-none">
-                  {p.nome}
-                </p>
+              <div className="border-t border-dashed border-slate-200"></div>
 
-                {p.descricao && (
-                  <p className="text-[11px] text-muted-foreground line-clamp-2 leading-snug select-none">
-                    {p.descricao}
+              <div className="flex justify-between items-end">
+                <div>
+                  <p className="text-[10px] uppercase font-semibold text-muted-foreground">
+                    Valor Previsto
                   </p>
-                )}
-
-                {/* Preço */}
-                <p className="text-base font-extrabold text-brand mt-auto select-none">
-                  R$ {Number(p.valor).toFixed(2).replace(".", ",")}
-                </p>
-
-                {/* Botão Pedir */}
+                  <p className="font-black text-brand text-lg">
+                    R$ {Number(c.valor_total || 0).toFixed(2).replace(".", ",")}
+                  </p>
+                </div>
                 <button
-                  onClick={() => handlePedir(p)}
-                  disabled={addedId === p.id}
-                  className={`
-                    w-full flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-bold
-                    transition-all duration-200 active:scale-95 select-none
-                    ${
-                      addedId === p.id
-                        ? "bg-emerald-500 text-white opacity-90 scale-95"
-                        : "bg-gradient-brand text-primary-foreground hover:opacity-90"
-                    }
-                  `}
+                  onClick={(e) => { e.stopPropagation(); continuarCarrinho(c.id); }}
+                  className="h-10 px-4 bg-[#12794C] hover:bg-emerald-800 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors active:scale-95 shadow-sm"
                 >
-                  <ShoppingCart className="h-4 w-4" />
-                  {addedId === p.id ? "Abrindo…" : "Pedir"}
+                  Continuar <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Sheet para Pré-visualização do Carrinho */}
+      <Sheet open={!!selectedCarrinho} onOpenChange={(open) => !open && setSelectedCarrinho(null)}>
+        <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl p-0 flex flex-col z-[100]">
+          <SheetHeader className="p-4 border-b text-left shrink-0">
+            <div className="flex justify-between items-start">
+              <div>
+                <SheetTitle className="flex items-center gap-2 text-lg text-slate-800">
+                  <PackageOpen className="w-5 h-5 text-[#12794C]" /> Resumo do Carrinho
+                </SheetTitle>
+                {selectedCarrinho && (
+                  <p className="text-sm font-bold text-[#12794C] mt-1">
+                    {selectedCarrinho.clientes?.nome || "Cliente não informado"}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => setSelectedCarrinho(null)}
+                className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </SheetHeader>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {loadingItens ? (
+              <div className="flex flex-col items-center justify-center py-10 space-y-3">
+                <Loader2 className="w-8 h-8 animate-spin text-[#12794C]" />
+                <p className="text-sm text-slate-500">Carregando itens...</p>
+              </div>
+            ) : carrinhoItens.length === 0 ? (
+              <p className="text-center text-slate-500 py-10 text-sm">Nenhum item encontrado.</p>
+            ) : (
+              carrinhoItens.map((item) => (
+                <div key={item.id} className="flex gap-3 bg-white border rounded-xl p-3 shadow-sm">
+                  <div className="w-16 h-16 rounded-lg bg-slate-100 flex-shrink-0 overflow-hidden">
+                    {item.produtos?.imagem ? (
+                      <img src={item.produtos.imagem} alt={item.produtos.nome} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-2xl">🌱</div>
+                    )}
+                  </div>
+                  <div className="flex-1 flex flex-col justify-between">
+                    <p className="font-bold text-sm text-slate-800 leading-tight line-clamp-2">
+                      {item.produtos?.nome || "Produto desconhecido"}
+                    </p>
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                        {item.quantidade}x R$ {Number(item.valor_unitario).toFixed(2).replace(".", ",")}
+                      </span>
+                      <span className="font-black text-brand text-sm">
+                        R$ {Number(item.subtotal).toFixed(2).replace(".", ",")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {selectedCarrinho && (
+            <div className="p-4 bg-slate-50 border-t flex items-center justify-between shrink-0">
+              <div>
+                <p className="text-[10px] uppercase font-semibold text-muted-foreground">
+                  Total
+                </p>
+                <p className="font-black text-brand text-2xl leading-none">
+                  R$ {Number(selectedCarrinho.valor_total || 0).toFixed(2).replace(".", ",")}
+                </p>
+              </div>
+              <button
+                onClick={() => continuarCarrinho(selectedCarrinho.id)}
+                className="h-12 px-6 bg-[#12794C] hover:bg-emerald-800 text-white text-base font-bold rounded-xl shadow-md active:scale-95 transition-transform flex items-center gap-2"
+              >
+                Continuar Venda <ArrowRight className="w-5 h-5" />
+              </button>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
     </div>
   );
 }

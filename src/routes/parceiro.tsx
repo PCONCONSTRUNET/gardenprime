@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, redirect, Link, useRouterState } from "@tanstack/react-router";
 import { supabaseParceiro as supabase } from "@/lib/supabase";
 import { GardenPrimeLogo } from "@/components/garden-prime-logo";
-import { Home, Calculator, LogOut, Package, Menu, X, Wallet, ClipboardList } from "lucide-react";
+import { Home, Calculator, LogOut, Package, Menu, X, Wallet, ClipboardList, Grid, ShoppingCart, Plus, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 
@@ -74,7 +74,7 @@ const navItems = [
   { to: "/parceiro/pdv", icon: Calculator, label: "Nova Venda" },
   { to: "/parceiro/vendas", icon: ClipboardList, label: "Vendas" },
   { to: "/parceiro/pagamentos", icon: Wallet, label: "Pagamentos" },
-  { to: "/parceiro/catalogo", icon: Package, label: "Catálogo" },
+  { to: "/parceiro/catalogo", icon: ShoppingCart, label: "Meus Carrinhos" },
 ];
 
 function ParceiroLayout() {
@@ -185,25 +185,60 @@ function ParceiroLayout() {
       </div>
 
       {/* ── MAIN CONTENT ── */}
-      <div className="flex flex-col flex-1 min-w-0">
-        {/* Mobile Header com botão ☰ */}
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-white shadow-sm px-4 lg:hidden">
-          <button
-            onClick={() => setDrawerOpen(true)}
-            className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
-            aria-label="Abrir menu"
-          >
-            <Menu className="h-6 w-6" />
-          </button>
-          <GardenPrimeLogo horizontal size="small" />
-          {/* Spacer para centralizar o logo */}
-          <div className="w-10" />
-        </header>
+      <div className="flex flex-col flex-1 min-w-0 relative">
+        {/* Mobile Header com botão ☰ (Oculto na tela PDV para usar o cabeçalho customizado) */}
+        {pathname !== "/parceiro/pdv" && (
+          <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-white shadow-sm px-4 lg:hidden">
+            <button
+              onClick={() => setDrawerOpen(true)}
+              className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
+              aria-label="Abrir menu"
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+            <GardenPrimeLogo horizontal size="small" />
+            <div className="w-10" />
+          </header>
+        )}
 
         {/* Page content */}
-        <main className="flex-1 p-4 max-w-2xl w-full mx-auto lg:max-w-4xl lg:px-8 lg:py-8">
+        <main className={cn("flex-1 max-w-2xl w-full mx-auto lg:max-w-4xl", pathname !== "/parceiro/pdv" && "p-4 lg:px-8 lg:py-8")}>
           <Outlet />
         </main>
+
+        {/* ── BOTTOM NAVIGATION (Mobile) ── */}
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#0A4D2E] rounded-t-3xl text-white px-6 py-2 flex items-center justify-between z-40 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.15)]">
+          <Link to="/parceiro/dashboard" className="flex flex-col items-center gap-1 opacity-70 hover:opacity-100 [&.active]:opacity-100 transition-opacity">
+            <Grid className="w-6 h-6" />
+            <span className="text-[10px] font-medium">Dashboard</span>
+          </Link>
+          
+          <Link to="/parceiro/catalogo" className="flex flex-col items-center gap-1 opacity-70 hover:opacity-100 [&.active]:opacity-100 transition-opacity">
+            <ShoppingCart className="w-6 h-6" />
+            <span className="text-[10px] font-medium">Carrinho</span>
+          </Link>
+          
+          {/* Floating Action Button */}
+          <div className="relative -top-6 flex items-center justify-center">
+            <Link 
+              to="/parceiro/pdv"
+              className="bg-[#12794C] hover:bg-[#1a905d] text-white p-4 rounded-full shadow-lg border-[6px] border-slate-50 transition-transform active:scale-95"
+            >
+              <Plus className="w-8 h-8" />
+            </Link>
+            <span className="absolute -bottom-5 text-[10px] font-medium opacity-100 whitespace-nowrap">Nova Venda</span>
+          </div>
+
+          <Link to="/parceiro/vendas" className="flex flex-col items-center gap-1 opacity-70 hover:opacity-100 [&.active]:opacity-100 transition-opacity">
+            <ClipboardList className="w-6 h-6" />
+            <span className="text-[10px] font-medium">Pedidos</span>
+          </Link>
+
+          <button onClick={() => setDrawerOpen(true)} className="flex flex-col items-center gap-1 opacity-70 hover:opacity-100 transition-opacity">
+            <MoreHorizontal className="w-6 h-6" />
+            <span className="text-[10px] font-medium">Mais</span>
+          </button>
+        </div>
       </div>
     </div>
   );

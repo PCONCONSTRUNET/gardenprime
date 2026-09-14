@@ -137,6 +137,7 @@ function Dashboard() {
     mixCategorias: [] as any[],
     vendasVsCompras: [] as any[],
     vendasChartData: [] as any[],
+    topVendedores: [] as any[],
     alertas: {
       estoqueCritico: 8,
       pedidosAguardando: 3,
@@ -149,7 +150,7 @@ function Dashboard() {
     async function loadData() {
       const { data: vendasData } = await supabase
         .from("vendas")
-        .select("*, vendas_itens(*, produto:produtos(nome, categoria)), clientes(nome)")
+        .select("*, vendas_itens(*, produto:produtos(nome, categoria)), clientes(nome), vendedor:vendedores(nome)")
         .in("tipo", ["VENDA", "PDV", "Afiliado"])
         .or("status_aprovacao.neq.Pendente,status_aprovacao.is.null");
 
@@ -171,19 +172,34 @@ function Dashboard() {
         .from("contas_pagar")
         .select("valor, created_at")
         .eq("status", "Pago");
+        
+      const { data: alertasEstoqueCritico } = await supabase
+        .from("produtos")
+        .select("id")
+        .lte("estoque", 5); // Assumindo <= 5 como crítico, ajuste se necessário
 
       let fat = 0;
       let pedHoje = 0;
       let entPend = 0;
+      let pedAguardando = 0;
       let vendasValidasMes = 0;
       let entreguesMes = 0;
       let validVendasCount = 0;
 
-      const hojeStr = new Date().toISOString().split("T")[0];
-      const inicioMesAtual = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const hoje = new Date();
+      const hojeStr = hoje.toISOString().split("T")[0];
+      const inicioMesAtual = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
 
       const produtoQtds: Record<string, number> = {};
       const catValores: Record<string, number> = {};
+      const vendedoresMap: Record<string, { nome: string; val: number }> = {};
+      
+      const vendasPorDia: Record<string, { faturamento: number, pedidos: number }> = {};
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        vendasPorDia[d.toISOString().split("T")[0]] = { faturamento: 0, pedidos: 0 };
+      }
 
       vendasData?.forEach((v) => {
         const isValida =
@@ -191,10 +207,19 @@ function Dashboard() {
           v.status !== "Rejeitada" &&
           v.status_aprovacao !== "Rejeitada";
         const dataVenda = new Date(v.created_at);
+        const dataVendaStr = v.created_at.split("T")[0];
 
         if (isValida) {
+          const valorVenda = Number(v.valor_total || v.total || 0);
+          
+          // Agrupamento para gráfico de 7 dias
+          if (vendasPorDia[dataVendaStr] !== undefined) {
+             vendasPorDia[dataVendaStr].faturamento += valorVenda;
+             vendasPorDia[dataVendaStr].pedidos += 1;
+          }
+          
           if (dataVenda >= inicioMesAtual) {
-            fat += Number(v.valor_total || v.total || 0);
+            fat += valorVenda;
             validVendasCount++;
             vendasValidasMes++;
             if (v.status === "Entregue" || v.status === "Pago" || v.status === "Faturado") {
@@ -210,11 +235,29 @@ function Dashboard() {
               produtoQtds[pName] = (produtoQtds[pName] || 0) + q;
               catValores[pCat] = (catValores[pCat] || 0) + subt;
             });
+            
+            // Agrupamento de Vendedores
+            if (v.vendedor && v.vendedor.nome) {
+               const vNome = v.vendedor.nome;
+               if (!vendedoresMap[vNome]) vendedoresMap[vNome] = { nome: vNome, val: 0 };
+               vendedoresMap[vNome].val += valorVenda;
+            }
           }
         }
         if (v.created_at?.startsWith(hojeStr)) pedHoje++;
         if (v.status === "PENDENTE" || v.status === "Pendente" || v.status === "EM_ROTA") entPend++;
+        if (v.status_aprovacao === "Pendente") pedAguardando++;
       });
+      
+      const topVendedores = Object.values(vendedoresMap)
+        .sort((a, b) => b.val - a.val)
+        .slice(0, 4)
+        .map(v => ({
+           name: v.nome,
+           val: `R$ ${v.val.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+           pct: fat > 0 ? ((v.val / fat) * 100).toFixed(0) : 0,
+           max: fat
+        }));
 
       const ticketMedio = validVendasCount > 0 ? fat / validVendasCount : 0;
       const otif = vendasValidasMes > 0 ? (entreguesMes / vendasValidasMes) * 100 : 0;
@@ -235,32 +278,53 @@ function Dashboard() {
         .slice(0, 5);
 
       const COLORS = ["#166534", "#EAB308", "#92400E", "#22C55E", "#84CC16", "#64748B"];
+      
+      // Corrigindo mix de categorias para evitar falhas de precisão e garantindo no máximo 6 cores
+      const totalMix = Object.values(catValores).reduce((a, b) => a + b, 0);
       const mixCategorias = Object.entries(catValores)
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([name, value], idx) => ({ name, value, fill: COLORS[idx % COLORS.length] }));
+        .slice(0, 6)
+        .map(([name, value], idx) => ({ 
+           name, 
+           value: Number(((value / (totalMix || 1)) * 100).toFixed(1)), 
+           fill: COLORS[idx % COLORS.length] 
+        }));
 
-      // Vendas Chart Mock for demo (Last 7 days)
-      const vendasChartData: any[] = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        vendasChartData.push({
-          date: d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
-          Faturamento: Math.floor(Math.random() * 10000) + 5000,
-          Pedidos: Math.floor(Math.random() * 20) + 10,
-        });
-      }
+      // Vendas Chart (Last 7 days real data)
+      const vendasChartData = Object.entries(vendasPorDia).map(([dateStr, metrics]) => {
+         const parts = dateStr.split("-");
+         return {
+            date: `${parts[2]}/${parts[1]}`, // DD/MM
+            Faturamento: metrics.faturamento,
+            Pedidos: metrics.pedidos
+         }
+      });
 
-      const vendasVsCompras: any[] = [];
+      // Comparativo 6 meses
+      const vendasVsCompras = [];
       for (let i = 5; i >= 0; i--) {
         const d = new Date();
         d.setMonth(d.getMonth() - i);
-        const label = d.toLocaleString("pt-BR", { month: "short" });
+        d.setDate(1);
+        d.setHours(0,0,0,0);
+        
+        const nextM = new Date(d);
+        nextM.setMonth(nextM.getMonth() + 1);
+        
+        const recM = receitasData?.filter(r => {
+           const rDate = new Date(r.created_at);
+           return rDate >= d && rDate < nextM;
+        }).reduce((acc, curr) => acc + Number(curr.valor), 0) || 0;
+        
+        const despM = despesasData?.filter(r => {
+           const rDate = new Date(r.created_at);
+           return rDate >= d && rDate < nextM;
+        }).reduce((acc, curr) => acc + Number(curr.valor), 0) || 0;
+
         vendasVsCompras.push({
-          m: label,
-          Faturamento: Math.floor(Math.random() * 200000) + 100000,
-          Despesas: Math.floor(Math.random() * 150000) + 80000,
+          m: d.toLocaleString("pt-BR", { month: "short" }),
+          Faturamento: recM,
+          Despesas: despM,
         });
       }
 
@@ -272,38 +336,27 @@ function Dashboard() {
 
       setStats((prev) => ({
         ...prev,
-        faturamento: fat > 0 ? fat : 12450, // mock se 0 para manter visual do layout
-        pedidosHoje: pedHoje > 0 ? pedHoje : 32,
-        produtosEstoque: produtosCount || 824,
-        clientesAtivos: clientesCount || 80,
+        faturamento: fat,
+        pedidosHoje: pedHoje,
+        produtosEstoque: produtosCount || 0,
+        clientesAtivos: clientesCount || 0,
         entregasPendentes: entPend,
         recent: vendasRecentes,
-        ticketMedio: ticketMedio > 0 ? ticketMedio : 389,
-        margemLiquida: margemLiquida > 0 ? margemLiquida : 24.8,
+        ticketMedio: ticketMedio,
+        margemLiquida: margemLiquida,
         otif,
-        maisVendidos:
-          maisVendidos.length > 0
-            ? maisVendidos
-            : [
-                { name: "Vaso Redondo 30cm", v: 246 },
-                { name: "Substrato 20Kg", v: 198 },
-                { name: "Pedra Seixo 10kg", v: 176 },
-                { name: "Vaso Quadrado 40cm", v: 142 },
-                { name: "Vaso Chácara 10L", v: 120 },
-              ],
-        mixCategorias:
-          mixCategorias.length > 0
-            ? mixCategorias
-            : [
-                { name: "Vasos", value: 42, fill: "#166534" },
-                { name: "Substratos", value: 18, fill: "#EAB308" },
-                { name: "Pedras", value: 12, fill: "#92400E" },
-                { name: "Acessórios", value: 10, fill: "#22C55E" },
-                { name: "Plantas", value: 8, fill: "#84CC16" },
-                { name: "Outros", value: 10, fill: "#64748B" },
-              ],
+        maisVendidos: maisVendidos,
+        mixCategorias: mixCategorias,
         vendasVsCompras,
         vendasChartData,
+        topVendedores: [] as any[],
+    alertas: {
+           estoqueCritico: alertasEstoqueCritico?.length || 0,
+           pedidosAguardando: pedAguardando,
+           entregasAtrasadas: 0, // Necessário lógica de atraso
+           contasVencidas: 0 // Necessário lógica de vencimento
+        },
+        topVendedores // Novo state property
       }));
     }
     loadData();
@@ -652,12 +705,7 @@ function Dashboard() {
                     <span className="flex-1">Vendedor</span>
                     <span>Valor em vendas</span>
                   </div>
-                  {[
-                    { name: "Carlos Souza", val: "R$ 4.820", pct: 26, max: 5000 },
-                    { name: "João Pereira", val: "R$ 3.950", pct: 21, max: 5000 },
-                    { name: "Marcos Silva", val: "R$ 3.210", pct: 17, max: 5000 },
-                    { name: "Lucas Santos", val: "R$ 2.870", pct: 15, max: 5000 },
-                  ].map((v, i) => (
+                  {stats.topVendedores?.map((v: any, i: number) => (
                     <div key={i} className="flex items-center gap-3">
                       <div className="h-8 w-8 rounded-full bg-secondary grid place-items-center text-xs font-medium text-muted-foreground shrink-0">
                         {v.name
@@ -727,24 +775,26 @@ function Dashboard() {
                 <div className="w-[120px] pl-4 flex flex-col justify-center space-y-4">
                   <div>
                     <p className="text-[10px] text-muted-foreground">
-                      Faturamento acumulado (2025)
+                      Faturamento (6 meses)
                     </p>
-                    <p className="text-sm font-bold">R$ 2.300.000</p>
+                    <p className="text-sm font-bold">R$ {stats.vendasVsCompras.reduce((acc, curr) => acc + curr.Faturamento, 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground">Média mensal</p>
-                    <p className="text-sm font-bold">R$ 383.333</p>
+                    <p className="text-sm font-bold">R$ {(stats.vendasVsCompras.reduce((acc, curr) => acc + curr.Faturamento, 0) / (stats.vendasVsCompras.length || 1)).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-muted-foreground">Impostos e Simples (média)</p>
-                    <p className="text-sm font-bold">R$ 3.000</p>
+                    <p className="text-[10px] text-muted-foreground">Impostos estimados (6%)</p>
+                    <p className="text-sm font-bold">R$ {((stats.vendasVsCompras.reduce((acc, curr) => acc + curr.Faturamento, 0) / (stats.vendasVsCompras.length || 1)) * 0.06).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Produção e Logística */}
+{/* Ocultado por falta de integração real - Produção e logística */}
+{/*
+          {/* Produção e Logística }
           <Card className="shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold">Produção e logística</CardTitle>
@@ -782,6 +832,7 @@ function Dashboard() {
               </div>
             </CardContent>
           </Card>
+*/}
         </div>
 
         {/* RIGHT COLUMN (span 1) */}
@@ -802,32 +853,26 @@ function Dashboard() {
                   {
                     icon: ShoppingCart,
                     text: "Pedidos aguardando aprovação",
-                    count: 4,
+                    count: stats.alertas.pedidosAguardando,
                     tone: "text-warning bg-warning/10",
                   },
                   {
                     icon: Truck,
                     text: "Entregas atrasadas",
-                    count: 3,
+                    count: stats.alertas.entregasAtrasadas,
                     tone: "text-destructive bg-destructive/10",
                   },
                   {
                     icon: AlertTriangle,
                     text: "Estoque crítico",
-                    count: 8,
+                    count: stats.alertas.estoqueCritico,
                     tone: "text-destructive bg-destructive/10",
                   },
                   {
                     icon: DollarSign,
                     text: "Contas vencidas",
-                    count: 6,
+                    count: stats.alertas.contasVencidas,
                     tone: "text-destructive bg-destructive/10",
-                  },
-                  {
-                    icon: Wallet,
-                    text: "Orçamentos próximos de vencer",
-                    count: 5,
-                    tone: "text-warning bg-warning/10",
                   },
                 ].map((item, idx) => (
                   <div

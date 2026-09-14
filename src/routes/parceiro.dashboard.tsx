@@ -42,6 +42,8 @@ function ParceiroDashboard() {
   const [vendedorId, setVendedorId] = useState<string | null>(null);
   const [nome, setNome] = useState("");
   const [status, setStatus] = useState("");
+  const [tipoComissao, setTipoComissao] = useState<string>("porcentagem");
+  const [valorComissao, setValorComissao] = useState<number>(0);
   const [vendas, setVendas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [sharingId, setSharingId] = useState<string | null>(null);
@@ -214,6 +216,10 @@ function ParceiroDashboard() {
               setVendedorId(retryData.id);
               setNome(retryData.nome);
               setStatus(retryData.status || "Aguardando Aprovação");
+              setTipoComissao(retryData.tipo_comissao || "porcentagem");
+              setValorComissao(Number(retryData.valor_comissao || 0));
+              setTipoComissao(retryData.tipo_comissao || "porcentagem");
+              setValorComissao(Number(retryData.valor_comissao || 0));
             } else {
               // Se falhou mesmo assim, vamos preencher o formulário manual com os metadados
               setNome(newNome);
@@ -467,7 +473,11 @@ function ParceiroDashboard() {
         <h1 className="text-2xl font-bold font-display text-slate-800">
           Olá, {nome.split(" ")[0]}! 👋
         </h1>
-        <p className="text-sm text-muted-foreground">Aqui está o resumo das suas vendas.</p>
+                <p className="text-sm text-muted-foreground mt-1">Aqui está o resumo das suas vendas.</p>
+        <div className="inline-flex items-center gap-1.5 mt-2 bg-brand/10 text-brand px-3 py-1.5 rounded-lg border border-brand/20">
+          <span className="text-xs font-semibold uppercase tracking-wider">Sua Comissão:</span>
+          <span className="text-sm font-black">{tipoComissao === 'porcentagem' ? `${valorComissao}%` : `R$ ${valorComissao.toFixed(2).replace('.', ',')}`}</span>
+        </div>
       </div>
 
       <div className="bg-brand/5 border border-brand/20 p-4 rounded-xl flex items-center justify-between gap-4">

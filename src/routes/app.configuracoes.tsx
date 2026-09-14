@@ -21,6 +21,8 @@ import {
   Loader2,
   Eye,
   EyeOff,
+  Zap,
+  Globe,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useConfirm } from "@/contexts/ConfirmContext";
@@ -47,6 +49,13 @@ function Configuracoes() {
   const [users, setUsers] = useState<any[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [loadingConfigs, setLoadingConfigs] = useState(true);
+
+  // ASAAS config
+  const [asaasKey, setAsaasKey] = useState("");
+  const [asaasAmbiente, setAsaasAmbiente] = useState<"sandbox" | "producao">("sandbox");
+  const [showAsaasKey, setShowAsaasKey] = useState(false);
+  const [savingAsaas, setSavingAsaas] = useState(false);
+  const [asaasTested, setAsaasTested] = useState<null | boolean>(null);
 
   const [novoUserNome, setNovoUserNome] = useState("");
   const [novoUserEmail, setNovoUserEmail] = useState("");
@@ -558,7 +567,7 @@ function FiscalTab() {
         </CardContent>
       </Card>
 
-      {/* Card de Documentos Suportados */}
+      {/* Card Documentos Suportados */}
       <Card className="shadow-card">
         <CardHeader>
           <CardTitle className="text-base">Documentos Suportados</CardTitle>
@@ -617,6 +626,160 @@ function FiscalTab() {
                 </div>
               </div>
             ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Card ASAAS */}
+      <Card className="shadow-card">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-lg bg-blue-600/10">
+              <Zap className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <CardTitle className="text-base">Integração ASAAS</CardTitle>
+              <CardDescription className="text-xs">
+                Gere cobranças via Boleto, PIX e Cartão de Crédito diretamente pelo ERP
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* Chave de API */}
+          <div className="space-y-2">
+            <Label htmlFor="asaas-key">Chave de API (access_token)</Label>
+            <div className="relative">
+              <Input
+                id="asaas-key"
+                type={showAsaasKey ? "text" : "password"}
+                placeholder="$aact_..."
+                value={asaasKey}
+                onChange={(e) => setAsaasKey(e.target.value)}
+                className="pr-10 font-mono text-xs"
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setShowAsaasKey((v) => !v)}
+              >
+                {showAsaasKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Obtenha sua chave em{" "}
+              <a
+                href="https://app.asaas.com/config/account/integracoes"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 underline underline-offset-2"
+              >
+                ASAAS → Configurações → Integrações
+              </a>.
+              A chave é armazenada como secret na Edge Function e nunca fica exposta no front.
+            </p>
+          </div>
+
+          {/* Ambiente */}
+          <div className="space-y-2">
+            <Label>Ambiente</Label>
+            <div className="grid grid-cols-2 gap-3">
+              {(["sandbox", "producao"] as const).map((env) => (
+                <button
+                  key={env}
+                  type="button"
+                  onClick={() => setAsaasAmbiente(env)}
+                  className={`flex items-center gap-2 rounded-lg border-2 p-3 text-sm transition-all ${
+                    asaasAmbiente === env
+                      ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                      : "border-border hover:border-muted-foreground/50"
+                  }`}
+                >
+                  <Globe className="h-4 w-4" />
+                  <span className="font-medium capitalize">{env === "sandbox" ? "Sandbox (Testes)" : "Produção"}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Status de teste */}
+          {asaasTested !== null && (
+            <div
+              className={`flex items-center gap-2 rounded-lg p-3 text-sm ${
+                asaasTested
+                  ? "bg-success/10 text-success"
+                  : "bg-destructive/10 text-destructive"
+              }`}
+            >
+              {asaasTested ? (
+                <CheckCircle2 className="h-4 w-4" />
+              ) : (
+                <XCircle className="h-4 w-4" />
+              )}
+              {asaasTested ? "Conexão com ASAAS confirmada!" : "Falha na conexão. Verifique a chave."}
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              disabled={savingAsaas || !asaasKey}
+              onClick={async () => {
+                setSavingAsaas(true);
+                try {
+                  // Testa buscando dados da conta
+                  const { data, error } = await supabase.functions.invoke("asaas-proxy", {
+                    body: JSON.stringify({}),
+                    headers: {
+                      "asaas-target-path": "/v3/myAccount",
+                      "asaas-environment": asaasAmbiente,
+                    },
+                  });
+                  setAsaasTested(!error && !data?.errors?.length);
+                } catch {
+                  setAsaasTested(false);
+                } finally {
+                  setSavingAsaas(false);
+                }
+              }}
+            >
+              {savingAsaas ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Testar Conexão
+            </Button>
+
+            <Button
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={savingAsaas || !asaasKey}
+              onClick={async () => {
+                setSavingAsaas(true);
+                try {
+                  // Salva o ambiente nas configuracoes da tabela
+                  await supabase.from("configuracoes").upsert([
+                    { chave: "asaas_ambiente", valor: asaasAmbiente },
+                  ], { onConflict: "chave" });
+                  alert(
+                    "Configurações salvas! Lembre-se de adicionar a chave ASAAS_API_KEY nos secrets da Edge Function no painel do Supabase."
+                  );
+                } catch (err: any) {
+                  alert("Erro ao salvar: " + err.message);
+                } finally {
+                  setSavingAsaas(false);
+                }
+              }}
+            >
+              <Zap className="mr-2 h-4 w-4" />
+              Salvar Configurações ASAAS
+            </Button>
+          </div>
+
+          <div className="rounded-lg bg-muted/50 p-4 text-xs text-muted-foreground space-y-1">
+            <p className="font-semibold text-foreground">Como configurar a chave:</p>
+            <ol className="list-decimal pl-4 space-y-1">
+              <li>Acesse o painel do Supabase → Edge Functions → asaas-proxy</li>
+              <li>Vá em <strong>Secrets</strong> e adicione <code className="bg-muted rounded px-1">ASAAS_API_KEY</code> com sua chave</li>
+              <li>Selecione o ambiente acima (Sandbox para testes, Produção para real)</li>
+              <li>Clique em <strong>Salvar Configurações</strong></li>
+            </ol>
           </div>
         </CardContent>
       </Card>
