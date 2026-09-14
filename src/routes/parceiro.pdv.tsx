@@ -102,6 +102,7 @@ function ParceiroPDV() {
   const [selectedCategory, setSelectedCategory] = useState("Todos");
   const [initError, setInitError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [pendingQty, setPendingQty] = useState<Record<string, string>>({});
 
   const dynamicCategories = Array.from(new Set(produtos.map((p) => p.categoria))).filter(
     Boolean,
@@ -887,24 +888,29 @@ function ParceiroPDV() {
                       type="number"
                       min="0"
                       className="w-full text-center text-sm font-bold text-slate-900 bg-white h-full outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      value={qtd === 0 ? 1 : qtd}
+                      value={qtd > 0 ? qtd : (pendingQty[p.id] ?? "1")}
                       onChange={(e) => {
                         const valStr = e.target.value;
-                        if (qtd === 0 && valStr !== "" && parseInt(valStr) > 0) {
-                          addToCart(p, parseInt(valStr));
-                        } else if (qtd > 0) {
+                        if (qtd > 0) {
                           setQuantity(p.id, valStr);
+                          if (valStr === "" || parseInt(valStr) <= 0) removeFromCart(p.id);
+                        } else {
+                          setPendingQty((prev) => ({ ...prev, [p.id]: valStr }));
                         }
                       }}
                       onBlur={(e) => {
-                        if (e.target.value === "" || parseInt(e.target.value) <= 0)
+                        if (qtd > 0 && (e.target.value === "" || parseInt(e.target.value) <= 0))
                           removeFromCart(p.id);
                       }}
                     />
                     <button
                       onClick={() => {
-                        if (qtd === 0) addToCart(p, 2); // se mostrava 1, clicou +, vai pra 2
-                        else updateQuantity(p.id, 1);
+                        if (qtd === 0) {
+                          const pending = parseInt(pendingQty[p.id] ?? "1");
+                          addToCart(p, isNaN(pending) || pending <= 0 ? 1 : pending + 1);
+                        } else {
+                          updateQuantity(p.id, 1);
+                        }
                       }}
                       className="w-7 h-full text-white flex items-center justify-center hover:bg-emerald-800"
                     >
@@ -913,7 +919,11 @@ function ParceiroPDV() {
                   </div>
                   <button
                     onClick={() => {
-                      if (qtd === 0) addToCart(p, 1);
+                      if (qtd === 0) {
+                        const pending = parseInt(pendingQty[p.id] ?? "1");
+                        addToCart(p, isNaN(pending) || pending <= 0 ? 1 : pending);
+                        setPendingQty((prev) => { const n = { ...prev }; delete n[p.id]; return n; });
+                      }
                     }}
                     className="bg-emerald-700 text-white text-[13px] font-bold w-full h-[30px] rounded-lg shadow-sm hover:bg-emerald-800 active:scale-95 transition-transform flex items-center justify-center"
                   >
