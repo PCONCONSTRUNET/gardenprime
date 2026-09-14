@@ -145,13 +145,16 @@ function ConfiguracoesPage() {
 
       toast.success("Foto de perfil atualizada com sucesso!");
       setPreviewUrl(publicUrl);
-    } catch (err: any) {
-      console.error("Erro ao enviar foto:", err);
-      toast.error("Erro ao enviar foto. Tente novamente.");
-      // Se não houver bucket, avisar
-      if (err?.message?.includes("Bucket not found") || err?.error === "Bucket not found" || err?.message?.includes("bucket")) {
-        toast.error("O bucket 'avatars' não existe no Supabase. Crie-o primeiro.");
+    } catch (error: any) {
+      console.error("Erro ao enviar foto:", error);
+      let errorMsg = error?.message || "Erro desconhecido";
+      if (errorMsg.includes("avatar_url")) {
+        errorMsg = "A coluna 'avatar_url' não existe na tabela vendedores.";
       }
+      if (errorMsg.includes("Bucket not found") || error?.error === "Bucket not found" || errorMsg.includes("bucket")) {
+        errorMsg = "O bucket 'avatars' não existe no Supabase. Crie-o primeiro.";
+      }
+      toast.error("Erro ao enviar foto: " + errorMsg);
     } finally {
       setUploading(false);
     }
