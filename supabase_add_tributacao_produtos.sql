@@ -1,0 +1,11 @@
+-- Adiciona novas colunas tributárias na tabela de produtos
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS cest TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS ipi_tipo_valor TEXT DEFAULT 'R$';
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS ipi_valor NUMERIC DEFAULT 0;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS ipi_cst TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS ipi_cenq TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS ipi_exc_fiscal TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS cst_nfe TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS csosn_nfe TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS cst_cfe TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS csosn_cfe TEXT;

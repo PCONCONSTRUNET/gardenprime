@@ -48,6 +48,16 @@ function NovoProduto() {
     comprimento: "",
     cores: [] as string[],
     ncm: "",
+    cest: "",
+    ipi_tipo_valor: "R$",
+    ipi_valor: 0,
+    ipi_cst: "",
+    ipi_cenq: "",
+    ipi_exc_fiscal: "",
+    cst_nfe: "",
+    csosn_nfe: "",
+    cst_cfe: "",
+    csosn_cfe: "",
   });
 
   const [categoriasDB, setCategoriasDB] = useState<string[]>([
@@ -104,6 +114,16 @@ function NovoProduto() {
               comprimento: data.comprimento || "",
               cores: data.cores || [],
               ncm: data.ncm || "",
+              cest: data.cest || "",
+              ipi_tipo_valor: data.ipi_tipo_valor || "R$",
+              ipi_valor: data.ipi_valor || 0,
+              ipi_cst: data.ipi_cst || "",
+              ipi_cenq: data.ipi_cenq || "",
+              ipi_exc_fiscal: data.ipi_exc_fiscal || "",
+              cst_nfe: data.cst_nfe || "",
+              csosn_nfe: data.csosn_nfe || "",
+              cst_cfe: data.cst_cfe || "",
+              csosn_cfe: data.csosn_cfe || "",
             });
           }
         } catch (err) {
@@ -255,6 +275,16 @@ function NovoProduto() {
         comprimento: produto.comprimento || null,
         cores: produto.cores,
         ncm: produto.ncm || null,
+        cest: produto.cest || null,
+        ipi_tipo_valor: produto.ipi_tipo_valor || "R$",
+        ipi_valor: produto.ipi_valor || 0,
+        ipi_cst: produto.ipi_cst || null,
+        ipi_cenq: produto.ipi_cenq || null,
+        ipi_exc_fiscal: produto.ipi_exc_fiscal || null,
+        cst_nfe: produto.cst_nfe || null,
+        csosn_nfe: produto.csosn_nfe || null,
+        cst_cfe: produto.cst_cfe || null,
+        csosn_cfe: produto.csosn_cfe || null,
       };
 
       if (isEditing) {
@@ -390,19 +420,7 @@ function NovoProduto() {
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label>NCM (Nomenclatura Comum do Mercosul)</Label>
-              <Input
-                value={produto.ncm}
-                onChange={(e) =>
-                  setProduto({ ...produto, ncm: e.target.value.replace(/\D/g, "").slice(0, 8) })
-                }
-                placeholder="Ex: 39269090 (8 dígitos)"
-              />
-              <p className="text-xs text-muted-foreground">
-                Obrigatório para emissão de NF-e. Consulte seu contador.
-              </p>
-            </div>
+            {/* NCM moved to Tributos section */}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -503,6 +521,131 @@ function NovoProduto() {
                 ))}
               </div>
             </div>
+          </div>
+
+          {/* Seção de Tributação */}
+          <div className="space-y-4 bg-muted/10 p-4 rounded-xl border border-border/60 mt-6">
+            <h3 className="font-semibold text-lg border-b pb-2 flex items-center gap-2">
+              ⚖️ Informações Tributárias
+            </h3>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>NCM (Nomenclatura Comum do Mercosul)</Label>
+                <Input
+                  value={produto.ncm}
+                  onChange={(e) =>
+                    setProduto({ ...produto, ncm: e.target.value.replace(/\D/g, "").slice(0, 8) })
+                  }
+                  placeholder="Ex: 39269090 (8 dígitos)"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>CEST</Label>
+                <Input
+                  value={produto.cest}
+                  onChange={(e) => setProduto({ ...produto, cest: e.target.value })}
+                  placeholder="Ex: 0100100"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4 border rounded-md p-4 bg-background">
+              <h4 className="font-medium text-sm text-primary">Situação Tributária - NFe (Contribuinte)</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>CST NFe</Label>
+                  <Input
+                    value={produto.cst_nfe}
+                    onChange={(e) => setProduto({ ...produto, cst_nfe: e.target.value })}
+                    placeholder="Ex: 090"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>CSOSN NFe</Label>
+                  <Input
+                    value={produto.csosn_nfe}
+                    onChange={(e) => setProduto({ ...produto, csosn_nfe: e.target.value })}
+                    placeholder="Ex: 101"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 border rounded-md p-4 bg-background">
+              <h4 className="font-medium text-sm text-primary">Situação Tributária - CFe e NFe (Não Contribuinte)</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>CST CFe</Label>
+                  <Input
+                    value={produto.cst_cfe}
+                    onChange={(e) => setProduto({ ...produto, cst_cfe: e.target.value })}
+                    placeholder="Ex: 090"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>CSOSN CFe</Label>
+                  <Input
+                    value={produto.csosn_cfe}
+                    onChange={(e) => setProduto({ ...produto, csosn_cfe: e.target.value })}
+                    placeholder="Ex: 102"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 border rounded-md p-4 bg-background">
+              <h4 className="font-medium text-sm text-primary">IPI</h4>
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                <div className="space-y-2">
+                  <Label>Tipo</Label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={produto.ipi_tipo_valor}
+                    onChange={(e) => setProduto({ ...produto, ipi_tipo_valor: e.target.value })}
+                  >
+                    <option value="R$">Valor (R$)</option>
+                    <option value="%">Percentual (%)</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Valor</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={produto.ipi_valor}
+                    onChange={(e) => setProduto({ ...produto, ipi_valor: Number(e.target.value) })}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>CST IPI</Label>
+                  <Input
+                    value={produto.ipi_cst}
+                    onChange={(e) => setProduto({ ...produto, ipi_cst: e.target.value })}
+                    placeholder="Ex: 99"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>CENQ</Label>
+                  <Input
+                    value={produto.ipi_cenq}
+                    onChange={(e) => setProduto({ ...produto, ipi_cenq: e.target.value })}
+                    placeholder="Ex: 001"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Exc. Fiscal</Label>
+                  <Input
+                    value={produto.ipi_exc_fiscal}
+                    onChange={(e) => setProduto({ ...produto, ipi_exc_fiscal: e.target.value })}
+                    placeholder=""
+                  />
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
 
