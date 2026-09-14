@@ -131,7 +131,7 @@ function ParceiroClientes() {
   // ─── FORM VIEW ───
   if (view === "new") {
     return (
-      <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
+      <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-28">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setView("list")}
@@ -236,7 +236,7 @@ function ParceiroClientes() {
 
   // ─── LIST VIEW ───
   return (
-    <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
+    <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-28">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold font-display text-slate-800 flex items-center gap-2">
