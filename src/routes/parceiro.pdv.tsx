@@ -416,8 +416,8 @@ function ParceiroPDV() {
     setIsClientModalOpen(true);
   };
 
-  const submitOrder = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitOrder = async (e: React.FormEvent, tipoVenda: "PDV" | "DAV" = "PDV") => {
+    if (e && e.preventDefault) e.preventDefault();
     if (loading) return;
 
     if (!clientForm.nome) {
@@ -495,7 +495,7 @@ function ParceiroPDV() {
         .from("vendas")
         .insert([
           {
-            tipo: "PDV",
+            tipo: tipoVenda,
             status_aprovacao: "Pendente",
             status: "Pendente",
             subtotal: rawSubtotal,
@@ -531,14 +531,16 @@ function ParceiroPDV() {
       setDavGeradoId(vendaData.id);
       setDavGeradoNumero(vendaData.numero_venda);
 
-      // 4. Dispara a notificação para o dono
-      await supabase.from("notificacoes").insert([
-        {
-          tipo: "venda",
-          titulo: `Novo pedido pendente`,
-          mensagem: `Um parceiro enviou um novo pedido (Cliente: ${clientForm.nome}) no valor de ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(subtotal)} para aprovação.`,
-        },
-      ]);
+      // 4. Dispara a notificação para o dono (apenas se for pedido)
+      if (tipoVenda === "PDV") {
+        await supabase.from("notificacoes").insert([
+          {
+            tipo: "venda",
+            titulo: `Novo pedido pendente`,
+            mensagem: `Um parceiro enviou um novo pedido (Cliente: ${clientForm.nome}) no valor de ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(subtotal)} para aprovação.`,
+          },
+        ]);
+      }
 
       setIsSuccessModalOpen(true);
     } catch (err: any) {
@@ -1212,11 +1214,22 @@ function ParceiroPDV() {
                   </p>
                 )}
               </div>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => setIsClientModalOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={loading} className="bg-gradient-brand text-white">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex gap-2 flex-1">
+                  <Button type="button" variant="outline" className="flex-1" onClick={() => setIsClientModalOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1 border-emerald-700 text-emerald-700 hover:bg-emerald-50"
+                    onClick={(e) => submitOrder(e as any, "DAV")}
+                    disabled={loading}
+                  >
+                    Salvar DAV
+                  </Button>
+                </div>
+                <Button type="button" onClick={(e) => submitOrder(e as any, "PDV")} disabled={loading} className="bg-emerald-700 hover:bg-emerald-800 text-white sm:flex-1">
                   {loading ? "Processando..." : "Gerar Pedido"}
                 </Button>
               </div>
