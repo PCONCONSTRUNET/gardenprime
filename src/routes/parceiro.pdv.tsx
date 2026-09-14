@@ -88,7 +88,7 @@ function ParceiroPDV() {
       localStorage.setItem("pdv_client_parceiro", JSON.stringify(clientForm));
     }
   }, [clientForm]);
-  const [vendedorInfo, setVendedorInfo] = useState<{ id: string; nome: string; tipo_comissao?: string; valor_comissao?: number } | null>(null);
+  const [vendedorInfo, setVendedorInfo] = useState<{ id: string; nome: string; tipo_comissao?: string; valor_comissao?: number; vendas_hoje?: number } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [davGeradoId, setDavGeradoId] = useState<string | null>(null);
   const [davGeradoNumero, setDavGeradoNumero] = useState<string | number | null>(null);
@@ -140,7 +140,22 @@ function ParceiroPDV() {
 
           if (vData) {
             vendedorId = vData.id;
-            setVendedorInfo({ id: vData.id, nome: vData.nome, tipo_comissao: vData.tipo_comissao, valor_comissao: vData.valor_comissao });
+            
+            // Fetch today's sales
+            const hoje = new Date().toISOString().split('T')[0];
+            const { data: vendasHoje } = await supabase
+              .from('vendas')
+              .select('valor_total')
+              .eq('vendedor_id', vData.id)
+              .neq('tipo', 'DAV')
+              .gte('created_at', `${hoje}T00:00:00.000Z`);
+              
+            let totalVendasHoje = 0;
+            if (vendasHoje) {
+              totalVendasHoje = vendasHoje.reduce((acc, v) => acc + (Number(v.valor_total) || 0), 0);
+            }
+            
+            setVendedorInfo({ id: vData.id, nome: vData.nome, tipo_comissao: vData.tipo_comissao, valor_comissao: vData.valor_comissao, vendas_hoje: totalVendasHoje });
             aplicaAcrescimo = vData.acrescimo_catalogo;
             if (
               vData.acrescimo_catalogo_percentual !== null &&
@@ -634,56 +649,75 @@ function ParceiroPDV() {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-28 bg-slate-50 min-h-screen">
       {/* Top Header */}
-      <div className="bg-white p-4 lg:sticky lg:top-0 z-10 shadow-sm">
-        <div className="flex justify-between items-center mb-4">
+      <div className="bg-gradient-brand px-4 pt-10 pb-12 lg:sticky lg:top-0 z-10 rounded-b-3xl shadow-md relative text-white">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-2">
+            <GardenPrimeLogo horizontal size="small" className="brightness-0 invert" />
+          </div>
+          <Bell className="w-5 h-5" />
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="w-14 h-14 bg-slate-200 rounded-full overflow-hidden shrink-0 border-2 border-white/20">
+            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Douglas&backgroundColor=e2e8f0" alt="Avatar" className="w-full h-full object-cover" />
+          </div>
           <div>
-            <p className="text-xs font-semibold text-brand">Cliente</p>
+            <p className="font-bold text-base leading-tight">{vendedorInfo.nome.split(" ")[0]}</p>
+            <p className="text-xs text-white/90 font-medium">Vendas de hoje: R$ {(vendedorInfo.vendas_hoje || 0).toFixed(2).replace(".", ",")}</p>
+            <p className="text-xs text-white/90 font-medium">
+               Comissão: {vendedorInfo.tipo_comissao === "Fixo" ? `R$ ${vendedorInfo.valor_comissao?.toFixed(2)}` : `${vendedorInfo.valor_comissao}%`}
+            </p>
+          </div>
+        </div>
+        
+        {/* Search bar overlapping */}
+        <div className="absolute -bottom-6 left-4 right-4 z-20">
+          <div className="relative flex items-center bg-white rounded-2xl shadow-lg border border-slate-100">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+            <Input
+              placeholder="Buscar produto ou código..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="h-14 pl-12 pr-20 rounded-2xl bg-transparent border-0 shadow-none text-slate-800 focus-visible:ring-0 text-base"
+            />
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-3">
+               <Barcode className="w-5 h-5 text-slate-400" />
+               <div className="w-px h-6 bg-slate-200" />
+               <Mic className="w-5 h-5 text-brand" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4 pt-10 pb-2">
+        <div className="flex justify-between items-center bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-brand">Cliente</p>
             {clientForm.nome ? (
               <>
-                <h2 className="text-lg font-bold text-slate-800 leading-tight">
+                <h2 className="text-sm font-bold text-slate-800 leading-tight line-clamp-1">
                   {clientForm.nome}
                 </h2>
                 {clientForm.documento && (
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
                     CNPJ: {clientForm.documento}
                   </p>
                 )}
               </>
             ) : (
-              <h2 className="text-lg font-bold text-slate-400 leading-tight">Nenhum cliente</h2>
+              <h2 className="text-sm font-bold text-slate-400 leading-tight">Nenhum cliente</h2>
             )}
           </div>
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={() => setIsClientModalOpen(true)}
-            className="h-9 px-3 rounded-lg text-xs font-semibold shadow-sm"
+            className="h-8 px-3 rounded-lg text-xs font-bold text-brand hover:bg-brand/10"
           >
             <RefreshCw className="w-3 h-3 mr-1.5" />
-            {clientForm.nome ? "Trocar cliente" : "Selecionar"}
+            {clientForm.nome ? "Trocar" : "Selecionar"}
           </Button>
         </div>
-
-        {/* Search Bar */}
-        <div className="relative flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar produto, código..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="h-11 pl-9 pr-10 rounded-xl bg-white border-slate-200 shadow-sm text-sm"
-            />
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 text-muted-foreground">
-              <button className="p-1.5 hover:text-brand">
-                <Camera className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-          <button className="h-11 w-11 rounded-xl bg-slate-100 flex items-center justify-center text-muted-foreground hover:bg-slate-200 shrink-0">
-            <Mic className="w-5 h-5" />
-          </button>
-        </div>
+      </div>
 
         {/* Quick Filters */}
         <div className="flex gap-2 mt-4 overflow-x-auto pb-1 no-scrollbar">
