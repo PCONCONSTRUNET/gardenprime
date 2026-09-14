@@ -530,8 +530,7 @@ function ParceiroPDV() {
     }
   };
 
-  const closeSuccessModal = () => {
-    setIsSuccessModalOpen(false);
+  const esvaziarCarrinho = () => {
     setCart([]);
     setClientForm({
       nome: "",
@@ -548,6 +547,11 @@ function ParceiroPDV() {
       frete: "Retirada",
       observacoes: "",
     });
+  };
+
+  const closeSuccessModal = () => {
+    setIsSuccessModalOpen(false);
+    esvaziarCarrinho();
     navigate({ to: "/parceiro/dashboard" });
   };
 
@@ -899,7 +903,7 @@ function ParceiroPDV() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setCart([])}
+                        onClick={esvaziarCarrinho}
                         className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 h-8 text-xs"
                       >
                         Esvaziar
