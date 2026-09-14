@@ -4,6 +4,7 @@ import { supabaseParceiro as supabase } from "@/lib/supabase";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { GardenPrimeLogo } from "@/components/garden-prime-logo";
 import {
   Search,
   Trash2,
@@ -14,6 +15,7 @@ import {
   Mic,
   Star,
   Flame,
+  Bell,
   Clock,
   Grid,
   RefreshCw,
