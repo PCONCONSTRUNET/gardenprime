@@ -81,10 +81,15 @@ function Produtos() {
       return;
     try {
       const { error } = await supabase.from("produtos").delete().eq("id", id);
-      if (error) throw error;
+      if (error) {
+        if (error.code === "23503") {
+          throw new Error("Não é possível excluir este produto pois ele já está vinculado a uma ou mais vendas. Sugerimos que você edite o produto e mude o status para 'Inativo'.");
+        }
+        throw error;
+      }
       fetchProducts(); // recarrega a lista
     } catch (err: any) {
-      alert("Erro ao deletar: " + err.message);
+      alert("Erro ao deletar: " + (err.message || "Erro desconhecido."));
     }
   };
 
