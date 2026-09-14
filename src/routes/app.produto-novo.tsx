@@ -23,6 +23,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
+  DialogClose,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -831,6 +833,17 @@ function NovoProduto() {
                       </div>
                     </TabsContent>
                   </Tabs>
+
+                  <DialogFooter className="mt-6 border-t pt-4">
+                    <DialogClose asChild>
+                      <Button type="button" variant="outline">
+                        Concluir e Fechar
+                      </Button>
+                    </DialogClose>
+                    <Button type="button" onClick={handleSalvar} disabled={loading}>
+                      {loading ? "Salvando..." : "Salvar Produto"}
+                    </Button>
+                  </DialogFooter>
                 </DialogContent>
               </Dialog>
             </div>
