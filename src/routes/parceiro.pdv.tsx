@@ -416,7 +416,104 @@ function ParceiroPDV() {
     setIsClientModalOpen(true);
   };
 
-  const submitOrder = async (e: React.FormEvent, tipoVenda: "PDV" | "DAV" = "PDV") => {
+  const salvarRascunho = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (loading) return;
+
+    if (!clientForm.nome) {
+      alert("Por favor, preencha o nome do cliente para salvar.");
+      return;
+    }
+
+    setIsClientModalOpen(false);
+    setLoading(true);
+
+    try {
+      // 1. Cria ou busca o cliente
+      let finalClienteId = null;
+
+      if (clientForm.documento && clientForm.documento.trim() !== "") {
+        const { data: existingClient } = await supabase
+          .from("clientes")
+          .select("id")
+          .eq("cpf_cnpj", clientForm.documento.trim())
+          .maybeSingle();
+        if (existingClient) finalClienteId = existingClient.id;
+      }
+
+      if (!finalClienteId) {
+        const payload: any = { nome: clientForm.nome };
+        if (clientForm.documento?.trim()) payload.cpf_cnpj = clientForm.documento.trim();
+        if (clientForm.telefone?.trim()) payload.telefone = clientForm.telefone.trim();
+        if (clientForm.cep?.trim()) payload.cep = clientForm.cep.trim();
+        if (clientForm.endereco?.trim()) payload.endereco = clientForm.endereco.trim();
+        if (clientForm.numero?.trim()) payload.numero = clientForm.numero.trim();
+        if (clientForm.bairro?.trim()) payload.bairro = clientForm.bairro.trim();
+        if (clientForm.cidade?.trim()) payload.cidade = clientForm.cidade.trim();
+        if (clientForm.uf?.trim()) payload.uf = clientForm.uf.trim();
+        payload.status = "Ativo";
+
+        const { data: clienteData, error: clienteError } = await supabase
+          .from("clientes")
+          .insert([payload])
+          .select()
+          .maybeSingle();
+
+        if (clienteData) {
+          finalClienteId = clienteData.id;
+        } else if (clienteError) {
+          alert("Não foi possível salvar o cliente: " + clienteError.message);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // 2. Cria o DAV como Rascunho (não vai para o admin)
+      const { data: vendaData, error: vendaError } = await supabase
+        .from("vendas")
+        .insert([{
+          tipo: "DAV",
+          status_aprovacao: "Rascunho",
+          status: "Rascunho",
+          subtotal: rawSubtotal,
+          valor_total: subtotal,
+          vendedor_id: vendedorInfo?.id,
+          cliente_id: finalClienteId,
+          desconto_valor: descontoAplicado,
+          desconto_percentual: descontoPercentual,
+          condicao_pagamento:
+            clientForm.pagamento === "Boleto a Prazo"
+              ? clientForm.condicaoBoleto || "Boleto a Prazo"
+              : clientForm.pagamento,
+        }])
+        .select()
+        .single();
+
+      if (vendaError) throw vendaError;
+
+      // 3. Insere os itens
+      const itensToInsert = cart.map((i) => ({
+        venda_id: vendaData.id,
+        produto_id: i.id,
+        quantidade: i.q,
+        valor_unitario: i.u,
+        subtotal: i.t,
+      }));
+
+      const { error: itensError } = await supabase.from("vendas_itens").insert(itensToInsert);
+      if (itensError) throw itensError;
+
+      // 4. Limpa o carrinho e redireciona para Meus Carrinhos
+      esvaziarCarrinho();
+      navigate({ to: "/parceiro/catalogo" });
+    } catch (err: any) {
+      alert("Erro ao salvar rascunho: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitOrder = async (e: React.FormEvent) => {
     if (e && e.preventDefault) e.preventDefault();
     if (loading) return;
 
@@ -432,7 +529,6 @@ function ParceiroPDV() {
       // 1. Cria ou busca o cliente
       let finalClienteId = null;
 
-      // Se o cliente digitou um documento, tenta buscar primeiro para não duplicar
       if (clientForm.documento && clientForm.documento.trim() !== "") {
         const { data: existingClient } = await supabase
           .from("clientes")
@@ -445,7 +541,6 @@ function ParceiroPDV() {
         }
       }
 
-      // Se não encontrou o cliente, tenta criar um novo
       if (!finalClienteId) {
         const payload: any = { nome: clientForm.nome };
         if (clientForm.documento && clientForm.documento.trim() !== "") {
@@ -495,7 +590,7 @@ function ParceiroPDV() {
         .from("vendas")
         .insert([
           {
-            tipo: tipoVenda,
+            tipo: "PDV",
             status_aprovacao: "Pendente",
             status: "Pendente",
             subtotal: rawSubtotal,
@@ -527,20 +622,17 @@ function ParceiroPDV() {
       const { error: itensError } = await supabase.from("vendas_itens").insert(itensToInsert);
       if (itensError) throw itensError;
 
-      // 3. Prepara os dados para o WhatsApp (usando o pedido que já foi gerado)
       setDavGeradoId(vendaData.id);
       setDavGeradoNumero(vendaData.numero_venda);
 
-      // 4. Dispara a notificação para o dono (apenas se for pedido)
-      if (tipoVenda === "PDV") {
-        await supabase.from("notificacoes").insert([
-          {
-            tipo: "venda",
-            titulo: `Novo pedido pendente`,
-            mensagem: `Um parceiro enviou um novo pedido (Cliente: ${clientForm.nome}) no valor de ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(subtotal)} para aprovação.`,
-          },
-        ]);
-      }
+      // 4. Dispara a notificação para o dono
+      await supabase.from("notificacoes").insert([
+        {
+          tipo: "venda",
+          titulo: `Novo pedido pendente`,
+          mensagem: `Um parceiro enviou um novo pedido (Cliente: ${clientForm.nome}) no valor de ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(subtotal)} para aprovação.`,
+        },
+      ]);
 
       setIsSuccessModalOpen(true);
     } catch (err: any) {
@@ -1223,13 +1315,13 @@ function ParceiroPDV() {
                     type="button"
                     variant="outline"
                     className="flex-1 border-emerald-700 text-emerald-700 hover:bg-emerald-50"
-                    onClick={(e) => submitOrder(e as any, "DAV")}
+                    onClick={salvarRascunho}
                     disabled={loading}
                   >
-                    Salvar DAV
+                    💾 Salvar no Carrinho
                   </Button>
                 </div>
-                <Button type="button" onClick={(e) => submitOrder(e as any, "PDV")} disabled={loading} className="bg-emerald-700 hover:bg-emerald-800 text-white sm:flex-1">
+                <Button type="submit" disabled={loading} className="bg-emerald-700 hover:bg-emerald-800 text-white sm:flex-1">
                   {loading ? "Processando..." : "Gerar Pedido"}
                 </Button>
               </div>
