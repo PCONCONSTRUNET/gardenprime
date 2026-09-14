@@ -193,8 +193,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
         <div className="p-4 border-t border-sidebar-border">
           <div className="flex items-center gap-3 rounded-lg bg-sidebar-accent/40 p-2.5">
-            <div className="h-9 w-9 shrink-0 rounded-full bg-gradient-brand grid place-items-center text-sm font-bold text-primary-foreground">
-              DA
+            <div className="h-9 w-9 shrink-0 rounded-full bg-slate-200 overflow-hidden border border-border">
+              <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Douglas&backgroundColor=e2e8f0" alt="Avatar" className="w-full h-full object-cover" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold truncate">Douglas Almeida</p>

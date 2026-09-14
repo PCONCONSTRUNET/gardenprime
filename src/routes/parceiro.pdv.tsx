@@ -868,13 +868,19 @@ function ParceiroPDV() {
       {/* Resumo Flutuante (Floating Summary) */}
       <div className="fixed bottom-[80px] lg:bottom-10 left-0 right-0 px-4 z-40 pointer-events-none pb-safe max-w-4xl lg:max-w-md mx-auto w-full">
         <div className="pointer-events-auto">
-          {cart.length > 0 && (
             <div className="animate-in slide-in-from-bottom-5 fade-in duration-300">
               <Sheet>
                 <SheetTrigger asChild>
                   <div className="bg-white/85 backdrop-blur-xl rounded-[32px] shadow-2xl border border-white/60 p-3 pl-6 pr-3 flex items-center justify-between cursor-pointer ring-1 ring-black/5">
                     <div>
-                      <p className="font-bold text-sm text-slate-800">Resumo do Pedido</p>
+                      <p className="font-bold text-sm text-slate-800 flex items-center gap-2">
+                        Resumo do Pedido
+                        {vendedorInfo && (
+                          <span className="text-[10px] font-bold bg-[#12794C]/10 text-[#12794C] px-2 py-0.5 rounded-full border border-[#12794C]/20">
+                            Comissão: {vendedorInfo.tipo_comissao === "Fixo" ? `R$ ${vendedorInfo.valor_comissao?.toFixed(2)}` : `${vendedorInfo.valor_comissao}%`}
+                          </span>
+                        )}
+                      </p>
                       <p className="text-xs text-slate-600 mt-0.5">
                         {cart.length} itens | Total <span className="font-bold text-slate-900">R$ {subtotal.toFixed(2).replace(".", ",")}</span>
                       </p>
@@ -947,7 +953,6 @@ function ParceiroPDV() {
                 </SheetContent>
               </Sheet>
             </div>
-          )}
         </div>
       </div>
 
