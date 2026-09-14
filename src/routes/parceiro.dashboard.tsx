@@ -76,7 +76,7 @@ function ParceiroDashboard() {
     try {
       const { data, error } = await supabase
         .from("vendas_itens")
-        .select("*, produto:produtos(nome, emoji)")
+        .select("*, produto:produtos(nome, codigo, emoji, imagem)")
         .eq("venda_id", venda.id);
 
       if (!error && data) {
@@ -159,7 +159,7 @@ function ParceiroDashboard() {
           // Busca as vendas dele ignorando os Orçamentos (DAV)
           const { data: vendasData } = await supabase
             .from("vendas")
-            .select("*, cliente:clientes(nome, cpf_cnpj, telefone)")
+            .select("*, cliente:clientes(*)")
             .eq("vendedor_id", vData.id)
             .neq("tipo", "DAV")
             .order("created_at", { ascending: false });

@@ -1,6 +1,6 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { supabaseParceiro as supabase } from "@/lib/supabase";
+import { supabase, supabaseParceiro } from "@/lib/supabase";
 import React from "react";
 
 export const WhatsAppIcon = ({ className }: { className?: string }) => (
@@ -16,17 +16,22 @@ export const WhatsAppIcon = ({ className }: { className?: string }) => (
 
 export interface OrderItem {
   id?: string;
+  produto_id?: string;
   produto?: {
     nome?: string;
     codigo?: string;
     emoji?: string;
+    imagem?: string;
   };
   produtos?: {
     nome?: string;
     codigo?: string;
+    emoji?: string;
+    imagem?: string;
   };
   produto_nome?: string;
   codigo?: string;
+  imagem?: string;
   quantidade?: number;
   qtd?: number;
   valor_unitario?: number;
@@ -49,6 +54,16 @@ export interface OrderData {
   condicao_pagamento?: string;
   metodo_pagamento?: string;
   observacoes?: string;
+  validade?: string;
+  cliente_id?: string;
+  cliente_nome?: string;
+  cliente_cnpj?: string;
+  cliente_telefone?: string;
+  cliente_endereco?: string;
+  bairro?: string;
+  cidade?: string;
+  uf?: string;
+  email?: string;
   cliente?: {
     nome?: string;
     cpf_cnpj?: string;
@@ -59,11 +74,19 @@ export interface OrderData {
     cidade?: string;
     uf?: string;
     cep?: string;
+    email?: string;
   } | null;
   clientes?: {
     nome?: string;
     cpf_cnpj?: string;
     telefone?: string;
+    endereco?: string;
+    numero?: string;
+    bairro?: string;
+    cidade?: string;
+    uf?: string;
+    cep?: string;
+    email?: string;
   } | null;
   vendedor?:
     | {
@@ -72,6 +95,32 @@ export interface OrderData {
     | string
     | null;
   vendedor_nome?: string;
+}
+
+/**
+ * Retorna o cliente supabase ativo de acordo com a sessão (admin ou parceiro)
+ */
+async function getActiveSupabase() {
+  try {
+    const { data } = await supabase.auth.getSession();
+    if (data?.session) return supabase;
+  } catch {}
+  return supabaseParceiro;
+}
+
+async function queryDb<T>(fn: (client: typeof supabase) => Promise<{ data: T | null; error: any }>): Promise<T | null> {
+  const active = await getActiveSupabase();
+  try {
+    const res = await fn(active);
+    if (!res.error && res.data) return res.data;
+  } catch {}
+  // Tenta fallback com o outro client
+  const fallback = active === supabase ? supabaseParceiro : supabase;
+  try {
+    const res2 = await fn(fallback);
+    if (!res2.error && res2.data) return res2.data;
+  } catch {}
+  return null;
 }
 
 /**
@@ -89,7 +138,7 @@ export function getOrderNumber(order: OrderData): string {
  * Retorna o nome do cliente normalizado
  */
 export function getClientName(order: OrderData): string {
-  return order.cliente?.nome || order.clientes?.nome || "Cliente não informado";
+  return order.cliente?.nome || order.clientes?.nome || (order as any).cliente_nome || "Cliente não informado";
 }
 
 /**
@@ -100,24 +149,280 @@ export function isOrderDav(order: OrderData): boolean {
 }
 
 /**
+ * Constrói texto da mensagem do WhatsApp formatado
+ */
+export function buildWhatsAppMessage(order: OrderData, items: OrderItem[]): string {
+  const isDAV = isOrderDav(order);
+  const num = getOrderNumber(order);
+  const docType = isDAV ? "ORÇAMENTO" : "PEDIDO";
+  const clienteNome = order.cliente?.nome || order.clientes?.nome || (order as any).cliente_nome || "Cliente";
+
+  let msg = `*${docType} - GARDEN PRIME*\n`;
+  msg += `Nº: ${num}\n`;
+  msg += `Data: ${new Date(order.created_at).toLocaleDateString("pt-BR")}\n`;
+  msg += `Cliente: ${clienteNome}\n\n`;
+  msg += `*ITENS:*\n`;
+
+  for (const it of items) {
+    const nome = it.produto_nome || it.produto?.nome || it.produtos?.nome || (it as any).produto || "Produto";
+    const cod = it.codigo || it.produto?.codigo || it.produtos?.codigo || (it as any).produto_codigo || (it as any).cod || "";
+    const qtd = it.quantidade || it.qtd || 1;
+    const total = it.total || it.subtotal || 0;
+    msg += `• ${qtd}x ${cod ? `[${cod}] ` : ""}${nome} - R$ ${Number(total).toFixed(2).replace(".", ",")}\n`;
+  }
+
+  const vTot = Number(order.valor_total || order.total || 0).toFixed(2).replace(".", ",");
+  msg += `\n*TOTAL: R$ ${vTot}*\n`;
+
+  if (typeof window !== "undefined" && order.id) {
+    const linkPdf = `${window.location.origin}/orcamento/${order.id}`;
+    msg += `\n📄 *Acesse o documento formal em PDF aqui:*\n${linkPdf}`;
+  }
+
+  return msg;
+}
+
+/**
+ * Garante que tanto os dados do pedido/orçamento (especialmente os dados do cliente)
+ * quanto os itens (com código e imagem do produto) estejam completos para o PDF.
+ */
+export async function enrichOrderAndItems(
+  rawOrder: OrderData,
+  rawItems?: OrderItem[]
+): Promise<{ order: OrderData; items: OrderItem[] }> {
+  const order: OrderData = { ...rawOrder };
+  let items: OrderItem[] = rawItems && rawItems.length > 0 ? [...rawItems] : [];
+
+  // 1. Resolver cliente se ausente ou incompleto
+  const existingClient = order.cliente || order.clientes || (order as any).client;
+  const hasClientName = Boolean(existingClient?.nome || (order as any).cliente_nome);
+  const hasClientAddressOrCity = Boolean(
+    existingClient?.cidade ||
+    existingClient?.endereco ||
+    existingClient?.bairro ||
+    (order as any).cidade ||
+    (order as any).bairro ||
+    (order as any).cliente_endereco
+  );
+
+  if ((!hasClientName || !hasClientAddressOrCity) && order.id) {
+    // Tenta primeiro em 'vendas'
+    try {
+      const v = await queryDb<any>((client) =>
+        client
+          .from("vendas")
+          .select("*, clientes(*), vendedor:vendedores(nome)")
+          .eq("id", order.id)
+          .maybeSingle()
+      );
+
+      if (v) {
+        order.numero_venda = order.numero_venda ?? v.numero_venda ?? v.numero;
+        order.tipo = order.tipo ?? v.tipo;
+        order.condicao_pagamento = order.condicao_pagamento ?? v.metodo_pagamento ?? v.condicao_pagamento;
+        order.total = order.total ?? v.valor_total;
+        order.subtotal = order.subtotal ?? v.subtotal ?? v.valor_total;
+        order.created_at = order.created_at || v.created_at;
+        if (v.vendedor) {
+          order.vendedor_nome = order.vendedor_nome ?? (typeof v.vendedor === "object" ? v.vendedor?.nome : v.vendedor);
+        }
+        if (v.clientes) {
+          order.cliente = {
+            nome: v.clientes.nome,
+            cpf_cnpj: v.clientes.cpf_cnpj,
+            telefone: v.clientes.telefone,
+            endereco: v.clientes.endereco,
+            numero: v.clientes.numero,
+            bairro: v.clientes.bairro,
+            cidade: v.clientes.cidade,
+            uf: v.clientes.uf,
+            cep: v.clientes.cep,
+            email: (v.clientes as any).email,
+          };
+        }
+      }
+    } catch (e) {
+      console.warn("Erro ao buscar venda para enriquecer PDF:", e);
+    }
+
+    // Se ainda não achou o cliente completo, tenta em 'davs'
+    if ((!order.cliente?.nome || !order.cliente?.cidade) && order.id) {
+      try {
+        const d = await queryDb<any>((client) =>
+          client.from("davs").select("*").eq("id", order.id).maybeSingle()
+        );
+
+        if (d) {
+          order.numero = order.numero ?? d.numero;
+          order.tipo = order.tipo ?? "DAV";
+          order.condicao_pagamento = order.condicao_pagamento ?? d.condicao_pagamento;
+          order.total = order.total ?? d.total;
+          order.subtotal = order.subtotal ?? d.subtotal;
+          order.created_at = order.created_at || d.created_at;
+          order.vendedor_nome = order.vendedor_nome ?? d.vendedor;
+          if (d.validade) (order as any).validade = (order as any).validade ?? d.validade;
+
+          let cliData: any = null;
+          if (d.cliente_id) {
+            cliData = await queryDb<any>((client) =>
+              client.from("clientes").select("*").eq("id", d.cliente_id).maybeSingle()
+            );
+          }
+
+          order.cliente = {
+            nome: cliData?.nome || d.cliente_nome || order.cliente?.nome,
+            cpf_cnpj: cliData?.cpf_cnpj || d.cliente_cnpj || order.cliente?.cpf_cnpj,
+            telefone: cliData?.telefone || d.cliente_telefone || order.cliente?.telefone,
+            endereco: cliData?.endereco || d.cliente_endereco || order.cliente?.endereco,
+            numero: cliData?.numero || "",
+            bairro: cliData?.bairro || d.bairro || order.cliente?.bairro,
+            cidade: cliData?.cidade || d.cidade || order.cliente?.cidade,
+            uf: cliData?.uf || d.uf || order.cliente?.uf,
+            cep: cliData?.cep || order.cliente?.cep,
+            email: cliData?.email || d.email || order.cliente?.email,
+          };
+        }
+      } catch (e) {
+        console.warn("Erro ao buscar dav para enriquecer PDF:", e);
+      }
+    }
+  }
+
+  // Normalizar objeto cliente
+  const rawC = order.cliente || order.clientes || (order as any).client || {};
+  let endFormatted = rawC.endereco || (order as any).cliente_endereco || "";
+  if (rawC.numero && endFormatted && !endFormatted.includes(String(rawC.numero))) {
+    endFormatted = `${endFormatted}, Nº ${rawC.numero}`;
+  }
+
+  order.cliente = {
+    nome: rawC.nome || (order as any).cliente_nome || "-",
+    cpf_cnpj: rawC.cpf_cnpj || rawC.cnpj || rawC.cpf || (order as any).cliente_cnpj || "-",
+    telefone: rawC.telefone || rawC.phone || (order as any).cliente_telefone || "-",
+    endereco: endFormatted || "-",
+    numero: rawC.numero || "",
+    bairro: rawC.bairro || (order as any).bairro || "-",
+    cidade: rawC.cidade || (order as any).cidade || "-",
+    uf: rawC.uf || (order as any).uf || "-",
+    cep: rawC.cep || (order as any).cep || "",
+    email: rawC.email || (order as any).email || "-",
+  };
+
+  // 2. Buscar itens no banco se vieram vazios
+  if (!items || items.length === 0) {
+    if (order.id) {
+      try {
+        const vi = await queryDb<any[]>((client) =>
+          client
+            .from("vendas_itens")
+            .select("*, produtos(nome, codigo, emoji, imagem)")
+            .eq("venda_id", order.id)
+        );
+
+        if (vi && vi.length > 0) {
+          items = vi.map((it: any) => ({
+            id: it.id,
+            produto_id: it.produto_id,
+            produto_nome: it.produtos?.nome || it.produto_nome,
+            codigo: it.produtos?.codigo || it.codigo,
+            quantidade: it.quantidade,
+            valor_unitario: it.valor_unitario,
+            subtotal: it.subtotal,
+            total: it.subtotal,
+            imagem: it.produtos?.imagem,
+            produtos: it.produtos,
+          }));
+        } else {
+          const di = await queryDb<any[]>((client) =>
+            client
+              .from("dav_items")
+              .select("*, produtos(nome, codigo, emoji, imagem)")
+              .eq("dav_id", order.id)
+          );
+
+          if (di && di.length > 0) {
+            items = di.map((it: any) => ({
+              id: it.id,
+              produto_id: it.produto_id,
+              produto_nome: it.produtos?.nome || it.produto,
+              codigo: it.produtos?.codigo || it.codigo,
+              quantidade: it.qtd || it.quantidade,
+              valor_unitario: it.valor_unitario,
+              subtotal: it.total || it.subtotal,
+              total: it.total || it.subtotal,
+              imagem: it.produtos?.imagem,
+              produtos: it.produtos,
+            }));
+          }
+        }
+      } catch (e) {
+        console.warn("Erro ao buscar itens do pedido para PDF:", e);
+      }
+    }
+  }
+
+  // 3. Garantir códigos e imagens para todos os itens passados
+  const missingCodOrImg = items.filter((it: any) => {
+    const hasCod = Boolean(it.codigo || it.produto?.codigo || it.produtos?.codigo || it.produto_codigo || it.cod);
+    const hasImg = Boolean(it.imagem || it.produto?.imagem || it.produtos?.imagem);
+    return (!hasCod || !hasImg) && (it.produto_id || it.id);
+  });
+
+  if (missingCodOrImg.length > 0) {
+    const missingIds = missingCodOrImg.map((it: any) => it.produto_id || it.id).filter(Boolean);
+    if (missingIds.length > 0) {
+      try {
+        const prods = await queryDb<any[]>((client) =>
+          client
+            .from("produtos")
+            .select("id, codigo, imagem, nome")
+            .in("id", missingIds)
+        );
+
+        if (prods && prods.length > 0) {
+          const prodMap = new Map(prods.map((p) => [p.id, p]));
+          items = items.map((it: any) => {
+            const p = prodMap.get(it.produto_id) || prodMap.get(it.id);
+            if (p) {
+              return {
+                ...it,
+                codigo: it.codigo || it.produtos?.codigo || it.produto?.codigo || p.codigo,
+                imagem: it.imagem || it.produtos?.imagem || it.produto?.imagem || p.imagem,
+                produto_nome: it.produto_nome || it.produtos?.nome || it.produto?.nome || p.nome,
+                produtos: {
+                  ...it.produtos,
+                  codigo: it.produtos?.codigo || p.codigo,
+                  imagem: it.produtos?.imagem || p.imagem,
+                  nome: it.produtos?.nome || p.nome,
+                },
+              };
+            }
+            return it;
+          });
+        }
+      } catch (e) {
+        console.warn("Erro ao complementar códigos e imagens dos produtos:", e);
+      }
+    }
+  }
+
+  // Normalizar campos em cada item
+  items = items.map((it: any) => ({
+    ...it,
+    codigo: it.codigo || it.produtos?.codigo || it.produto?.codigo || it.produto_codigo || it.cod || "-",
+    produto_nome: it.produto_nome || it.produtos?.nome || it.produto?.nome || it.produto || "Produto Indisponível",
+    imagem: it.imagem || it.produtos?.imagem || it.produto?.imagem || null,
+  }));
+
+  return { order, items };
+}
+
+/**
  * Busca os itens do pedido no Supabase caso não tenham sido passados
  */
 export async function fetchOrderItems(orderId: string): Promise<OrderItem[]> {
-  try {
-    const { data, error } = await supabase
-      .from("vendas_itens")
-      .select("*, produto:produtos(nome, codigo, emoji, imagem)")
-      .eq("venda_id", orderId);
-
-    if (error) {
-      console.warn("Erro ao buscar vendas_itens:", error);
-      return [];
-    }
-    return data || [];
-  } catch (e) {
-    console.error("Falha ao buscar itens:", e);
-    return [];
-  }
+  const { items } = await enrichOrderAndItems({ id: orderId, created_at: new Date().toISOString() });
+  return items;
 }
 
 let cachedLogos: { prime: string | null; plus: string | null } | null = null;
@@ -176,7 +481,7 @@ export async function generateOrderPdfDoc(
       .catch(() => null);
 
   for (const it of items) {
-    const imgUrl = (it.produto as any)?.imagem || (it.produtos as any)?.imagem;
+    const imgUrl = (it as any).imagem || (it.produto as any)?.imagem || (it.produtos as any)?.imagem;
     if (imgUrl) {
       const b64 = await toBase64(imgUrl);
       if (b64) {
@@ -315,17 +620,17 @@ export async function generateOrderPdfDoc(
   const valX2 = margin + 105;
 
   let cy = y + 14;
-  doc.text("Nome:", labelX1, cy); doc.text(c.nome || "-", valX1, cy);
-  doc.text("Bairro:", labelX2, cy); doc.text(c.bairro || "-", valX2, cy);
+  doc.text("Nome:", labelX1, cy); doc.text(String(c.nome || "-"), valX1, cy);
+  doc.text("Bairro:", labelX2, cy); doc.text(String(c.bairro || "-"), valX2, cy);
   cy += 5;
-  doc.text("CNPJ/CPF:", labelX1, cy); doc.text(c.cpf_cnpj || "-", valX1, cy);
-  doc.text("Cidade:", labelX2, cy); doc.text(c.cidade || "-", valX2, cy);
+  doc.text("CNPJ/CPF:", labelX1, cy); doc.text(String(c.cpf_cnpj || "-"), valX1, cy);
+  doc.text("Cidade:", labelX2, cy); doc.text(String(c.cidade || "-"), valX2, cy);
   cy += 5;
-  doc.text("Telefone:", labelX1, cy); doc.text(c.telefone || "-", valX1, cy);
-  doc.text("UF:", labelX2, cy); doc.text(c.uf || "-", valX2, cy);
+  doc.text("Telefone:", labelX1, cy); doc.text(String(c.telefone || "-"), valX1, cy);
+  doc.text("UF:", labelX2, cy); doc.text(String(c.uf || "-"), valX2, cy);
   cy += 5;
-  doc.text("Endereço:", labelX1, cy); doc.text(c.endereco || "-", valX1, cy);
-  doc.text("E-mail:", labelX2, cy); doc.text(c.email || "-", valX2, cy);
+  doc.text("Endereço:", labelX1, cy); doc.text(String(c.endereco || "-"), valX1, cy);
+  doc.text("E-mail:", labelX2, cy); doc.text(String(c.email || "-"), valX2, cy);
 
   // Obrigado box
   const obX = pageWidth - margin - 50;
@@ -351,12 +656,12 @@ export async function generateOrderPdfDoc(
   y += 6;
 
   const tableBody = items.map((it) => {
-    const nome = it.produto_nome || it.produto?.nome || it.produtos?.nome || "Produto Indisponível";
-    const codigo = it.codigo || it.produto?.codigo || it.produtos?.codigo || "-";
+    const nome = it.produto_nome || it.produto?.nome || it.produtos?.nome || (it as any).produto || "Produto Indisponível";
+    const codigo = it.codigo || it.produto?.codigo || it.produtos?.codigo || (it as any).produto_codigo || (it as any).cod || "-";
     const qtd = Number(it.quantidade || it.qtd || 1).toString();
     const vUnit = `R$ ${Number(it.valor_unitario || 0).toFixed(2).replace(".", ",")}`;
     const vTotal = `R$ ${Number(it.total || it.subtotal || 0).toFixed(2).replace(".", ",")}`;
-    return [codigo, "", nome, qtd, vUnit, vTotal, (it as any)._imagemBase64 || ""];
+    return [String(codigo), "", nome, qtd, vUnit, vTotal, (it as any)._imagemBase64 || ""];
   });
 
   autoTable(doc, {
@@ -480,44 +785,18 @@ export async function generateOrderPdfDoc(
 }
 
 
-export async function shareOrderWhatsApp(order: OrderData, items?: OrderItem[]): Promise<boolean> {
+export async function shareOrderWhatsApp(rawOrder: OrderData, rawItems?: OrderItem[]): Promise<boolean> {
   try {
-    // Garante que temos os itens e logos carregados
-    const [loadedItems, logos] = await Promise.all([
-      items && items.length > 0 ? items : fetchOrderItems(order.id),
+    const [enriched, logos] = await Promise.all([
+      enrichOrderAndItems(rawOrder, rawItems),
       preloadLogos(),
     ]);
 
-    // 1. Gera o documento PDF e o arquivo .pdf com os logos
-    const { file, filename } = await generateOrderPdfDoc(order, loadedItems, logos);
-    const msg = buildWhatsAppMessage(order, loadedItems);
-      // Load images
-  const toBase64 = (url: string): Promise<string | null> =>
-    fetch(url)
-      .then((r) => r.blob())
-      .then(
-        (blob) =>
-          new Promise<string | null>((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = () => resolve(null);
-            reader.readAsDataURL(blob);
-          }),
-      )
-      .catch(() => null);
+    const { file } = await generateOrderPdfDoc(enriched.order, enriched.items, logos);
+    const msg = buildWhatsAppMessage(enriched.order, enriched.items);
 
-  for (const it of items) {
-    const imgUrl = (it.produto as any)?.imagem || (it.produtos as any)?.imagem;
-    if (imgUrl) {
-      const b64 = await toBase64(imgUrl);
-      if (b64) {
-        (it as any)._imagemBase64 = b64;
-      }
-    }
-  }
-
-  const isDAV = isOrderDav(order);
-    const num = getOrderNumber(order);
+    const isDAV = isOrderDav(enriched.order);
+    const num = getOrderNumber(enriched.order);
     const title = `${isDAV ? "Orçamento" : "Pedido"} #${num} - Garden Prime`;
 
     // 2. Tenta compartilhar via Web Share API com o arquivo PDF anexado
@@ -533,7 +812,6 @@ export async function shareOrderWhatsApp(order: OrderData, items?: OrderItem[]):
           await navigator.share(shareDataWithFile);
           return true;
         } catch (shareErr: any) {
-          // Se o usuário cancelou o menu de compartilhamento, não faz nada
           if (shareErr.name === "AbortError") {
             return false;
           }
@@ -543,7 +821,6 @@ export async function shareOrderWhatsApp(order: OrderData, items?: OrderItem[]):
     }
 
     // 3. Fallback: Abre o WhatsApp (wa.me) com a mensagem completa e link do PDF
-    // O wa.me sem telefone abre a lista de contatos do WhatsApp para o vendedor escolher para quem enviar
     const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
     window.open(url, "_blank");
     return true;
@@ -565,17 +842,18 @@ export function openOrderPdf(orderId: string): void {
 /**
  * Faz download direto do arquivo PDF gerado no dispositivo
  */
-export async function downloadOrderPdf(order: OrderData, items?: OrderItem[]): Promise<void> {
+export async function downloadOrderPdf(rawOrder: OrderData, rawItems?: OrderItem[]): Promise<void> {
   try {
-    const [loadedItems, logos] = await Promise.all([
-      items && items.length > 0 ? items : fetchOrderItems(order.id),
+    const [enriched, logos] = await Promise.all([
+      enrichOrderAndItems(rawOrder, rawItems),
       preloadLogos(),
     ]);
-    const { doc, filename } = await generateOrderPdfDoc(order, loadedItems, logos);
+    const { doc, filename } = await generateOrderPdfDoc(enriched.order, enriched.items, logos);
     doc.save(filename);
   } catch (err: any) {
     console.error("Erro ao baixar PDF:", err);
     // Fallback: abre a rota de visualização
-    openOrderPdf(order.id);
+    openOrderPdf(rawOrder.id);
   }
 }
+

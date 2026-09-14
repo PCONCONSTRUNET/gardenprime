@@ -59,10 +59,10 @@ function Vendas() {
 
   const fetchVendas = async () => {
     try {
-      // Usando junção (join) com clientes para pegar o nome e cnpj
+      // Usando junção (join) com clientes para pegar todos os dados do cliente
       const { data, error } = await supabase
         .from("vendas")
-        .select(`*, clientes (nome, cpf_cnpj)`)
+        .select(`*, clientes (*)`)
         .or("status_aprovacao.neq.Pendente,status_aprovacao.is.null")
         .order("created_at", { ascending: false });
 
@@ -97,7 +97,7 @@ function Vendas() {
     try {
       const { data, error } = await supabase
         .from("vendas_itens")
-        .select("*, produtos(nome, imagem)")
+        .select("*, produtos(nome, codigo, imagem)")
         .eq("venda_id", venda.id);
       if (!error && data) setVendaItens(data);
     } catch (err) {
@@ -523,7 +523,13 @@ function Vendas() {
                 <Button
                   className="flex-1 bg-slate-900"
                   onClick={() => downloadOrderPdf(
-                    { id: selectedVenda?.id, created_at: selectedVenda?.created_at, numero_venda: selectedVenda?.numero_venda, tipo: selectedVenda?.tipo, condicao_pagamento: selectedVenda?.metodo_pagamento, total: selectedVenda?.valor_total, subtotal: selectedVenda?.subtotal },
+                    {
+                      ...selectedVenda,
+                      cliente: selectedVenda?.clientes || selectedVenda?.cliente,
+                      condicao_pagamento: selectedVenda?.metodo_pagamento || selectedVenda?.condicao_pagamento,
+                      total: selectedVenda?.valor_total ?? selectedVenda?.total,
+                      subtotal: selectedVenda?.subtotal ?? selectedVenda?.valor_total,
+                    },
                     vendaItens
                   )}
                 >

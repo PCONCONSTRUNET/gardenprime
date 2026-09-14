@@ -84,13 +84,26 @@ function DAVList() {
   }, []);
 
   const handleOpenDetails = async (dav: any) => {
-    setSelectedDav(dav);
+    let fullDav = { ...dav };
+    if (dav.cliente_id) {
+      try {
+        const { data: cli } = await supabase.from("clientes").select("*").eq("id", dav.cliente_id).maybeSingle();
+        if (cli) {
+          fullDav.cliente = cli;
+          fullDav.bairro = cli.bairro;
+          fullDav.cidade = cli.cidade;
+          fullDav.uf = cli.uf;
+          fullDav.email = cli.email;
+        }
+      } catch (e) {}
+    }
+    setSelectedDav(fullDav);
     setOpenSheet(true);
     setLoadingItens(true);
     try {
       const { data, error } = await supabase
         .from("dav_items")
-        .select("*, produtos(imagem)")
+        .select("*, produtos(nome, codigo, imagem)")
         .eq("dav_id", dav.id);
       if (!error && data) setDavItens(data);
     } catch (err) {
@@ -365,7 +378,7 @@ function DAVList() {
                       size="icon"
                       className="h-8 w-8 text-primary"
                       title="Baixar PDF"
-                      onClick={() => downloadOrderPdf({ id: v.id, created_at: v.created_at, numero: v.numero, tipo: 'DAV', condicao_pagamento: v.condicao_pagamento, total: v.total, subtotal: v.subtotal })}
+                      onClick={() => downloadOrderPdf(v)}
                     >
                       <Printer className="h-4 w-4" />
                     </Button>
@@ -508,10 +521,7 @@ function DAVList() {
               </Button>
               <Button
                 className="flex-1 bg-gradient-brand text-primary-foreground"
-                onClick={() => downloadOrderPdf(
-                  { id: selectedDav?.id, created_at: selectedDav?.created_at, numero: selectedDav?.numero, tipo: 'DAV', condicao_pagamento: selectedDav?.condicao_pagamento, total: selectedDav?.total, subtotal: selectedDav?.subtotal },
-                  davItens
-                )}
+                onClick={() => downloadOrderPdf(selectedDav, davItens)}
               >
                 <Printer className="h-4 w-4 mr-2" /> Baixar PDF
               </Button>

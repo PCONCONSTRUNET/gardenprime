@@ -83,7 +83,7 @@ function VendasParceiro() {
     try {
       const { data, error } = await supabase
         .from("vendas_itens")
-        .select("*, produto:produtos(nome, emoji)")
+        .select("*, produto:produtos(nome, codigo, emoji, imagem)")
         .eq("venda_id", venda.id);
       if (data) setVendaItens(data);
     } catch (e) {
@@ -110,7 +110,7 @@ function VendasParceiro() {
         if (vendedor) {
           const { data, error } = await supabase
             .from("vendas")
-            .select("*, clientes(nome)")
+            .select("*, clientes(*)")
             .eq("vendedor_id", vendedor.id)
             .order("created_at", { ascending: false });
 

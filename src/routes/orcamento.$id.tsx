@@ -46,13 +46,12 @@ function ImprimirDAV() {
         setDav(d);
         const { data: i } = await supabase
           .from("dav_items")
-          .select("*, produto:produtos(nome, codigo, imagem, descricao)")
+          .select("*, produto:produtos(nome, codigo, imagem)")
           .eq("dav_id", id);
         if (i) {
           itemsData = i.map((item) => ({
             codigo: item.codigo || item.produto?.codigo,
             produto: item.produto?.nome || item.produto || "Produto sem nome",
-            descricao: item.produto?.descricao,
             imagem: item.produto?.imagem,
             qtd: item.qtd || item.quantidade,
             valor_unitario: item.valor_unitario,
@@ -106,14 +105,13 @@ function ImprimirDAV() {
 
           const { data: vi } = await supabase
             .from("vendas_itens")
-            .select("*, produto:produtos(nome, codigo, imagem, descricao)")
+            .select("*, produto:produtos(nome, codigo, imagem)")
             .eq("venda_id", id);
 
           if (vi) {
             itemsData = vi.map((item) => ({
               codigo: item.produto?.codigo || item.codigo,
               produto: item.produto?.nome || item.produto_nome || "Produto sem nome",
-              descricao: item.produto?.descricao,
               imagem: item.produto?.imagem,
               qtd: item.quantidade,
               valor_unitario: item.valor_unitario,
