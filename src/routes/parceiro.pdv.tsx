@@ -682,9 +682,7 @@ function ParceiroPDV() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="h-14 pl-12 pr-20 rounded-2xl bg-transparent border-0 shadow-none text-slate-800 focus-visible:ring-0 text-base"
             />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-3">
-               <Barcode className="w-5 h-5 text-slate-400" />
-               <div className="w-px h-6 bg-slate-200" />
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-3">
                <Mic className="w-5 h-5 text-brand" />
             </div>
           </div>
