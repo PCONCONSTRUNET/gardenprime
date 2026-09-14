@@ -7,6 +7,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 export const Route = createFileRoute("/parceiro/clientes")({
   head: () => ({ meta: [{ title: "Clientes — GARDEN PRIME" }] }),
@@ -22,6 +23,7 @@ function ParceiroClientes() {
   const [saving, setSaving] = useState(false);
   const [cnpjLoading, setCnpjLoading] = useState(false);
   const [cnpjErro, setCnpjErro] = useState("");
+  const [selectedCliente, setSelectedCliente] = useState<any>(null);
 
   const emptyForm = {
     nome: "", cpf_cnpj: "", telefone: "", cep: "", endereco: "",
@@ -285,7 +287,11 @@ function ParceiroClientes() {
       ) : (
         <div className="grid gap-3">
           {filtered.map((c) => (
-            <div key={c.id} className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-900/5 p-4 flex items-center justify-between gap-3">
+            <div
+              key={c.id}
+              onClick={() => setSelectedCliente(c)}
+              className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-900/5 p-4 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
+            >
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 font-bold text-base flex items-center justify-center shrink-0">
                   {(c.nome || "?")[0].toUpperCase()}
@@ -311,6 +317,74 @@ function ParceiroClientes() {
           ))}
         </div>
       )}
+
+      {/* ─── CLIENTE DETALHES SHEET ─── */}
+      <Sheet open={!!selectedCliente} onOpenChange={(open) => !open && setSelectedCliente(null)}>
+        <SheetContent side="bottom" className="rounded-t-3xl h-[85vh] p-0 flex flex-col bg-slate-50">
+          <SheetHeader className="p-5 pb-4 border-b bg-white rounded-t-3xl shrink-0 relative">
+            <SheetTitle className="text-left font-display">Ficha do Cliente</SheetTitle>
+          </SheetHeader>
+          
+          <div className="flex-1 overflow-y-auto p-5 space-y-5">
+            {selectedCliente && (
+              <>
+                <div className="bg-white rounded-2xl p-5 shadow-sm ring-1 ring-slate-900/5 flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-700 font-bold text-2xl flex items-center justify-center shrink-0">
+                    {(selectedCliente.nome || "?")[0].toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="font-bold text-lg text-slate-800 leading-tight">
+                      {selectedCliente.nome}
+                    </h2>
+                    {selectedCliente.cpf_cnpj && (
+                      <p className="text-sm text-slate-500 mt-1">
+                        {selectedCliente.cpf_cnpj.length > 14 ? "CNPJ" : "CPF"}: {selectedCliente.cpf_cnpj}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl p-5 shadow-sm ring-1 ring-slate-900/5 space-y-4">
+                  <h3 className="font-semibold text-slate-800 border-b pb-2">Contato</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <Phone className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Telefone</p>
+                        <p className="text-slate-700">{selectedCliente.telefone || "Não informado"}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl p-5 shadow-sm ring-1 ring-slate-900/5 space-y-4">
+                  <h3 className="font-semibold text-slate-800 border-b pb-2">Endereço</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <MapPin className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Local</p>
+                        <p className="text-slate-700">
+                          {selectedCliente.endereco || "Não informado"}
+                          {selectedCliente.numero && `, ${selectedCliente.numero}`}
+                        </p>
+                        {(selectedCliente.bairro || selectedCliente.cidade || selectedCliente.uf || selectedCliente.cep) && (
+                          <p className="text-slate-600 mt-1 text-sm">
+                            {selectedCliente.bairro && `${selectedCliente.bairro} - `}
+                            {selectedCliente.cidade && `${selectedCliente.cidade}`}
+                            {selectedCliente.uf && `/${selectedCliente.uf}`}
+                            {selectedCliente.cep && ` (CEP: ${selectedCliente.cep})`}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
