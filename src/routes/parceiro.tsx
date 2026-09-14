@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, redirect, Link, useRouterState } from "@tanstack/react-router";
 import { supabaseParceiro as supabase } from "@/lib/supabase";
 import { GardenPrimeLogo } from "@/components/garden-prime-logo";
-import { Home, Calculator, LogOut, Package, Menu, X, Wallet, ClipboardList, Grid, ShoppingCart, Plus, MoreHorizontal, Settings } from "lucide-react";
+import { Home, Calculator, LogOut, Package, Menu, X, Wallet, ClipboardList, Grid, ShoppingCart, Plus, MoreHorizontal, Settings, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 
@@ -75,6 +75,7 @@ const navItems = [
   { to: "/parceiro/vendas", icon: ClipboardList, label: "Vendas" },
   { to: "/parceiro/pagamentos", icon: Wallet, label: "Pagamentos" },
   { to: "/parceiro/catalogo", icon: ShoppingCart, label: "Meus Carrinhos" },
+  { to: "/parceiro/clientes", icon: Users, label: "Clientes" },
   { to: "/parceiro/configuracoes", icon: Settings, label: "Configurações" },
 ];
 
