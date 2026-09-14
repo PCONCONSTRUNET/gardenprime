@@ -4,6 +4,7 @@ import { supabaseParceiro as supabase } from "@/lib/supabase";
 import { ShoppingCart, PackageOpen, Search, X, Trash2, ArrowRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/parceiro/catalogo")({
@@ -19,6 +20,18 @@ function ParceiroCarrinhos() {
   const [selectedCarrinho, setSelectedCarrinho] = useState<any | null>(null);
   const [carrinhoItens, setCarrinhoItens] = useState<any[]>([]);
   const [loadingItens, setLoadingItens] = useState(false);
+
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void;
+  }>({ open: false, title: "", description: "", onConfirm: () => {} });
+
+  const openConfirm = (title: string, description: string, onConfirm: () => void) => {
+    setConfirmDialog({ open: true, title, description, onConfirm });
+  };
+  const closeConfirm = () => setConfirmDialog((p) => ({ ...p, open: false }));
 
   useEffect(() => {
     const fetchCarrinhos = async () => {
@@ -73,16 +86,21 @@ function ParceiroCarrinhos() {
   }, [selectedCarrinho]);
 
   const deleteCarrinho = async (id: string) => {
-    if (!window.confirm("Tem certeza que deseja excluir este carrinho salvo?")) return;
-
-    try {
-      await supabase.from("vendas_itens").delete().eq("venda_id", id);
-      const { error } = await supabase.from("vendas").delete().eq("id", id);
-      if (error) throw error;
-      setCarrinhos((prev) => prev.filter((c) => c.id !== id));
-    } catch (err: any) {
-      alert("Erro ao excluir carrinho: " + err.message);
-    }
+    openConfirm(
+      "Excluir carrinho",
+      "Tem certeza que deseja excluir este carrinho salvo? Essa ação não pode ser desfeita.",
+      async () => {
+        try {
+          await supabase.from("vendas_itens").delete().eq("venda_id", id);
+          const { error } = await supabase.from("vendas").delete().eq("id", id);
+          if (error) throw error;
+          setCarrinhos((prev) => prev.filter((c) => c.id !== id));
+          if (selectedCarrinho?.id === id) setSelectedCarrinho(null);
+        } catch (err: any) {
+          alert("Erro ao excluir carrinho: " + err.message);
+        }
+      }
+    );
   };
 
   const continuarCarrinho = (id: string) => {
@@ -300,6 +318,44 @@ function ParceiroCarrinhos() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Confirm Dialog Modal */}
+      <Dialog open={confirmDialog.open} onOpenChange={(o) => !o && closeConfirm()}>
+        <DialogContent className="sm:max-w-[380px] rounded-2xl p-0 overflow-hidden">
+          <div className="p-6">
+            <DialogHeader>
+              <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+              </div>
+              <DialogTitle className="text-lg font-bold text-slate-900">
+                {confirmDialog.title}
+              </DialogTitle>
+              <DialogDescription className="text-sm text-slate-500 mt-1">
+                {confirmDialog.description}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={closeConfirm}
+                className="flex-1 h-11 rounded-xl border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  confirmDialog.onConfirm();
+                  closeConfirm();
+                }}
+                className="flex-1 h-11 rounded-xl font-semibold text-sm text-white bg-rose-600 hover:bg-rose-700 transition-colors"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );
