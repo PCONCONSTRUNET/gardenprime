@@ -846,12 +846,12 @@ function ParceiroPDV() {
       </div>
 
       {/* Resumo Flutuante (Floating Summary) */}
-      <div className="fixed bottom-[80px] lg:bottom-10 left-0 right-0 px-4 z-40 pointer-events-none pb-safe max-w-4xl lg:max-w-md mx-auto w-full">
+      <div className="fixed bottom-[100px] lg:bottom-10 left-0 right-0 px-4 z-40 pointer-events-none pb-safe max-w-4xl lg:max-w-md mx-auto w-full">
         <div className="pointer-events-auto">
             <div className="animate-in slide-in-from-bottom-5 fade-in duration-300">
               <Sheet>
                 <SheetTrigger asChild>
-                  <div className="bg-white/85 backdrop-blur-xl rounded-[32px] shadow-2xl border border-white/60 p-3 pl-6 pr-3 flex items-center justify-between cursor-pointer ring-1 ring-black/5">
+                  <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-2xl border border-black/20 p-3 pl-6 pr-3 flex items-center justify-between cursor-pointer ring-1 ring-black/10">
                     <div>
                       <p className="font-bold text-sm text-slate-800 flex items-center gap-2">
                         Resumo do Pedido
