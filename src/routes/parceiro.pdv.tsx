@@ -734,7 +734,6 @@ function ParceiroPDV() {
             <Grid className="w-3.5 h-3.5" /> Categorias
           </button>
         </div>
-      </div>
 
       <div className="p-4 space-y-6">
         {/* Mais Comprados */}
