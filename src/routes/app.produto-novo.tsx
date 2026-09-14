@@ -66,6 +66,8 @@ function NovoProduto() {
     csosn_nfe: "",
     cst_cfe: "",
     csosn_cfe: "",
+    cst_pis: "",
+    cst_cofins: "",
   });
 
   const [categoriasDB, setCategoriasDB] = useState<string[]>([
@@ -132,6 +134,8 @@ function NovoProduto() {
               csosn_nfe: data.csosn_nfe || "",
               cst_cfe: data.cst_cfe || "",
               csosn_cfe: data.csosn_cfe || "",
+              cst_pis: data.cst_pis || "",
+              cst_cofins: data.cst_cofins || "",
             });
           }
         } catch (err) {
@@ -293,6 +297,8 @@ function NovoProduto() {
         csosn_nfe: produto.csosn_nfe || null,
         cst_cfe: produto.cst_cfe || null,
         csosn_cfe: produto.csosn_cfe || null,
+        cst_pis: produto.cst_pis || null,
+        cst_cofins: produto.cst_cofins || null,
       };
 
       if (isEditing) {
@@ -481,6 +487,28 @@ function NovoProduto() {
                             value={produto.ipi_exc_fiscal}
                             onChange={(e) => setProduto({ ...produto, ipi_exc_fiscal: e.target.value })}
                             placeholder=""
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 border rounded-md p-4 bg-muted/30">
+                      <h4 className="font-medium text-sm text-primary">PIS / COFINS</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>CST PIS</Label>
+                          <Input
+                            value={produto.cst_pis}
+                            onChange={(e) => setProduto({ ...produto, cst_pis: e.target.value })}
+                            placeholder="Ex: 99"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>CST COFINS</Label>
+                          <Input
+                            value={produto.cst_cofins}
+                            onChange={(e) => setProduto({ ...produto, cst_cofins: e.target.value })}
+                            placeholder="Ex: 99"
                           />
                         </div>
                       </div>
