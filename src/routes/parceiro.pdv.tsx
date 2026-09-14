@@ -769,19 +769,19 @@ function ParceiroPDV() {
                   R$ {Number(p.valor).toFixed(2).replace(".", ",")}
                 </p>
 
-                {getCartQuantity(p.id) !== 0 ? (
-                  <div className="mt-auto flex items-center justify-between border rounded-lg p-0.5 border-brand/20 bg-brand/5">
+                <div className="mt-auto flex flex-col gap-2">
+                  <div className="flex items-center bg-emerald-700 rounded-lg overflow-hidden h-[30px]">
                     <button
                       onClick={() => updateQuantity(p.id, -1)}
-                      className="w-7 h-7 flex items-center justify-center text-brand hover:bg-brand/10 rounded-md"
+                      className="w-7 h-full text-white flex items-center justify-center hover:bg-emerald-800"
                     >
                       <Minus className="w-3 h-3" />
                     </button>
                     <input
                       type="number"
                       min="0"
-                      className="w-8 text-center text-xs font-bold text-brand bg-transparent outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      value={getCartQuantity(p.id)}
+                      className="w-full text-center text-xs font-bold text-slate-900 bg-white h-full outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      value={getCartQuantity(p.id) === 0 ? 1 : getCartQuantity(p.id)}
                       onChange={(e) => setQuantity(p.id, e.target.value)}
                       onBlur={(e) => {
                         if (e.target.value === "" || parseInt(e.target.value) <= 0)
@@ -790,41 +790,45 @@ function ParceiroPDV() {
                     />
                     <button
                       onClick={() => updateQuantity(p.id, 1)}
-                      className="w-7 h-7 flex items-center justify-center text-brand hover:bg-brand/10 rounded-md"
+                      className="w-7 h-full text-white flex items-center justify-center hover:bg-emerald-800"
                     >
                       <Plus className="w-3 h-3" />
                     </button>
                   </div>
-                ) : (
                   <button
-                    onClick={() => addToCart(p)}
-                    className="mt-auto w-full bg-emerald-700 text-white py-1.5 rounded-lg shadow-sm hover:bg-emerald-800 active:scale-95 transition-transform flex items-center justify-center gap-1 text-xs font-bold"
+                    onClick={() => {
+                      if (getCartQuantity(p.id) === 0) updateQuantity(p.id, 1);
+                    }}
+                    className="w-full bg-emerald-700 text-white text-xs font-bold py-1.5 rounded-lg shadow-sm hover:bg-emerald-800 active:scale-95 transition-transform flex items-center justify-center"
                   >
-                    <ShoppingCart className="w-3.5 h-3.5" /> Adicionar
+                    Adicionar
                   </button>
-                )}
+                </div>
               </div>
             ))}
           </div>
         </div>
 
         {/* Categories Tabs */}
-        <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar bg-slate-50 py-1">
-          <button
-            onClick={() => toggleCategory("Todos")}
-            className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold transition-colors ${selectedCategory === "Todos" ? "bg-emerald-700 text-white shadow-md" : "bg-white text-slate-600 border border-slate-200"}`}
-          >
-            Todos
-          </button>
-          {categorias.map((cat) => (
+        <div>
+          <h3 className="font-bold text-lg text-slate-900 mb-3">Categorias</h3>
+          <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar bg-slate-50 py-1">
             <button
-              key={cat}
-              onClick={() => toggleCategory(cat)}
-              className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold transition-colors ${selectedCategory === cat ? "bg-emerald-700 text-white shadow-md" : "bg-white text-slate-600 border border-slate-200"}`}
+              onClick={() => toggleCategory("Todos")}
+              className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold transition-colors ${selectedCategory === "Todos" ? "bg-emerald-700 text-white shadow-md" : "bg-white text-slate-600 border border-slate-200"}`}
             >
-              {cat}
+              Todos
             </button>
-          ))}
+            {categorias.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => toggleCategory(cat)}
+                className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold transition-colors ${selectedCategory === cat ? "bg-emerald-700 text-white shadow-md" : "bg-white text-slate-600 border border-slate-200"}`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Vertical Product List */}
@@ -834,9 +838,9 @@ function ParceiroPDV() {
             return (
               <div
                 key={p.id}
-                className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-3"
+                className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 flex items-stretch gap-3"
               >
-                <div className="h-16 w-16 bg-slate-50 rounded-xl shrink-0 flex items-center justify-center overflow-hidden">
+                <div className="h-20 w-20 bg-slate-50 rounded-xl shrink-0 flex items-center justify-center overflow-hidden">
                   {p.imagem ? (
                     <img
                       src={p.imagem}
@@ -844,58 +848,55 @@ function ParceiroPDV() {
                       className="h-full w-full object-cover mix-blend-multiply"
                     />
                   ) : (
-                    <span className="text-2xl opacity-50">{p.emoji || "🪴"}</span>
+                    <span className="text-3xl opacity-50">{p.emoji || "🪴"}</span>
                   )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-slate-800 leading-tight mb-1">{p.nome}</p>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] text-muted-foreground">
-                      Código: {p.codigo || "N/A"}
-                    </span>
+                
+                <div className="flex-1 flex flex-col justify-between min-w-0 py-0.5">
+                  <div>
+                    <p className="text-[13px] font-bold text-slate-900 leading-tight mb-1 line-clamp-2">{p.nome}</p>
+                    <p className="text-[11px] text-slate-600 mb-0.5">Código: {p.codigo || "N/A"}</p>
+                    <p className="text-[11px] text-slate-600">Estoque: {p.estoque || 0} und</p>
                   </div>
-                  <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
-                    Estoque: {p.estoque || 0} und
-                  </span>
-                </div>
-                <div className="flex flex-col items-end gap-2 shrink-0">
-                  <p className="text-sm font-extrabold text-slate-900">
+                  <p className="text-sm font-black text-slate-900 mt-1">
                     R$ {Number(p.valor).toFixed(2).replace(".", ",")}
                   </p>
-                  {qtd !== 0 ? (
-                    <div className="flex items-center gap-1 border rounded-lg p-0.5 border-brand/20 bg-brand/5">
-                      <button
-                        onClick={() => updateQuantity(p.id, -1)}
-                        className="w-6 h-6 flex items-center justify-center text-brand"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <input
-                        type="number"
-                        min="0"
-                        className="w-8 text-center text-xs font-bold text-brand bg-transparent outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        value={qtd}
-                        onChange={(e) => setQuantity(p.id, e.target.value)}
-                        onBlur={(e) => {
-                          if (e.target.value === "" || parseInt(e.target.value) <= 0)
-                            removeFromCart(p.id);
-                        }}
-                      />
-                      <button
-                        onClick={() => updateQuantity(p.id, 1)}
-                        className="w-6 h-6 flex items-center justify-center text-brand"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ) : (
+                </div>
+                
+                <div className="flex flex-col justify-between shrink-0 w-[90px]">
+                  <div className="flex items-center bg-emerald-700 rounded-lg overflow-hidden h-[30px] mb-2">
                     <button
-                      onClick={() => addToCart(p)}
-                      className="bg-emerald-700 text-white p-1.5 px-2.5 rounded-lg shadow-sm hover:bg-emerald-800 active:scale-95 transition-transform flex items-center gap-1"
+                      onClick={() => updateQuantity(p.id, -1)}
+                      className="w-7 h-full text-white flex items-center justify-center hover:bg-emerald-800"
                     >
-                      <ShoppingCart className="w-4 h-4" />
+                      <Minus className="w-3.5 h-3.5" />
                     </button>
-                  )}
+                    <input
+                      type="number"
+                      min="0"
+                      className="w-full text-center text-sm font-bold text-slate-900 bg-white h-full outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      value={qtd === 0 ? 1 : qtd}
+                      onChange={(e) => setQuantity(p.id, e.target.value)}
+                      onBlur={(e) => {
+                        if (e.target.value === "" || parseInt(e.target.value) <= 0)
+                          removeFromCart(p.id);
+                      }}
+                    />
+                    <button
+                      onClick={() => updateQuantity(p.id, 1)}
+                      className="w-7 h-full text-white flex items-center justify-center hover:bg-emerald-800"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (qtd === 0) updateQuantity(p.id, 1);
+                    }}
+                    className="bg-emerald-700 text-white text-[13px] font-bold w-full h-[30px] rounded-lg shadow-sm hover:bg-emerald-800 active:scale-95 transition-transform flex items-center justify-center"
+                  >
+                    Adicionar
+                  </button>
                 </div>
               </div>
             );
