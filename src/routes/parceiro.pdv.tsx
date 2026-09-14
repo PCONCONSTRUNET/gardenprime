@@ -16,6 +16,7 @@ import {
   Star,
   Flame,
   Bell,
+  Barcode,
   Clock,
   Grid,
   RefreshCw,
