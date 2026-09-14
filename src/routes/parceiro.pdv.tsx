@@ -294,12 +294,12 @@ function ParceiroPDV() {
     init();
   }, []);
 
-  const addToCart = (produto: any) => {
+  const addToCart = (produto: any, qty: number = 1) => {
     setCart((prev) => {
       const existing = prev.find((i) => i.id === produto.id);
       if (existing) {
         return prev.map((i) =>
-          i.id === produto.id ? { ...i, q: i.q + 1, t: (i.q + 1) * i.u } : i,
+          i.id === produto.id ? { ...i, q: i.q + qty, t: (i.q + qty) * i.u } : i,
         );
       }
       return [
@@ -307,9 +307,9 @@ function ParceiroPDV() {
         {
           id: produto.id,
           p: produto.nome,
-          q: 1,
+          q: qty,
           u: Number(produto.valor),
-          t: Number(produto.valor),
+          t: Number(produto.valor) * qty,
           emoji: produto.emoji,
           imagem: produto.imagem,
         },
@@ -794,7 +794,10 @@ function ParceiroPDV() {
                 <div className="flex flex-col justify-between shrink-0 w-[90px]">
                   <div className="flex items-center bg-emerald-700 rounded-lg overflow-hidden h-[30px] mb-2">
                     <button
-                      onClick={() => updateQuantity(p.id, -1)}
+                      onClick={() => {
+                        if (qtd === 0) return; // Se é 0 (input mostra 1), clicar - não deve fazer nada ou ir para 0? Ir para 0 não faz nada se já é 0
+                        updateQuantity(p.id, -1);
+                      }}
                       className="w-7 h-full text-white flex items-center justify-center hover:bg-emerald-800"
                     >
                       <Minus className="w-3.5 h-3.5" />
@@ -804,14 +807,24 @@ function ParceiroPDV() {
                       min="0"
                       className="w-full text-center text-sm font-bold text-slate-900 bg-white h-full outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       value={qtd === 0 ? 1 : qtd}
-                      onChange={(e) => setQuantity(p.id, e.target.value)}
+                      onChange={(e) => {
+                        const valStr = e.target.value;
+                        if (qtd === 0 && valStr !== "" && parseInt(valStr) > 0) {
+                          addToCart(p, parseInt(valStr));
+                        } else if (qtd > 0) {
+                          setQuantity(p.id, valStr);
+                        }
+                      }}
                       onBlur={(e) => {
                         if (e.target.value === "" || parseInt(e.target.value) <= 0)
                           removeFromCart(p.id);
                       }}
                     />
                     <button
-                      onClick={() => updateQuantity(p.id, 1)}
+                      onClick={() => {
+                        if (qtd === 0) addToCart(p, 2); // se mostrava 1, clicou +, vai pra 2
+                        else updateQuantity(p.id, 1);
+                      }}
                       className="w-7 h-full text-white flex items-center justify-center hover:bg-emerald-800"
                     >
                       <Plus className="w-3.5 h-3.5" />
@@ -819,11 +832,11 @@ function ParceiroPDV() {
                   </div>
                   <button
                     onClick={() => {
-                      if (qtd === 0) updateQuantity(p.id, 1);
+                      if (qtd === 0) addToCart(p, 1);
                     }}
                     className="bg-emerald-700 text-white text-[13px] font-bold w-full h-[30px] rounded-lg shadow-sm hover:bg-emerald-800 active:scale-95 transition-transform flex items-center justify-center"
                   >
-                    Adicionar
+                    {qtd > 0 ? "Adicionado" : "Adicionar"}
                   </button>
                 </div>
               </div>
