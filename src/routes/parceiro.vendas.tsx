@@ -47,6 +47,25 @@ function VendasParceiro() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [loadingItens, setLoadingItens] = useState(false);
 
+  // Confirm dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void;
+    danger?: boolean;
+  }>({
+    open: false,
+    title: "",
+    description: "",
+    onConfirm: () => {},
+  });
+
+  const openConfirm = (title: string, description: string, onConfirm: () => void, danger = true) => {
+    setConfirmDialog({ open: true, title, description, onConfirm, danger });
+  };
+  const closeConfirm = () => setConfirmDialog((p) => ({ ...p, open: false }));
+
   const handleShare = async (venda: any, itens?: any[]) => {
     setSharingId(venda.id);
     try {
@@ -126,50 +145,53 @@ function VendasParceiro() {
 
   const deleteVenda = async (id: string, isDav: boolean = false) => {
     const label = isDav ? "orçamento" : "pedido";
-    if (
-      !window.confirm(
-        `Tem certeza que deseja excluir este ${label}? Essa ação não pode ser desfeita.`,
-      )
-    )
-      return;
-
-    try {
-      // Exclui itens da venda primeiro para integridade referencial
-      await supabase.from("vendas_itens").delete().eq("venda_id", id);
-      const { error } = await supabase.from("vendas").delete().eq("id", id);
-      if (error) throw error;
-      setVendas((prev) => prev.filter((v) => v.id !== id));
-      if (selectedVenda?.id === id) {
-        setSelectedVenda(null);
+    openConfirm(
+      `Excluir ${label}`,
+      `Tem certeza que deseja excluir este ${label}? Essa ação não pode ser desfeita.`,
+      async () => {
+        try {
+          await supabase.from("vendas_itens").delete().eq("venda_id", id);
+          const { error } = await supabase.from("vendas").delete().eq("id", id);
+          if (error) throw error;
+          setVendas((prev) => prev.filter((v) => v.id !== id));
+          if (selectedVenda?.id === id) {
+            setSelectedVenda(null);
+            setIsDetailsOpen(false);
+          }
+        } catch (err: any) {
+          alert(`Erro ao excluir ${label}: ` + err.message);
+        }
       }
-    } catch (err: any) {
-      alert(`Erro ao excluir ${label}: ` + err.message);
-    }
+    );
   };
 
   const cancelarOrcamento = async (id: string) => {
-    if (!window.confirm("Tem certeza que deseja cancelar este orçamento?")) return;
+    openConfirm(
+      "Cancelar orçamento",
+      "Tem certeza que deseja cancelar este orçamento? Ele será marcado como cancelado.",
+      async () => {
+        try {
+          const { error } = await supabase
+            .from("vendas")
+            .update({ status: "Cancelado", status_aprovacao: "Cancelado" })
+            .eq("id", id);
+          if (error) throw error;
 
-    try {
-      const { error } = await supabase
-        .from("vendas")
-        .update({ status: "Cancelado", status_aprovacao: "Cancelado" })
-        .eq("id", id);
-      if (error) throw error;
-
-      setVendas((prev) =>
-        prev.map((v) =>
-          v.id === id ? { ...v, status: "Cancelado", status_aprovacao: "Cancelado" } : v,
-        ),
-      );
-      if (selectedVenda?.id === id) {
-        setSelectedVenda((prev: any) =>
-          prev ? { ...prev, status: "Cancelado", status_aprovacao: "Cancelado" } : null,
-        );
+          setVendas((prev) =>
+            prev.map((v) =>
+              v.id === id ? { ...v, status: "Cancelado", status_aprovacao: "Cancelado" } : v,
+            ),
+          );
+          if (selectedVenda?.id === id) {
+            setSelectedVenda((prev: any) =>
+              prev ? { ...prev, status: "Cancelado", status_aprovacao: "Cancelado" } : null,
+            );
+          }
+        } catch (err: any) {
+          alert("Erro ao cancelar orçamento: " + err.message);
+        }
       }
-    } catch (err: any) {
-      alert("Erro ao cancelar orçamento: " + err.message);
-    }
+    );
   };
 
   const filteredVendas = vendas.filter((v) => {
@@ -542,6 +564,44 @@ function VendasParceiro() {
                 </div>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Dialog Modal */}
+      <Dialog open={confirmDialog.open} onOpenChange={(o) => !o && closeConfirm()}>
+        <DialogContent className="sm:max-w-[380px] rounded-2xl p-0 overflow-hidden">
+          <div className="p-6">
+            <DialogHeader>
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${confirmDialog.danger ? "bg-rose-100" : "bg-amber-100"}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" className={`w-6 h-6 ${confirmDialog.danger ? "text-rose-600" : "text-amber-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+              </div>
+              <DialogTitle className="text-lg font-bold text-slate-900">
+                {confirmDialog.title}
+              </DialogTitle>
+              <DialogDescription className="text-sm text-slate-500 mt-1">
+                {confirmDialog.description}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={closeConfirm}
+                className="flex-1 h-11 rounded-xl border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  confirmDialog.onConfirm();
+                  closeConfirm();
+                }}
+                className={`flex-1 h-11 rounded-xl font-semibold text-sm text-white transition-colors ${confirmDialog.danger ? "bg-rose-600 hover:bg-rose-700" : "bg-amber-500 hover:bg-amber-600"}`}
+              >
+                Confirmar
+              </button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
