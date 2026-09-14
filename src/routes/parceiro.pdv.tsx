@@ -720,21 +720,7 @@ function ParceiroPDV() {
         </div>
       </div>
 
-        {/* Quick Filters */}
-        <div className="flex gap-2 mt-4 overflow-x-auto pb-1 no-scrollbar">
-          <button className="flex-shrink-0 flex items-center gap-2 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-100">
-            <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" /> Favoritos
-          </button>
-          <button className="flex-shrink-0 flex items-center gap-2 bg-rose-50 text-rose-700 px-3 py-1.5 rounded-lg text-xs font-semibold border border-rose-100">
-            <Flame className="w-3.5 h-3.5 fill-rose-500 text-rose-500" /> Mais vendidos
-          </button>
-          <button className="flex-shrink-0 flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-semibold border border-blue-100">
-            <Clock className="w-3.5 h-3.5" /> Último pedido
-          </button>
-          <button className="flex-shrink-0 flex items-center gap-2 bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200">
-            <Grid className="w-3.5 h-3.5" /> Categorias
-          </button>
-        </div>
+
 
       <div className="p-4 space-y-6">
         {/* Categories Tabs */}
