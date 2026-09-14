@@ -91,7 +91,7 @@ function ParceiroPDV() {
       localStorage.setItem("pdv_client_parceiro", JSON.stringify(clientForm));
     }
   }, [clientForm]);
-  const [vendedorInfo, setVendedorInfo] = useState<{ id: string; nome: string; tipo_comissao?: string; valor_comissao?: number; vendas_hoje?: number } | null>(null);
+  const [vendedorInfo, setVendedorInfo] = useState<{ id: string; nome: string; tipo_comissao?: string; valor_comissao?: number; vendas_hoje?: number; avatar_url?: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [davGeradoId, setDavGeradoId] = useState<string | null>(null);
   const [davGeradoNumero, setDavGeradoNumero] = useState<string | number | null>(null);
@@ -158,7 +158,7 @@ function ParceiroPDV() {
               totalVendasHoje = vendasHoje.reduce((acc, v) => acc + (Number(v.valor_total) || 0), 0);
             }
             
-            setVendedorInfo({ id: vData.id, nome: vData.nome, tipo_comissao: vData.tipo_comissao, valor_comissao: vData.valor_comissao, vendas_hoje: totalVendasHoje });
+            setVendedorInfo({ id: vData.id, nome: vData.nome, tipo_comissao: vData.tipo_comissao, valor_comissao: vData.valor_comissao, vendas_hoje: totalVendasHoje, avatar_url: vData.avatar_url });
             aplicaAcrescimo = vData.acrescimo_catalogo;
             if (
               vData.acrescimo_catalogo_percentual !== null &&
@@ -661,7 +661,7 @@ function ParceiroPDV() {
         </div>
         <div className="flex items-center gap-3">
           <div className="w-14 h-14 bg-slate-200 rounded-full overflow-hidden shrink-0 border-2 border-white/20">
-            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Douglas&backgroundColor=e2e8f0" alt="Avatar" className="w-full h-full object-cover" />
+            <img src={vendedorInfo?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${vendedorInfo?.nome}&backgroundColor=e2e8f0`} alt="Avatar" className="w-full h-full object-cover" />
           </div>
           <div>
             <p className="font-bold text-base leading-tight">{vendedorInfo.nome.split(" ")[0]}</p>
