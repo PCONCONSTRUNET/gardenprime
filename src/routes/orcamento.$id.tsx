@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { GardenPrimeLogo } from "@/components/garden-prime-logo";
-import { Printer, ArrowLeft, Loader2 } from "lucide-react";
+import { Printer, ArrowLeft, Loader2, FileText, Calendar, Clock, Handshake, Package, User } from "lucide-react";
 import { WhatsAppIcon, shareOrderWhatsApp } from "@/lib/order-pdf";
 
 export const Route = createFileRoute("/orcamento/$id")({
@@ -23,9 +23,42 @@ function ImprimirDAV() {
       let itemsData: any[] = [];
 
       if (d) {
+        if (d.cliente_id) {
+          const { data: cli } = await supabase.from("clientes").select("*").eq("id", d.cliente_id).single();
+          if (cli) {
+            d.bairro = cli.bairro;
+            d.cidade = cli.cidade;
+            d.uf = cli.uf;
+            d.email = cli.email;
+            if (!d.cliente_endereco) {
+              d.cliente_endereco = [
+                cli.endereco,
+                cli.numero ? `Nº ${cli.numero}` : null,
+                cli.bairro,
+                cli.cidade && cli.uf ? `${cli.cidade}/${cli.uf}` : cli.cidade || cli.uf || null,
+                cli.cep ? `CEP: ${cli.cep}` : null,
+              ]
+                .filter(Boolean)
+                .join(", ");
+            }
+          }
+        }
         setDav(d);
-        const { data: i } = await supabase.from("dav_items").select("*").eq("dav_id", id);
-        if (i) itemsData = i;
+        const { data: i } = await supabase
+          .from("dav_items")
+          .select("*, produto:produtos(nome, codigo, imagem, descricao)")
+          .eq("dav_id", id);
+        if (i) {
+          itemsData = i.map((item) => ({
+            codigo: item.codigo || item.produto?.codigo,
+            produto: item.produto?.nome || item.produto || "Produto sem nome",
+            descricao: item.produto?.descricao,
+            imagem: item.produto?.imagem,
+            qtd: item.qtd || item.quantidade,
+            valor_unitario: item.valor_unitario,
+            total: item.total || item.subtotal,
+          }));
+        }
       } else {
         // Tenta buscar na tabela de vendas (Vendas ou DAVs antigos)
         const { data: v } = await supabase
@@ -54,6 +87,10 @@ function ImprimirDAV() {
             cliente_cnpj: cli?.cpf_cnpj,
             cliente_telefone: cli?.telefone,
             cliente_endereco: enderecoPartes || null,
+            bairro: cli?.bairro || null,
+            cidade: cli?.cidade || null,
+            uf: cli?.uf || null,
+            email: cli?.email || null,
             condicao_pagamento: v.metodo_pagamento,
             subtotal: v.subtotal || v.valor_total,
             desconto_valor: v.desconto_valor || 0,
@@ -69,13 +106,15 @@ function ImprimirDAV() {
 
           const { data: vi } = await supabase
             .from("vendas_itens")
-            .select("*, produto:produtos(nome, codigo)")
+            .select("*, produto:produtos(nome, codigo, imagem, descricao)")
             .eq("venda_id", id);
 
           if (vi) {
             itemsData = vi.map((item) => ({
-              codigo: item.produto?.codigo,
-              produto: item.produto?.nome || "Produto sem nome",
+              codigo: item.produto?.codigo || item.codigo,
+              produto: item.produto?.nome || item.produto_nome || "Produto sem nome",
+              descricao: item.produto?.descricao,
+              imagem: item.produto?.imagem,
               qtd: item.quantidade,
               valor_unitario: item.valor_unitario,
               total: item.subtotal,
@@ -207,115 +246,199 @@ function ImprimirDAV() {
         </div>
 
         {/* 2. BLOCO ESCURO (TÍTULO) */}
-        <div className="bg-[#171F1E] text-white rounded-lg p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-4">
-            <div className="p-2 border border-[#C5A059] rounded-md text-[#C5A059]">
-              <Printer className="w-6 h-6" />
+        <div className="bg-[#112321] text-white rounded-xl px-4 py-3 sm:px-5 sm:py-3.5 flex items-center justify-between gap-3 sm:gap-4 mb-6 shadow-sm">
+          {/* Título e DAV */}
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="p-2 border border-[#C5A059] rounded-lg text-[#C5A059] flex items-center justify-center shrink-0">
+              <FileText className="w-6 h-6 stroke-[1.75]" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold tracking-wider">{dav.isVenda ? "PEDIDO DE VENDA" : "ORÇAMENTO"}</h1>
-              <p className="text-sm font-light">DAV Nº: {dav.numero || dav.id.substring(0,6)}</p>
+              <h1 className="text-lg sm:text-xl font-bold tracking-wider uppercase text-white leading-tight">
+                {dav.isVenda ? "PEDIDO DE VENDA" : "ORÇAMENTO"}
+              </h1>
+              <p className="text-xs text-white/80 font-normal leading-tight">
+                DAV Nº: {dav.numero !== undefined && dav.numero !== null ? String(dav.numero).padStart(3, "0") : (dav.id ? dav.id.substring(0, 6) : "001")}
+              </p>
             </div>
           </div>
-          
-          <div className="flex flex-wrap items-stretch gap-6">
-            <div className="text-xs">
-              <p className="text-[#C5A059] mb-1">Emissão</p>
-              <p>{dataDAV} às {horaDAV}</p>
+
+          {/* Divisor */}
+          <div className="w-px h-8 bg-white/20 shrink-0 hidden sm:block"></div>
+
+          {/* Emissão */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-[#C5A059] shrink-0 stroke-[1.75]" />
+            <div className="text-xs leading-tight">
+              <p className="text-[10px] text-white/70 font-normal leading-none mb-1">Emissão</p>
+              <p className="text-[11px] sm:text-xs text-white font-medium whitespace-nowrap leading-none">
+                {dataDAV} às {horaDAV}
+              </p>
             </div>
-            <div className="w-px bg-white/20"></div>
-            <div className="text-xs">
-              <p className="text-[#C5A059] mb-1">Validade</p>
-              <p>{validadeStr || "--/--/----"}</p>
+          </div>
+
+          {/* Divisor */}
+          <div className="w-px h-8 bg-white/20 shrink-0 hidden sm:block"></div>
+
+          {/* Validade */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-[#C5A059] shrink-0 stroke-[1.75]" />
+            <div className="text-xs leading-tight">
+              <p className="text-[10px] text-white/70 font-normal leading-none mb-1">Validade</p>
+              <p className="text-[11px] sm:text-xs text-white font-medium whitespace-nowrap leading-none">
+                {validadeStr || "--/--/----"}
+              </p>
             </div>
-            <div className="bg-[#B89547] text-white rounded-md p-2 px-3 text-xs flex flex-col justify-center">
-              <p className="font-bold mb-1">CONDIÇÕES COMERCIAIS</p>
-              <p>Pagamento: {dav.condicao_pagamento || "Não informado"}</p>
-              <p>Frete: Retirada | Prazo: Imediato</p>
-            </div>
+          </div>
+
+          {/* Condições Comerciais */}
+          <div className="bg-[#a57f33] text-white rounded-lg px-3.5 py-2 sm:px-4 sm:py-2.5 text-xs flex flex-col justify-center shrink-0 ml-auto sm:ml-0">
+            <p className="font-bold text-[9px] sm:text-[10px] tracking-wider uppercase mb-0.5 leading-none">
+              CONDIÇÕES COMERCIAIS
+            </p>
+            <p className="text-[10px] sm:text-[11px] text-white/95 leading-tight">
+              Pagamento: {dav.condicao_pagamento || "Dinheiro / Pix"}
+            </p>
+            <p className="text-[10px] sm:text-[11px] text-white/95 leading-tight">
+              Frete: Retirada | Prazo: Imediato
+            </p>
           </div>
         </div>
 
         {/* 3. DADOS DO CLIENTE */}
-        <div className="bg-slate-50 border border-slate-100 rounded-lg p-5 flex flex-wrap justify-between gap-6 mb-6">
+        <div className="bg-white border border-[#E5E7EB] rounded-xl p-5 flex flex-wrap justify-between gap-6 mb-6 shadow-xs">
           <div className="flex-1 min-w-[250px]">
-            <h2 className="text-[#C5A059] font-bold text-sm mb-3 flex items-center gap-2">
-              <span className="text-[#B89547] text-lg">👤</span> DADOS DO CLIENTE
+            <h2 className="font-bold text-sm mb-3 flex items-center gap-2">
+              <div className="w-5 h-5 rounded-full bg-[#B89547] flex items-center justify-center text-white shrink-0">
+                <User className="w-3.5 h-3.5" />
+              </div>
+              <span className="tracking-wide">
+                <span className="text-[#B89547] font-bold">DADOS</span>{" "}
+                <span className="text-slate-900 font-bold">DO CLIENTE</span>
+              </span>
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
-              <div className="flex"><span className="w-20 font-semibold text-slate-600">Nome:</span> <span>{dav.cliente_nome || "-"}</span></div>
-              <div className="flex"><span className="w-20 font-semibold text-slate-600">Bairro:</span> <span>{dav.rawVenda?.cliente?.bairro || "-"}</span></div>
-              <div className="flex"><span className="w-20 font-semibold text-slate-600">CNPJ/CPF:</span> <span>{dav.cliente_cnpj || "-"}</span></div>
-              <div className="flex"><span className="w-20 font-semibold text-slate-600">Cidade:</span> <span>{dav.rawVenda?.cliente?.cidade || "-"}</span></div>
-              <div className="flex"><span className="w-20 font-semibold text-slate-600">Telefone:</span> <span>{dav.cliente_telefone || "-"}</span></div>
-              <div className="flex"><span className="w-20 font-semibold text-slate-600">UF:</span> <span>{dav.rawVenda?.cliente?.uf || "-"}</span></div>
-              <div className="flex"><span className="w-20 font-semibold text-slate-600">Endereço:</span> <span className="flex-1 truncate">{dav.rawVenda?.cliente?.endereco || "-"}</span></div>
-              <div className="flex"><span className="w-20 font-semibold text-slate-600">E-mail:</span> <span>{dav.rawVenda?.cliente?.email || "-"}</span></div>
+              <div className="flex">
+                <span className="w-20 font-semibold text-slate-800 shrink-0">Nome:</span>
+                <span className="text-slate-600 truncate">{dav.cliente_nome || "-"}</span>
+              </div>
+              <div className="flex">
+                <span className="w-20 font-semibold text-slate-800 shrink-0">Bairro:</span>
+                <span className="text-slate-600 truncate">{dav.rawVenda?.cliente?.bairro || dav.bairro || "-"}</span>
+              </div>
+              <div className="flex">
+                <span className="w-20 font-semibold text-slate-800 shrink-0">CNPJ/CPF:</span>
+                <span className="text-slate-600 truncate">{dav.cliente_cnpj || "-"}</span>
+              </div>
+              <div className="flex">
+                <span className="w-20 font-semibold text-slate-800 shrink-0">Cidade:</span>
+                <span className="text-slate-600 truncate">{dav.rawVenda?.cliente?.cidade || dav.cidade || "-"}</span>
+              </div>
+              <div className="flex">
+                <span className="w-20 font-semibold text-slate-800 shrink-0">Telefone:</span>
+                <span className="text-slate-600 truncate">{dav.cliente_telefone || "-"}</span>
+              </div>
+              <div className="flex">
+                <span className="w-20 font-semibold text-slate-800 shrink-0">UF:</span>
+                <span className="text-slate-600 truncate">{dav.rawVenda?.cliente?.uf || dav.uf || "-"}</span>
+              </div>
+              <div className="flex">
+                <span className="w-20 font-semibold text-slate-800 shrink-0">Endereço:</span>
+                <span className="flex-1 truncate text-slate-600">{dav.rawVenda?.cliente?.endereco || dav.cliente_endereco || "-"}</span>
+              </div>
+              <div className="flex">
+                <span className="w-20 font-semibold text-slate-800 shrink-0">E-mail:</span>
+                <span className="text-slate-600 truncate">{dav.rawVenda?.cliente?.email || dav.email || "-"}</span>
+              </div>
             </div>
           </div>
           
-          <div className="bg-[#FAF9F5] border border-[#EBE4D5] rounded-md p-4 text-center max-w-[180px] flex flex-col justify-center items-center">
-             <div className="text-[#C5A059] text-2xl mb-1">🤝</div>
-             <p className="text-[#C5A059] font-bold text-sm mb-2">Obrigado pela sua confiança!</p>
+          <div className="bg-[#FAF7EE] border border-[#EAE3D2] rounded-xl p-4 text-center w-full sm:w-[200px] flex flex-col justify-center items-center shrink-0">
+             <Handshake className="w-8 h-8 text-[#A57F33] mb-1.5 stroke-[1.75]" />
+             <p className="text-[#A57F33] font-bold text-xs mb-1">Obrigado pela sua confiança!</p>
              <p className="text-[9px] text-slate-500 leading-tight">Estamos à disposição para lhe atender sempre!</p>
           </div>
         </div>
 
         {/* 4. PRODUTOS */}
-        <div className="mb-4">
-          <h2 className="text-[#C5A059] font-bold text-sm mb-3 flex items-center gap-2">
-            <span className="text-[#B89547] text-lg">📦</span> PRODUTOS
+        <div className="mb-6">
+          <h2 className="font-bold text-sm mb-3 flex items-center gap-2">
+            <Package className="w-5 h-5 text-[#B89547] shrink-0" strokeWidth={2} />
+            <span className="text-slate-900 tracking-wider uppercase font-bold">PRODUTOS</span>
           </h2>
           
-          <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 overflow-hidden shadow-xs">
             <table className="w-full text-left text-xs whitespace-nowrap">
-              <thead className="bg-[#171F1E] text-white">
+              <thead className="bg-[#112321] text-white">
                 <tr>
-                  <th className="p-3 text-center w-16">Código</th>
-                  <th className="p-3 w-16"></th>
-                  <th className="p-3">Produto</th>
-                  <th className="p-3 text-center">Qtd</th>
-                  <th className="p-3 text-right">Vlr. Unit.</th>
-                  <th className="p-3 text-right">Vlr. Total</th>
+                  <th className="p-3 text-left pl-4 font-semibold text-xs">Código</th>
+                  <th className="p-3 text-left font-semibold text-xs">Produto</th>
+                  <th className="p-3 text-center font-semibold text-xs">Qtd</th>
+                  <th className="p-3 text-right font-semibold text-xs">Vlr. Unit.</th>
+                  <th className="p-3 text-right pr-4 font-semibold text-xs">Vlr. Total</th>
                 </tr>
               </thead>
               <tbody>
-                {itens.map((it, idx) => (
-                  <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
-                    <td className="p-3 text-center font-medium text-slate-600">{it.codigo || "-"}</td>
-                    <td className="p-2">
-                      <div className="w-10 h-10 rounded border border-slate-200 bg-white overflow-hidden flex items-center justify-center">
-                        {it.produto?.imagem || it.produtos?.imagem ? (
-                          <img src={it.produto?.imagem || it.produtos?.imagem} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-slate-300 text-[10px]">Sem img</span>
+                {itens.map((it, idx) => {
+                  const imgUrl = it.imagem || it.produto?.imagem || it.produtos?.imagem || (it.rawVenda || it).produto?.imagem;
+                  const desc = it.descricao || (it.rawVenda || it).produto?.descricao;
+                  return (
+                    <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-[#FBFBFA]"}>
+                      <td className="p-3 pl-4">
+                        <div className="flex items-center gap-3">
+                          {imgUrl ? (
+                            <div className="w-10 h-10 rounded-md border border-slate-200 bg-white overflow-hidden flex items-center justify-center shrink-0">
+                              <img src={imgUrl} alt="" className="w-full h-full object-cover" />
+                            </div>
+                          ) : (
+                            <div className="w-10 h-10 rounded-md border border-slate-100 bg-slate-50 flex items-center justify-center shrink-0">
+                              <Package className="w-4 h-4 text-slate-300" />
+                            </div>
+                          )}
+                          <span className="font-semibold text-slate-700 text-xs">{it.codigo || "-"}</span>
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <p className="font-bold text-slate-900 text-xs">{it.produto}</p>
+                        {desc && (
+                          <p className="text-[10px] text-slate-500 max-w-[240px] sm:max-w-md truncate mt-0.5">{desc}</p>
                         )}
-                      </div>
-                    </td>
-                    <td className="p-3">
-                      <p className="font-bold text-slate-800">{it.produto}</p>
-                      <p className="text-[9px] text-slate-500 max-w-[200px] sm:max-w-sm truncate">{(it.rawVenda || it).produto?.descricao || "Sem descrição"}</p>
-                    </td>
-                    <td className="p-3 text-center font-bold text-slate-700">{it.qtd}</td>
-                    <td className="p-3 text-right text-slate-600">R$ {Number(it.valor_unitario || 0).toFixed(2).replace(".", ",")}</td>
-                    <td className="p-3 text-right font-bold text-slate-800">R$ {Number(it.total || 0).toFixed(2).replace(".", ",")}</td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="p-3 text-center font-bold text-slate-800 text-xs">{it.qtd}</td>
+                      <td className="p-3 text-right text-slate-600 text-xs whitespace-nowrap">
+                        R$ {Number(it.valor_unitario || 0).toFixed(2).replace(".", ",")}
+                      </td>
+                      <td className="p-3 pr-4 text-right font-bold text-slate-900 text-xs whitespace-nowrap">
+                        R$ {Number(it.total || 0).toFixed(2).replace(".", ",")}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
 
         {/* 5. SUBTOTAL / TOTAL */}
-        <div className="flex justify-end mb-10">
-          <div className="w-64">
-            <div className="flex justify-between items-center p-3 bg-slate-100 rounded-t-lg">
-              <span className="text-slate-600 text-xs font-semibold">Subtotal</span>
-              <span className="text-slate-800 text-sm font-bold">R$ {Number(dav.subtotal || dav.total || 0).toFixed(2).replace(".", ",")}</span>
+        <div className="flex justify-end mb-8">
+          <div className="bg-[#FAF7EE] border border-[#EBE4D5] rounded-xl p-2.5 flex items-center gap-3 min-w-[260px] shadow-xs">
+            {/* Ícone de Moeda/Cifrão à esquerda */}
+            <div className="w-7 h-7 rounded-full border border-[#1B382F] flex items-center justify-center text-[#1B382F] shrink-0 ml-1">
+              <span className="font-bold text-xs leading-none">$</span>
             </div>
-            <div className="flex justify-between items-center p-3 bg-[#B89547] text-white rounded-b-lg">
-              <span className="text-xs font-bold">Total</span>
-              <span className="text-base font-black">R$ {Number(dav.total || 0).toFixed(2).replace(".", ",")}</span>
+            {/* Linhas de Valores à direita */}
+            <div className="flex-1 flex flex-col gap-1.5">
+              <div className="flex justify-between items-center px-1 text-xs">
+                <span className="text-slate-600 font-medium">Subtotal</span>
+                <span className="text-slate-900 font-bold">
+                  R$ {Number(dav.subtotal || dav.total || 0).toFixed(2).replace(".", ",")}
+                </span>
+              </div>
+              <div className="bg-[#A37E36] text-white rounded-lg px-3 py-1.5 flex justify-between items-center">
+                <span className="text-xs font-bold uppercase tracking-wider">Total</span>
+                <span className="text-sm font-black">
+                  R$ {Number(dav.total || 0).toFixed(2).replace(".", ",")}
+                </span>
+              </div>
             </div>
           </div>
         </div>

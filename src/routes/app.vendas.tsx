@@ -12,10 +12,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Calculator, Trash2, Check, X, Pencil, Search, Ban, Zap } from "lucide-react";
+import { Plus, Calculator, Trash2, Check, X, Pencil, Search, Ban, Zap, Download } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useConfirm } from "@/contexts/ConfirmContext";
+import { downloadOrderPdf } from "@/lib/order-pdf";
 import { AsaasCobrancaModal } from "@/components/asaas-cobranca-modal";
 import {
   Sheet,
@@ -519,10 +520,14 @@ function Vendas() {
                   </svg>
                   Enviar WhatsApp
                 </Button>
-                <Button className="flex-1 bg-slate-900" asChild>
-                  <Link to="/orcamento/$id" params={{ id: selectedVenda?.id }}>
-                    Imprimir PDF
-                  </Link>
+                <Button
+                  className="flex-1 bg-slate-900"
+                  onClick={() => downloadOrderPdf(
+                    { id: selectedVenda?.id, created_at: selectedVenda?.created_at, numero_venda: selectedVenda?.numero_venda, tipo: selectedVenda?.tipo, condicao_pagamento: selectedVenda?.metodo_pagamento, total: selectedVenda?.valor_total, subtotal: selectedVenda?.subtotal },
+                    vendaItens
+                  )}
+                >
+                  <Download className="h-4 w-4 mr-2" /> Baixar PDF
                 </Button>
               </div>
               <Button
