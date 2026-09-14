@@ -1,0 +1,53 @@
+-- Adiciona colunas para a ficha completa de produtos (Dados Básicos / Custos)
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS tipo_item TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS controle_estoque TEXT DEFAULT 'Nenhum';
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS unidade_medida TEXT DEFAULT 'Unidade';
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS fornecedor_preferencial TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS codigo_barras TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS descricao_complementar TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS referencia_extra TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS qtd_minima NUMERIC DEFAULT 0;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS qtd_reserva NUMERIC DEFAULT 0;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS peso_bruto NUMERIC DEFAULT 0;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS peso_liquido NUMERIC DEFAULT 0;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS custo_compra NUMERIC DEFAULT 0;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS custo_medio NUMERIC DEFAULT 0;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco_uss NUMERIC DEFAULT 0;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS lucro_bruto_perc NUMERIC DEFAULT 0;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS comissao_perc NUMERIC DEFAULT 0;
+
+-- Adiciona colunas de Tributos (Tela 1)
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS taxa_icms_iss_contrib TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS taxa_icms_iss_cfe_nfe_nao_contrib TEXT;
+
+-- Adiciona colunas de Tributos Adicionais (Tela 2)
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS pis_perc NUMERIC DEFAULT 0;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS cofins_perc NUMERIC DEFAULT 0;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS natureza_receita TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS irrf_perc NUMERIC DEFAULT 0;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS mva_perc NUMERIC DEFAULT 0;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS icms_efetivo_perc NUMERIC DEFAULT 0;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS cfop_ecf TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS cfop_nf TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS indicador_trib TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS indicador_escala TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS aliquota_icms_destino_perc NUMERIC DEFAULT 0;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS iat TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS ippt TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS taxa_icms_partilha TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS taxa_fcp TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS fci TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS codigo_anp TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS cnpj_fabricante TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS motivo_desoneracao TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS conta_contabil TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS usa_cod_beneficio_tabela_cfop BOOLEAN DEFAULT FALSE;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS cod_beneficio_nfe TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS cod_beneficio_entr TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS cod_beneficio_cfe TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS cod_beneficio_rbc TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS credito_presumido_tipo TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS credito_presumido_codigo TEXT;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS credito_presumido_aliquota NUMERIC DEFAULT 0;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS credito_presumido_aliquota_uf BOOLEAN DEFAULT FALSE;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS credito_presumido_uf_list JSONB DEFAULT '[]'::jsonb;

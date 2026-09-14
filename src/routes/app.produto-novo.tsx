@@ -24,6 +24,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export const Route = createFileRoute("/app/produto-novo")({
   validateSearch: (search: Record<string, unknown>): { id?: string } => {
@@ -68,6 +70,54 @@ function NovoProduto() {
     csosn_cfe: "",
     cst_pis: "",
     cst_cofins: "",
+    tipo_item: "Embalagem",
+    controle_estoque: "Nenhum",
+    unidade_medida: "Unidade",
+    fornecedor_preferencial: "",
+    codigo_barras: "",
+    descricao_complementar: "",
+    referencia_extra: "",
+    qtd_minima: 0,
+    qtd_reserva: 0,
+    peso_bruto: 0,
+    peso_liquido: 0,
+    custo_compra: 0,
+    custo_medio: 0,
+    preco_uss: 0,
+    lucro_bruto_perc: 0,
+    comissao_perc: 0,
+    taxa_icms_iss_contrib: "Tributação Isenta",
+    taxa_icms_iss_cfe_nfe_nao_contrib: "Venda à vista",
+    pis_perc: 0,
+    cofins_perc: 0,
+    natureza_receita: "",
+    irrf_perc: 0,
+    mva_perc: 0,
+    icms_efetivo_perc: 0,
+    cfop_ecf: "5102",
+    cfop_nf: "5102",
+    indicador_trib: "",
+    indicador_escala: "",
+    aliquota_icms_destino_perc: 0,
+    iat: "A-Arredondamento",
+    ippt: "T-Terceiros",
+    taxa_icms_partilha: "",
+    taxa_fcp: "",
+    fci: "",
+    codigo_anp: "",
+    cnpj_fabricante: "",
+    motivo_desoneracao: "",
+    conta_contabil: "",
+    usa_cod_beneficio_tabela_cfop: false,
+    cod_beneficio_nfe: "",
+    cod_beneficio_entr: "",
+    cod_beneficio_cfe: "",
+    cod_beneficio_rbc: "",
+    credito_presumido_tipo: "NF-e",
+    credito_presumido_codigo: "",
+    credito_presumido_aliquota: 0,
+    credito_presumido_aliquota_uf: false,
+    credito_presumido_uf_list: [] as { codigo: string; aliquota: number }[],
   });
 
   const [categoriasDB, setCategoriasDB] = useState<string[]>([
@@ -136,6 +186,54 @@ function NovoProduto() {
               csosn_cfe: data.csosn_cfe || "",
               cst_pis: data.cst_pis || "",
               cst_cofins: data.cst_cofins || "",
+              tipo_item: data.tipo_item || "Embalagem",
+              controle_estoque: data.controle_estoque || "Nenhum",
+              unidade_medida: data.unidade_medida || "Unidade",
+              fornecedor_preferencial: data.fornecedor_preferencial || "",
+              codigo_barras: data.codigo_barras || "",
+              descricao_complementar: data.descricao_complementar || "",
+              referencia_extra: data.referencia_extra || "",
+              qtd_minima: data.qtd_minima || 0,
+              qtd_reserva: data.qtd_reserva || 0,
+              peso_bruto: data.peso_bruto || 0,
+              peso_liquido: data.peso_liquido || 0,
+              custo_compra: data.custo_compra || 0,
+              custo_medio: data.custo_medio || 0,
+              preco_uss: data.preco_uss || 0,
+              lucro_bruto_perc: data.lucro_bruto_perc || 0,
+              comissao_perc: data.comissao_perc || 0,
+              taxa_icms_iss_contrib: data.taxa_icms_iss_contrib || "Tributação Isenta",
+              taxa_icms_iss_cfe_nfe_nao_contrib: data.taxa_icms_iss_cfe_nfe_nao_contrib || "Venda à vista",
+              pis_perc: data.pis_perc || 0,
+              cofins_perc: data.cofins_perc || 0,
+              natureza_receita: data.natureza_receita || "",
+              irrf_perc: data.irrf_perc || 0,
+              mva_perc: data.mva_perc || 0,
+              icms_efetivo_perc: data.icms_efetivo_perc || 0,
+              cfop_ecf: data.cfop_ecf || "5102",
+              cfop_nf: data.cfop_nf || "5102",
+              indicador_trib: data.indicador_trib || "",
+              indicador_escala: data.indicador_escala || "",
+              aliquota_icms_destino_perc: data.aliquota_icms_destino_perc || 0,
+              iat: data.iat || "A-Arredondamento",
+              ippt: data.ippt || "T-Terceiros",
+              taxa_icms_partilha: data.taxa_icms_partilha || "",
+              taxa_fcp: data.taxa_fcp || "",
+              fci: data.fci || "",
+              codigo_anp: data.codigo_anp || "",
+              cnpj_fabricante: data.cnpj_fabricante || "",
+              motivo_desoneracao: data.motivo_desoneracao || "",
+              conta_contabil: data.conta_contabil || "",
+              usa_cod_beneficio_tabela_cfop: data.usa_cod_beneficio_tabela_cfop || false,
+              cod_beneficio_nfe: data.cod_beneficio_nfe || "",
+              cod_beneficio_entr: data.cod_beneficio_entr || "",
+              cod_beneficio_cfe: data.cod_beneficio_cfe || "",
+              cod_beneficio_rbc: data.cod_beneficio_rbc || "",
+              credito_presumido_tipo: data.credito_presumido_tipo || "NF-e",
+              credito_presumido_codigo: data.credito_presumido_codigo || "",
+              credito_presumido_aliquota: data.credito_presumido_aliquota || 0,
+              credito_presumido_aliquota_uf: data.credito_presumido_aliquota_uf || false,
+              credito_presumido_uf_list: data.credito_presumido_uf_list || [],
             });
           }
         } catch (err) {
@@ -299,6 +397,54 @@ function NovoProduto() {
         csosn_cfe: produto.csosn_cfe || null,
         cst_pis: produto.cst_pis || null,
         cst_cofins: produto.cst_cofins || null,
+        tipo_item: produto.tipo_item || null,
+        controle_estoque: produto.controle_estoque || null,
+        unidade_medida: produto.unidade_medida || null,
+        fornecedor_preferencial: produto.fornecedor_preferencial || null,
+        codigo_barras: produto.codigo_barras || null,
+        descricao_complementar: produto.descricao_complementar || null,
+        referencia_extra: produto.referencia_extra || null,
+        qtd_minima: produto.qtd_minima || 0,
+        qtd_reserva: produto.qtd_reserva || 0,
+        peso_bruto: produto.peso_bruto || 0,
+        peso_liquido: produto.peso_liquido || 0,
+        custo_compra: produto.custo_compra || 0,
+        custo_medio: produto.custo_medio || 0,
+        preco_uss: produto.preco_uss || 0,
+        lucro_bruto_perc: produto.lucro_bruto_perc || 0,
+        comissao_perc: produto.comissao_perc || 0,
+        taxa_icms_iss_contrib: produto.taxa_icms_iss_contrib || null,
+        taxa_icms_iss_cfe_nfe_nao_contrib: produto.taxa_icms_iss_cfe_nfe_nao_contrib || null,
+        pis_perc: produto.pis_perc || 0,
+        cofins_perc: produto.cofins_perc || 0,
+        natureza_receita: produto.natureza_receita || null,
+        irrf_perc: produto.irrf_perc || 0,
+        mva_perc: produto.mva_perc || 0,
+        icms_efetivo_perc: produto.icms_efetivo_perc || 0,
+        cfop_ecf: produto.cfop_ecf || null,
+        cfop_nf: produto.cfop_nf || null,
+        indicador_trib: produto.indicador_trib || null,
+        indicador_escala: produto.indicador_escala || null,
+        aliquota_icms_destino_perc: produto.aliquota_icms_destino_perc || 0,
+        iat: produto.iat || null,
+        ippt: produto.ippt || null,
+        taxa_icms_partilha: produto.taxa_icms_partilha || null,
+        taxa_fcp: produto.taxa_fcp || null,
+        fci: produto.fci || null,
+        codigo_anp: produto.codigo_anp || null,
+        cnpj_fabricante: produto.cnpj_fabricante || null,
+        motivo_desoneracao: produto.motivo_desoneracao || null,
+        conta_contabil: produto.conta_contabil || null,
+        usa_cod_beneficio_tabela_cfop: produto.usa_cod_beneficio_tabela_cfop,
+        cod_beneficio_nfe: produto.cod_beneficio_nfe || null,
+        cod_beneficio_entr: produto.cod_beneficio_entr || null,
+        cod_beneficio_cfe: produto.cod_beneficio_cfe || null,
+        cod_beneficio_rbc: produto.cod_beneficio_rbc || null,
+        credito_presumido_tipo: produto.credito_presumido_tipo || null,
+        credito_presumido_codigo: produto.credito_presumido_codigo || null,
+        credito_presumido_aliquota: produto.credito_presumido_aliquota || 0,
+        credito_presumido_aliquota_uf: produto.credito_presumido_aliquota_uf,
+        credito_presumido_uf_list: produto.credito_presumido_uf_list || [],
       };
 
       if (isEditing) {
@@ -367,153 +513,324 @@ function NovoProduto() {
                     Fiscal
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                       <Scale className="h-5 w-5" /> Informações Tributárias
                     </DialogTitle>
                   </DialogHeader>
                   
-                  <div className="space-y-4 py-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>NCM (Nomenclatura Comum do Mercosul)</Label>
-                        <Input
-                          value={produto.ncm}
-                          onChange={(e) =>
-                            setProduto({ ...produto, ncm: e.target.value.replace(/\D/g, "").slice(0, 8) })
-                          }
-                          placeholder="Ex: 39269090 (8 dígitos)"
+                  <Tabs defaultValue="principal" className="mt-4">
+                    <TabsList className="w-full justify-start overflow-x-auto">
+                      <TabsTrigger value="principal">Principal</TabsTrigger>
+                      <TabsTrigger value="adicionais">Tributos Adicionais</TabsTrigger>
+                      <TabsTrigger value="beneficios">Benefícios Fiscais</TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="principal" className="space-y-4 py-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>NCM (Nomenclatura Comum do Mercosul)</Label>
+                          <Input
+                            value={produto.ncm}
+                            onChange={(e) =>
+                              setProduto({ ...produto, ncm: e.target.value.replace(/\D/g, "").slice(0, 8) })
+                            }
+                            placeholder="Ex: 39269090 (8 dígitos)"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>CEST</Label>
+                          <Input
+                            value={produto.cest}
+                            onChange={(e) => setProduto({ ...produto, cest: e.target.value })}
+                            placeholder="Ex: 0100100"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 border rounded-md p-4 bg-muted/30">
+                        <h4 className="font-medium text-sm text-primary">Situação Tributária</h4>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                          <div className="space-y-2">
+                            <Label>CST NFe</Label>
+                            <Input
+                              value={produto.cst_nfe}
+                              onChange={(e) => setProduto({ ...produto, cst_nfe: e.target.value })}
+                              placeholder="090"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>CSOSN NFe</Label>
+                            <Input
+                              value={produto.csosn_nfe}
+                              onChange={(e) => setProduto({ ...produto, csosn_nfe: e.target.value })}
+                              placeholder="101"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>CST CFe</Label>
+                            <Input
+                              value={produto.cst_cfe}
+                              onChange={(e) => setProduto({ ...produto, cst_cfe: e.target.value })}
+                              placeholder="090"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>CSOSN CFe</Label>
+                            <Input
+                              value={produto.csosn_cfe}
+                              onChange={(e) => setProduto({ ...produto, csosn_cfe: e.target.value })}
+                              placeholder="102"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Taxa ICMS/ISS (Contrib)</Label>
+                          <Input
+                            value={produto.taxa_icms_iss_contrib}
+                            onChange={(e) => setProduto({ ...produto, taxa_icms_iss_contrib: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Taxa ICMS/ISS CFe/NFe (Não Contrib)</Label>
+                          <Input
+                            value={produto.taxa_icms_iss_cfe_nfe_nao_contrib}
+                            onChange={(e) => setProduto({ ...produto, taxa_icms_iss_cfe_nfe_nao_contrib: e.target.value })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 border rounded-md p-4 bg-muted/30">
+                        <h4 className="font-medium text-sm text-primary">IPI</h4>
+                        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                          <div className="space-y-2">
+                            <Label>Tipo</Label>
+                            <select
+                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
+                              value={produto.ipi_tipo_valor}
+                              onChange={(e) => setProduto({ ...produto, ipi_tipo_valor: e.target.value })}
+                            >
+                              <option value="R$">Valor (R$)</option>
+                              <option value="%">Percentual (%)</option>
+                            </select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Valor</Label>
+                            <Input
+                              type="number" step="0.01" min="0"
+                              value={produto.ipi_valor}
+                              onChange={(e) => setProduto({ ...produto, ipi_valor: Number(e.target.value) })}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>CST IPI</Label>
+                            <Input
+                              value={produto.ipi_cst}
+                              onChange={(e) => setProduto({ ...produto, ipi_cst: e.target.value })}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>CENQ</Label>
+                            <Input
+                              value={produto.ipi_cenq}
+                              onChange={(e) => setProduto({ ...produto, ipi_cenq: e.target.value })}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Exc. Fiscal</Label>
+                            <Input
+                              value={produto.ipi_exc_fiscal}
+                              onChange={(e) => setProduto({ ...produto, ipi_exc_fiscal: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 border rounded-md p-4 bg-muted/30">
+                        <h4 className="font-medium text-sm text-primary">PIS / COFINS</h4>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                          <div className="space-y-2">
+                            <Label>CST PIS</Label>
+                            <Input
+                              value={produto.cst_pis}
+                              onChange={(e) => setProduto({ ...produto, cst_pis: e.target.value })}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>% PIS</Label>
+                            <Input
+                              type="number" step="0.01" min="0"
+                              value={produto.pis_perc}
+                              onChange={(e) => setProduto({ ...produto, pis_perc: Number(e.target.value) })}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>CST COFINS</Label>
+                            <Input
+                              value={produto.cst_cofins}
+                              onChange={(e) => setProduto({ ...produto, cst_cofins: e.target.value })}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>% COFINS</Label>
+                            <Input
+                              type="number" step="0.01" min="0"
+                              value={produto.cofins_perc}
+                              onChange={(e) => setProduto({ ...produto, cofins_perc: Number(e.target.value) })}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="adicionais" className="space-y-4 py-4">
+                      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label>Natureza da Receita</Label>
+                          <Input value={produto.natureza_receita} onChange={(e) => setProduto({ ...produto, natureza_receita: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>% IRRF</Label>
+                          <Input type="number" step="0.01" value={produto.irrf_perc} onChange={(e) => setProduto({ ...produto, irrf_perc: Number(e.target.value) })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>% MVA</Label>
+                          <Input type="number" step="0.01" value={produto.mva_perc} onChange={(e) => setProduto({ ...produto, mva_perc: Number(e.target.value) })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>% ICMS Efetivo</Label>
+                          <Input type="number" step="0.01" value={produto.icms_efetivo_perc} onChange={(e) => setProduto({ ...produto, icms_efetivo_perc: Number(e.target.value) })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>CFOP ECF</Label>
+                          <Input value={produto.cfop_ecf} onChange={(e) => setProduto({ ...produto, cfop_ecf: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>CFOP NF</Label>
+                          <Input value={produto.cfop_nf} onChange={(e) => setProduto({ ...produto, cfop_nf: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Indicador de Trib</Label>
+                          <Input value={produto.indicador_trib} onChange={(e) => setProduto({ ...produto, indicador_trib: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Indicador de Escala</Label>
+                          <Input value={produto.indicador_escala} onChange={(e) => setProduto({ ...produto, indicador_escala: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>% Alíq ICMS Destino</Label>
+                          <Input type="number" step="0.01" value={produto.aliquota_icms_destino_perc} onChange={(e) => setProduto({ ...produto, aliquota_icms_destino_perc: Number(e.target.value) })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>IAT</Label>
+                          <Input value={produto.iat} onChange={(e) => setProduto({ ...produto, iat: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>IPPT</Label>
+                          <Input value={produto.ippt} onChange={(e) => setProduto({ ...produto, ippt: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Taxa ICMS Partilha</Label>
+                          <Input value={produto.taxa_icms_partilha} onChange={(e) => setProduto({ ...produto, taxa_icms_partilha: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Taxa FCP</Label>
+                          <Input value={produto.taxa_fcp} onChange={(e) => setProduto({ ...produto, taxa_fcp: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>FCI</Label>
+                          <Input value={produto.fci} onChange={(e) => setProduto({ ...produto, fci: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Código ANP</Label>
+                          <Input value={produto.codigo_anp} onChange={(e) => setProduto({ ...produto, codigo_anp: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>CNPJ Fabricante</Label>
+                          <Input value={produto.cnpj_fabricante} onChange={(e) => setProduto({ ...produto, cnpj_fabricante: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Motivo desoneração</Label>
+                          <Input value={produto.motivo_desoneracao} onChange={(e) => setProduto({ ...produto, motivo_desoneracao: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Conta</Label>
+                          <Input value={produto.conta_contabil} onChange={(e) => setProduto({ ...produto, conta_contabil: e.target.value })} />
+                        </div>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="beneficios" className="space-y-6 py-4">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox 
+                          id="usa_cod_beneficio" 
+                          checked={produto.usa_cod_beneficio_tabela_cfop}
+                          onCheckedChange={(checked) => setProduto({ ...produto, usa_cod_beneficio_tabela_cfop: checked === true })}
                         />
+                        <Label htmlFor="usa_cod_beneficio" className="cursor-pointer">Cód. Benefício e Crédito Presumido por Tabela (CFOP)</Label>
                       </div>
-                      <div className="space-y-2">
-                        <Label>CEST</Label>
-                        <Input
-                          value={produto.cest}
-                          onChange={(e) => setProduto({ ...produto, cest: e.target.value })}
-                          placeholder="Ex: 0100100"
-                        />
-                      </div>
-                    </div>
 
-                    <div className="space-y-4 border rounded-md p-4 bg-muted/30">
-                      <h4 className="font-medium text-sm text-primary">Situação Tributária - NFe (Contribuinte)</h4>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>CST NFe</Label>
-                          <Input
-                            value={produto.cst_nfe}
-                            onChange={(e) => setProduto({ ...produto, cst_nfe: e.target.value })}
-                            placeholder="Ex: 090"
-                          />
+                      <div className="grid md:grid-cols-2 gap-8">
+                        <div className="space-y-4 border rounded-md p-4">
+                          <h4 className="font-medium text-sm text-primary">Código Benefício</h4>
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <Label className="w-32">Cód. benefic. (NFe):</Label>
+                              <Input className="flex-1" value={produto.cod_beneficio_nfe} onChange={(e) => setProduto({ ...produto, cod_beneficio_nfe: e.target.value })} />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Label className="w-32">Cód. benefic. (Entr):</Label>
+                              <Input className="flex-1" value={produto.cod_beneficio_entr} onChange={(e) => setProduto({ ...produto, cod_beneficio_entr: e.target.value })} />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Label className="w-32">Cód. benefic. (CFe):</Label>
+                              <Input className="flex-1" value={produto.cod_beneficio_cfe} onChange={(e) => setProduto({ ...produto, cod_beneficio_cfe: e.target.value })} />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Label className="w-32">Cód. benefic. (RBC):</Label>
+                              <Input className="flex-1" value={produto.cod_beneficio_rbc} onChange={(e) => setProduto({ ...produto, cod_beneficio_rbc: e.target.value })} />
+                            </div>
+                          </div>
                         </div>
-                        <div className="space-y-2">
-                          <Label>CSOSN NFe</Label>
-                          <Input
-                            value={produto.csosn_nfe}
-                            onChange={(e) => setProduto({ ...produto, csosn_nfe: e.target.value })}
-                            placeholder="Ex: 101"
-                          />
-                        </div>
-                      </div>
-                    </div>
 
-                    <div className="space-y-4 border rounded-md p-4 bg-muted/30">
-                      <h4 className="font-medium text-sm text-primary">Situação Tributária - CFe e NFe (Não Contribuinte)</h4>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>CST CFe</Label>
-                          <Input
-                            value={produto.cst_cfe}
-                            onChange={(e) => setProduto({ ...produto, cst_cfe: e.target.value })}
-                            placeholder="Ex: 090"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>CSOSN CFe</Label>
-                          <Input
-                            value={produto.csosn_cfe}
-                            onChange={(e) => setProduto({ ...produto, csosn_cfe: e.target.value })}
-                            placeholder="Ex: 102"
-                          />
-                        </div>
-                      </div>
-                    </div>
+                        <div className="space-y-4 border rounded-md p-4">
+                          <h4 className="font-medium text-sm text-primary">Crédito Presumido</h4>
+                          <div className="flex gap-4 items-center">
+                            <Label className="flex items-center gap-1 cursor-pointer">
+                              <input type="radio" name="credito_tipo" value="NF-e" checked={produto.credito_presumido_tipo === "NF-e"} onChange={() => setProduto({...produto, credito_presumido_tipo: "NF-e"})} /> NF-e
+                            </Label>
+                            <Label className="flex items-center gap-1 cursor-pointer">
+                              <input type="radio" name="credito_tipo" value="NFC-e" checked={produto.credito_presumido_tipo === "NFC-e"} onChange={() => setProduto({...produto, credito_presumido_tipo: "NFC-e"})} /> NFC-e
+                            </Label>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label>Alíquota</Label>
+                              <Input type="number" step="0.01" value={produto.credito_presumido_aliquota} onChange={(e) => setProduto({ ...produto, credito_presumido_aliquota: Number(e.target.value) })} />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Código</Label>
+                              <Input value={produto.credito_presumido_codigo} onChange={(e) => setProduto({ ...produto, credito_presumido_codigo: e.target.value })} />
+                            </div>
+                          </div>
 
-                    <div className="space-y-4 border rounded-md p-4 bg-muted/30">
-                      <h4 className="font-medium text-sm text-primary">IPI</h4>
-                      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                        <div className="space-y-2">
-                          <Label>Tipo</Label>
-                          <select
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                            value={produto.ipi_tipo_valor}
-                            onChange={(e) => setProduto({ ...produto, ipi_tipo_valor: e.target.value })}
-                          >
-                            <option value="R$">Valor (R$)</option>
-                            <option value="%">Percentual (%)</option>
-                          </select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Valor</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={produto.ipi_valor}
-                            onChange={(e) => setProduto({ ...produto, ipi_valor: Number(e.target.value) })}
-                            placeholder="0.00"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>CST IPI</Label>
-                          <Input
-                            value={produto.ipi_cst}
-                            onChange={(e) => setProduto({ ...produto, ipi_cst: e.target.value })}
-                            placeholder="Ex: 99"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>CENQ</Label>
-                          <Input
-                            value={produto.ipi_cenq}
-                            onChange={(e) => setProduto({ ...produto, ipi_cenq: e.target.value })}
-                            placeholder="Ex: 001"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Exc. Fiscal</Label>
-                          <Input
-                            value={produto.ipi_exc_fiscal}
-                            onChange={(e) => setProduto({ ...produto, ipi_exc_fiscal: e.target.value })}
-                            placeholder=""
-                          />
+                          <div className="flex items-center space-x-2 pt-2">
+                            <Checkbox 
+                              id="credito_aliquota_uf" 
+                              checked={produto.credito_presumido_aliquota_uf}
+                              onCheckedChange={(checked) => setProduto({ ...produto, credito_presumido_aliquota_uf: checked === true })}
+                            />
+                            <Label htmlFor="credito_aliquota_uf" className="cursor-pointer">Alíquota por UF (NF-e)</Label>
+                          </div>
                         </div>
                       </div>
-                    </div>
-
-                    <div className="space-y-4 border rounded-md p-4 bg-muted/30">
-                      <h4 className="font-medium text-sm text-primary">PIS / COFINS</h4>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>CST PIS</Label>
-                          <Input
-                            value={produto.cst_pis}
-                            onChange={(e) => setProduto({ ...produto, cst_pis: e.target.value })}
-                            placeholder="Ex: 99"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>CST COFINS</Label>
-                          <Input
-                            value={produto.cst_cofins}
-                            onChange={(e) => setProduto({ ...produto, cst_cofins: e.target.value })}
-                            placeholder="Ex: 99"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                    </TabsContent>
+                  </Tabs>
                 </DialogContent>
               </Dialog>
             </div>
@@ -597,23 +914,111 @@ function NovoProduto() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Estoque Inicial</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={produto.estoque}
-                  onChange={(e) => setProduto({ ...produto, estoque: Number(e.target.value) })}
-                />
+                <Label>Tipo de Item</Label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
+                  value={produto.tipo_item}
+                  onChange={(e) => setProduto({ ...produto, tipo_item: e.target.value })}
+                >
+                  <option value="Mercadoria para Revenda">Mercadoria para Revenda</option>
+                  <option value="Embalagem">Embalagem</option>
+                  <option value="Matéria-Prima">Matéria-Prima</option>
+                  <option value="Produto Acabado">Produto Acabado</option>
+                  <option value="Serviço">Serviço</option>
+                </select>
               </div>
               <div className="space-y-2">
-                <Label>Valor Unitário (R$)</Label>
+                <Label>Código de Barras</Label>
                 <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={produto.valor}
-                  onChange={(e) => setProduto({ ...produto, valor: Number(e.target.value) })}
+                  value={produto.codigo_barras}
+                  onChange={(e) => setProduto({ ...produto, codigo_barras: e.target.value })}
                 />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <Label>Controle</Label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
+                  value={produto.controle_estoque}
+                  onChange={(e) => setProduto({ ...produto, controle_estoque: e.target.value })}
+                >
+                  <option value="Nenhum">Nenhum</option>
+                  <option value="Serial">Serial</option>
+                  <option value="Grade">Grade</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Unidade de Medida</Label>
+                <Input
+                  value={produto.unidade_medida}
+                  onChange={(e) => setProduto({ ...produto, unidade_medida: e.target.value })}
+                  placeholder="Ex: Unidade, Kg, L"
+                />
+              </div>
+              <div className="space-y-2 lg:col-span-2">
+                <Label>Fornecedor Preferencial</Label>
+                <Input
+                  value={produto.fornecedor_preferencial}
+                  onChange={(e) => setProduto({ ...produto, fornecedor_preferencial: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-2">
+              <h4 className="font-semibold text-sm border-b pb-1">Estoque e Pesos</h4>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label>Estoque Inicial</Label>
+                  <Input type="number" min="0" value={produto.estoque} onChange={(e) => setProduto({ ...produto, estoque: Number(e.target.value) })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Qtd. Mínima</Label>
+                  <Input type="number" min="0" value={produto.qtd_minima} onChange={(e) => setProduto({ ...produto, qtd_minima: Number(e.target.value) })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Qtd. Reserva</Label>
+                  <Input type="number" min="0" value={produto.qtd_reserva} onChange={(e) => setProduto({ ...produto, qtd_reserva: Number(e.target.value) })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Peso Bruto (Kg)</Label>
+                  <Input type="number" step="0.001" min="0" value={produto.peso_bruto} onChange={(e) => setProduto({ ...produto, peso_bruto: Number(e.target.value) })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Peso Líq (Kg)</Label>
+                  <Input type="number" step="0.001" min="0" value={produto.peso_liquido} onChange={(e) => setProduto({ ...produto, peso_liquido: Number(e.target.value) })} />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-2">
+              <h4 className="font-semibold text-sm border-b pb-1">Custos e Margens</h4>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Custo de Compra</Label>
+                  <Input type="number" step="0.01" value={produto.custo_compra} onChange={(e) => setProduto({ ...produto, custo_compra: Number(e.target.value) })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Custo Médio</Label>
+                  <Input type="number" step="0.01" value={produto.custo_medio} onChange={(e) => setProduto({ ...produto, custo_medio: Number(e.target.value) })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Valor de Venda (R$)</Label>
+                  <Input type="number" step="0.01" value={produto.valor} onChange={(e) => setProduto({ ...produto, valor: Number(e.target.value) })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Preço em US$</Label>
+                  <Input type="number" step="0.01" value={produto.preco_uss} onChange={(e) => setProduto({ ...produto, preco_uss: Number(e.target.value) })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>% Lucro Bruto</Label>
+                  <Input type="number" step="0.01" value={produto.lucro_bruto_perc} onChange={(e) => setProduto({ ...produto, lucro_bruto_perc: Number(e.target.value) })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>% Comissão</Label>
+                  <Input type="number" step="0.01" value={produto.comissao_perc} onChange={(e) => setProduto({ ...produto, comissao_perc: Number(e.target.value) })} />
+                </div>
               </div>
             </div>
           </div>
@@ -623,13 +1028,28 @@ function NovoProduto() {
               🪴 Especificações do Catálogo Sura Vasos
             </h3>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label>Número / Referência</Label>
+                <Label>Número (Interno Sura Vasos)</Label>
                 <Input
                   value={produto.numero}
                   onChange={(e) => setProduto({ ...produto, numero: e.target.value })}
                   placeholder="Ex: 0, 1, Violeta, Mini"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Referência Extra</Label>
+                <Input
+                  value={produto.referencia_extra}
+                  onChange={(e) => setProduto({ ...produto, referencia_extra: e.target.value })}
+                  placeholder="Ex: REF-99"
+                />
+              </div>
+              <div className="space-y-2 lg:col-span-1">
+                <Label>Desc. Complementar</Label>
+                <Input
+                  value={produto.descricao_complementar}
+                  onChange={(e) => setProduto({ ...produto, descricao_complementar: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
@@ -694,8 +1114,6 @@ function NovoProduto() {
                 ))}
               </div>
             </div>
-          </div>
-
           </div>
         </div>
 
