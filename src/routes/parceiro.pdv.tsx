@@ -746,7 +746,7 @@ function ParceiroPDV() {
   });
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-28 bg-slate-50 min-h-screen">
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-48 bg-slate-50 min-h-screen">
       {/* Top Header */}
       <div className="bg-gradient-brand px-4 pt-10 pb-12 lg:sticky lg:top-0 z-10 rounded-b-3xl shadow-md relative text-white">
         <div className="flex justify-between items-center mb-6">
