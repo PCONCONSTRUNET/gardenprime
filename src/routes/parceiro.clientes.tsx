@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabaseParceiro as supabase } from "@/lib/supabase";
+import {
   Users, Plus, Search, X, Save, ArrowLeft, Loader2, Phone, MapPin, ChevronRight, Edit,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
