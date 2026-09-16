@@ -1132,7 +1132,7 @@ function ParceiroPDV() {
 
       {/* Modal do Cliente */}
       <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
-        <DialogContent className="w-[95vw] max-w-[500px] max-h-[90vh] overflow-y-auto rounded-2xl p-5 sm:p-6">
+        <DialogContent className="w-[95vw] max-w-[500px] max-h-[90vh] overflow-y-auto overflow-x-hidden rounded-2xl p-5 sm:p-6">
           <form onSubmit={submitOrder}>
             <DialogHeader>
               <DialogTitle>Finalizar Geração de Orçamento / Pedido</DialogTitle>
@@ -1307,9 +1307,9 @@ function ParceiroPDV() {
                 </div>
               </div>
             </div>
-            <div className="bg-slate-50 border-t -mx-4 -mb-4 mt-4 p-4 flex items-center justify-between shadow-[0_-4px_10px_rgba(0,0,0,0.02)] rounded-b-2xl">
+            <div className="bg-slate-50 border-t -mx-5 -mb-5 sm:-mx-6 sm:-mb-6 mt-4 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[0_-4px_10px_rgba(0,0,0,0.02)] rounded-b-2xl">
               <div>
-                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
                   Total a Pagar
                 </p>
                 {descontoPercentual > 0 ? (
@@ -1317,32 +1317,33 @@ function ParceiroPDV() {
                     <span className="text-xs text-muted-foreground line-through">
                       R$ {rawSubtotal.toFixed(2).replace(".", ",")}
                     </span>
-                    <p className="text-2xl font-extrabold text-brand font-display">
+                    <p className="text-xl font-extrabold text-brand font-display">
                       R$ {subtotal.toFixed(2).replace(".", ",")}
                     </p>
                   </div>
                 ) : (
-                  <p className="text-2xl font-extrabold text-brand font-display">
+                  <p className="text-xl font-extrabold text-brand font-display">
                     R$ {subtotal.toFixed(2).replace(".", ",")}
                   </p>
                 )}
               </div>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <div className="flex gap-2 flex-1">
-                  <Button type="button" variant="outline" className="flex-1" onClick={() => setIsClientModalOpen(false)}>
+              <div className="flex flex-col w-full sm:w-auto gap-2">
+                <div className="flex gap-2 w-full">
+                  <Button size="sm" type="button" variant="outline" className="flex-1 text-xs px-2" onClick={() => setIsClientModalOpen(false)}>
                     Cancelar
                   </Button>
                   <Button
+                    size="sm"
                     type="button"
                     variant="outline"
-                    className="flex-1 border-emerald-700 text-emerald-700 hover:bg-emerald-50"
+                    className="flex-1 text-xs px-2 border-emerald-700 text-emerald-700 hover:bg-emerald-50"
                     onClick={salvarRascunho}
                     disabled={loading}
                   >
-                    💾 Salvar no Carrinho
+                    Salvar Carrinho
                   </Button>
                 </div>
-                <Button type="submit" disabled={loading} className="bg-emerald-700 hover:bg-emerald-800 text-white sm:flex-1">
+                <Button size="sm" type="submit" disabled={loading} className="w-full text-xs bg-emerald-700 hover:bg-emerald-800 text-white">
                   {loading ? "Processando..." : "Gerar Pedido"}
                 </Button>
               </div>
