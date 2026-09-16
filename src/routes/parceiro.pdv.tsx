@@ -27,6 +27,7 @@ import {
   ChevronRight,
   FileText,
   Download,
+  User,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -103,6 +104,41 @@ function ParceiroPDV() {
   const [initError, setInitError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [pendingQty, setPendingQty] = useState<Record<string, string>>({});
+
+  const [clientSuggestions, setClientSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const searchClients = async (query: string) => {
+    if (query.length < 2) {
+      setClientSuggestions([]);
+      return;
+    }
+    const { data } = await supabase
+      .from("clientes")
+      .select("*")
+      .or(`nome.ilike.%${query}%,cpf_cnpj.ilike.%${query}%`)
+      .limit(5);
+    
+    if (data) {
+      setClientSuggestions(data);
+    }
+  };
+
+  const selectClient = (client: any) => {
+    setClientForm((prev: any) => ({
+      ...prev,
+      nome: client.nome || "",
+      documento: client.cpf_cnpj || "",
+      telefone: client.telefone || "",
+      cep: client.cep || "",
+      endereco: client.endereco || "",
+      numero: client.numero || "",
+      bairro: client.bairro || "",
+      cidade: client.cidade || "",
+      uf: client.uf || "",
+    }));
+    setShowSuggestions(false);
+  };
 
   const dynamicCategories = Array.from(new Set(produtos.map((p) => p.categoria))).filter(
     Boolean,
@@ -1143,24 +1179,59 @@ function ParceiroPDV() {
             <div className="grid gap-4 py-4">
               <div className="space-y-3">
                 <h3 className="font-semibold text-brand text-sm border-b pb-1">Dados do Cliente</h3>
-                <div className="grid gap-2">
+                <div className="grid gap-2 relative">
                   <label className="text-sm font-medium">Nome / Empresa *</label>
                   <Input
                     required
                     placeholder="Ex: João Silva ou Construtora X"
                     value={clientForm.nome}
-                    onChange={(e) => setClientForm({ ...clientForm, nome: e.target.value })}
+                    onFocus={() => { if(clientForm.nome.length >= 2) setShowSuggestions(true); }}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setClientForm({ ...clientForm, nome: val });
+                      searchClients(val);
+                      setShowSuggestions(true);
+                    }}
                   />
+                  {showSuggestions && clientSuggestions.length > 0 && (
+                    <div className="absolute top-[100%] left-0 right-0 z-[100] mt-1 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                      {clientSuggestions.map((c) => (
+                        <div
+                          key={c.id}
+                          className="flex items-center gap-3 px-3 py-2 hover:bg-zinc-800 cursor-pointer border-b border-zinc-800 last:border-0"
+                          onClick={() => selectClient(c)}
+                        >
+                          <div className="bg-zinc-800 rounded-full p-1.5 shrink-0">
+                            <User className="w-4 h-4 text-zinc-400" />
+                          </div>
+                          <div className="flex flex-col">
+                            <p className="text-sm font-medium text-zinc-100">{c.nome}</p>
+                            {(c.cpf_cnpj || c.telefone) && (
+                              <p className="text-[11px] text-zinc-400 mt-0.5">
+                                {[c.cpf_cnpj, c.telefone].filter(Boolean).join(" • ")}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="grid gap-2">
+                <div className="grid gap-2 relative">
                   <label className="text-sm font-medium">CPF / CNPJ</label>
                   <div className="flex gap-2">
                     <Input
                       placeholder="Apenas números"
                       value={clientForm.documento}
+                      onFocus={() => { if(clientForm.documento.length >= 2) setShowSuggestions(true); }}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                       onChange={(e) => {
+                        const val = e.target.value;
                         setCnpjErro("");
-                        setClientForm({ ...clientForm, documento: e.target.value });
+                        setClientForm({ ...clientForm, documento: val });
+                        searchClients(val);
+                        setShowSuggestions(true);
                       }}
                     />
                     <Button
