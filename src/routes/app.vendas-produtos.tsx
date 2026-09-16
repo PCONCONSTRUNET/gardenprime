@@ -111,9 +111,25 @@ function VendasProdutos() {
   };
 
   const filteredProducts = products.filter((p) => {
+    const search = busca.toLowerCase().trim();
+    const nome = p.nome ? String(p.nome).toLowerCase() : "";
+    const codigo = p.codigo ? String(p.codigo).toLowerCase() : "";
+    
+    const normalize = (str: string) => 
+      str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      
+    const searchNormalized = normalize(search);
+    const nomeNormalized = normalize(nome);
+    const codigoNormalized = normalize(codigo);
+
+    const searchTerms = searchNormalized.split(/\s+/).filter(Boolean);
+    
     const matchBusca =
-      p.nome.toLowerCase().includes(busca.toLowerCase()) ||
-      (p.codigo && p.codigo.toLowerCase().includes(busca.toLowerCase()));
+      searchTerms.length === 0 ||
+      searchTerms.every((term) =>
+        nomeNormalized.includes(term) || codigoNormalized.includes(term)
+      );
+
     const matchCat = categoriaFilter === "Todas" || p.categoria === categoriaFilter;
     return matchBusca && matchCat;
   });
