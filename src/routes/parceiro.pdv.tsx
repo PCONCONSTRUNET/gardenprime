@@ -204,6 +204,14 @@ function ParceiroPDV() {
       }]).select().single();
       if (error) throw error;
       
+      if (vendedorInfo?.id) {
+        const savedStr = localStorage.getItem(`novos_clientes_${vendedorInfo.id}`);
+        let savedIds = [];
+        try { savedIds = savedStr ? JSON.parse(savedStr) : []; } catch(e){}
+        savedIds.push(data.id);
+        localStorage.setItem(`novos_clientes_${vendedorInfo.id}`, JSON.stringify([...new Set(savedIds)]));
+      }
+      
       setClientForm((prev: any) => ({
         ...prev,
         nome: data.nome || "",

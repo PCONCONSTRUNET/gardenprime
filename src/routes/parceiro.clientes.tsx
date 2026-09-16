@@ -24,6 +24,7 @@ function ParceiroClientes() {
   const [cnpjLoading, setCnpjLoading] = useState(false);
   const [cnpjErro, setCnpjErro] = useState("");
   const [selectedCliente, setSelectedCliente] = useState<any>(null);
+  const [vendedorId, setVendedorId] = useState<string | null>(null);
 
   const emptyForm = {
     nome: "", cpf_cnpj: "", telefone: "", cep: "", endereco: "",
@@ -40,14 +41,31 @@ function ParceiroClientes() {
         .from("vendedores").select("id").eq("user_id", session.user.id).single();
 
       if (vendedor) {
+        setVendedorId(vendedor.id);
         const { data: vendas } = await supabase
           .from("vendas").select("cliente_id")
           .eq("vendedor_id", vendedor.id).not("cliente_id", "is", null);
 
+        let ids: string[] = [];
         if (vendas && vendas.length > 0) {
-          const ids = [...new Set(vendas.map((v: any) => v.cliente_id))];
+          ids = vendas.map((v: any) => v.cliente_id);
+        }
+
+        const savedStr = localStorage.getItem(`novos_clientes_${vendedor.id}`);
+        if (savedStr) {
+          try {
+            const savedIds = JSON.parse(savedStr);
+            if (Array.isArray(savedIds)) ids = [...ids, ...savedIds];
+          } catch(e) {}
+        }
+        
+        ids = [...new Set(ids)];
+
+        if (ids.length > 0) {
           const { data } = await supabase.from("clientes").select("*").in("id", ids).order("nome");
           if (data) setClientes(data);
+        } else {
+          setClientes([]);
         }
       }
       setLoadingList(false);
@@ -114,6 +132,15 @@ function ParceiroClientes() {
       };
       const { data, error } = await supabase.from("clientes").insert([payload]).select().single();
       if (error) throw error;
+
+      if (vendedorId) {
+        const savedStr = localStorage.getItem(`novos_clientes_${vendedorId}`);
+        let savedIds = [];
+        try { savedIds = savedStr ? JSON.parse(savedStr) : []; } catch(e){}
+        savedIds.push(data.id);
+        localStorage.setItem(`novos_clientes_${vendedorId}`, JSON.stringify([...new Set(savedIds)]));
+      }
+
       setClientes((prev) => [data, ...prev]);
       setForm(emptyForm);
       setView("list");
