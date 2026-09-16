@@ -772,7 +772,7 @@ function ParceiroPDV() {
             size="sm"
             variant="outline"
             className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white h-8 px-3 text-xs"
-            onClick={() => setIsClientModalOpen(true)}
+            onClick={() => navigate({ to: "/parceiro/clientes" })}
           >
             Cadastrar cliente
           </Button>
