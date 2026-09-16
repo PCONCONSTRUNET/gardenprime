@@ -140,6 +140,92 @@ function ParceiroPDV() {
     setShowSuggestions(false);
   };
 
+  const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false);
+  const [newClientForm, setNewClientForm] = useState({ nome: "", cpf_cnpj: "", telefone: "", cep: "", endereco: "", numero: "", bairro: "", cidade: "", uf: "", status: "Ativo" });
+  const [savingNewClient, setSavingNewClient] = useState(false);
+  const [newClientCnpjLoading, setNewClientCnpjLoading] = useState(false);
+  const [newClientCnpjErro, setNewClientCnpjErro] = useState("");
+
+  const buscarCnpjNovoCliente = async () => {
+    const cnpjLimpo = newClientForm.cpf_cnpj.replace(/\D/g, "");
+    if (cnpjLimpo.length !== 14) { setNewClientCnpjErro("Digite um CNPJ válido com 14 dígitos."); return; }
+    setNewClientCnpjErro("");
+    setNewClientCnpjLoading(true);
+    try {
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
+      if (!res.ok) { setNewClientCnpjErro("CNPJ não encontrado na Receita Federal."); return; }
+      const data = await res.json();
+      
+      const tel = data.ddd_telefone_1
+        ? data.ddd_telefone_1.replace(/(\d{2})(\d{4,5})(\d{4})/, "($1) $2-$3")
+        : newClientForm.telefone;
+      const cepFmt = data.cep ? data.cep.replace(/\D/g, "").replace(/(\d{5})(\d{3})/, "$1-$2") : "";
+      const tipoLogradouro = data.descricao_tipo_de_logradouro
+        ? data.descricao_tipo_de_logradouro + " "
+        : "";
+      const cidade = data.municipio
+        ? data.municipio.charAt(0) + data.municipio.slice(1).toLowerCase()
+        : newClientForm.cidade;
+        
+      setNewClientForm((prev: any) => ({
+        ...prev,
+        nome: data.razao_social || prev.nome,
+        telefone: tel,
+        cep: cepFmt,
+        endereco: tipoLogradouro + (data.logradouro || ""),
+        numero: data.numero || prev.numero,
+        bairro: data.bairro || prev.bairro,
+        cidade,
+        uf: data.uf || prev.uf,
+      }));
+    } catch {
+      setNewClientCnpjErro("Erro ao consultar o CNPJ. Tente novamente.");
+    } finally {
+      setNewClientCnpjLoading(false);
+    }
+  };
+
+  const handleSaveNewClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newClientForm.nome.trim()) { alert("Preencha o nome do cliente."); return; }
+    setSavingNewClient(true);
+    try {
+      const { data, error } = await supabase.from("clientes").insert([{
+        nome: newClientForm.nome,
+        cpf_cnpj: newClientForm.cpf_cnpj || null,
+        telefone: newClientForm.telefone || null,
+        cep: newClientForm.cep || null,
+        endereco: newClientForm.endereco || null,
+        numero: newClientForm.numero || null,
+        bairro: newClientForm.bairro || null,
+        cidade: newClientForm.cidade || null,
+        uf: newClientForm.uf || null,
+        status: "Ativo"
+      }]).select().single();
+      if (error) throw error;
+      
+      setClientForm((prev: any) => ({
+        ...prev,
+        nome: data.nome || "",
+        documento: data.cpf_cnpj || "",
+        telefone: data.telefone || "",
+        cep: data.cep || "",
+        endereco: data.endereco || "",
+        numero: data.numero || "",
+        bairro: data.bairro || "",
+        cidade: data.cidade || "",
+        uf: data.uf || "",
+      }));
+      
+      setIsNewClientModalOpen(false);
+      setNewClientForm({ nome: "", cpf_cnpj: "", telefone: "", cep: "", endereco: "", numero: "", bairro: "", cidade: "", uf: "", status: "Ativo" });
+    } catch (err: any) {
+      alert("Erro ao cadastrar cliente: " + err.message);
+    } finally {
+      setSavingNewClient(false);
+    }
+  };
+
   const dynamicCategories = Array.from(new Set(produtos.map((p) => p.categoria))).filter(
     Boolean,
   ) as string[];
@@ -808,7 +894,7 @@ function ParceiroPDV() {
             size="sm"
             variant="outline"
             className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white h-8 px-3 text-xs"
-            onClick={() => navigate({ to: "/parceiro/clientes" })}
+            onClick={() => setIsNewClientModalOpen(true)}
           >
             Cadastrar cliente
           </Button>
@@ -1418,6 +1504,70 @@ function ParceiroPDV() {
                   {loading ? "Processando..." : "Gerar Pedido"}
                 </Button>
               </div>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isNewClientModalOpen} onOpenChange={setIsNewClientModalOpen}>
+        <DialogContent className="w-[95vw] max-w-[500px] max-h-[90vh] overflow-y-auto overflow-x-hidden rounded-2xl p-5 sm:p-6">
+          <form onSubmit={handleSaveNewClient}>
+            <DialogHeader>
+              <DialogTitle>Novo Cliente</DialogTitle>
+              <DialogDescription>
+                Cadastre um novo cliente rapidamente.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium">Nome / Empresa *</label>
+                <Input required placeholder="Ex: João Silva ou Construtora X" value={newClientForm.nome} onChange={e => setNewClientForm({...newClientForm, nome: e.target.value})} />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium">CPF / CNPJ</label>
+                <div className="flex gap-2">
+                  <Input placeholder="Apenas números" value={newClientForm.cpf_cnpj} onChange={e => { setNewClientCnpjErro(""); setNewClientForm({...newClientForm, cpf_cnpj: e.target.value}); }} />
+                  <Button type="button" variant="outline" size="icon" onClick={buscarCnpjNovoCliente} disabled={newClientCnpjLoading}>
+                    {newClientCnpjLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {newClientCnpjErro && <p className="text-xs text-destructive">{newClientCnpjErro}</p>}
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium">Telefone / WhatsApp</label>
+                <Input placeholder="(00) 00000-0000" value={newClientForm.telefone} onChange={e => setNewClientForm({...newClientForm, telefone: e.target.value})} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">CEP</label>
+                  <Input placeholder="00000-000" value={newClientForm.cep} onChange={e => setNewClientForm({...newClientForm, cep: e.target.value})} />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">Endereço (Rua)</label>
+                  <Input placeholder="Rua Exemplo" value={newClientForm.endereco} onChange={e => setNewClientForm({...newClientForm, endereco: e.target.value})} />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">Número</label>
+                  <Input placeholder="123" value={newClientForm.numero} onChange={e => setNewClientForm({...newClientForm, numero: e.target.value})} />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">Bairro</label>
+                  <Input placeholder="Centro" value={newClientForm.bairro} onChange={e => setNewClientForm({...newClientForm, bairro: e.target.value})} />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">Cidade</label>
+                  <Input placeholder="Sua Cidade" value={newClientForm.cidade} onChange={e => setNewClientForm({...newClientForm, cidade: e.target.value})} />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">Estado (UF)</label>
+                  <Input placeholder="SP" maxLength={2} value={newClientForm.uf} onChange={e => setNewClientForm({...newClientForm, uf: e.target.value})} />
+                </div>
+              </div>
+            </div>
+            <div className="bg-slate-50 border-t -mx-5 -mb-5 sm:-mx-6 sm:-mb-6 mt-4 p-4 sm:p-5 flex justify-end gap-2 shadow-[0_-4px_10px_rgba(0,0,0,0.02)] rounded-b-2xl">
+              <Button type="button" variant="outline" onClick={() => setIsNewClientModalOpen(false)}>Cancelar</Button>
+              <Button type="submit" disabled={savingNewClient} className="bg-emerald-700 hover:bg-emerald-800 text-white">
+                {savingNewClient ? "Salvando..." : "Salvar Cliente"}
+              </Button>
             </div>
           </form>
         </DialogContent>
