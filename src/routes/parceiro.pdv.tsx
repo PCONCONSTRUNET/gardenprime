@@ -106,7 +106,7 @@ function ParceiroPDV() {
   const [pendingQty, setPendingQty] = useState<Record<string, string>>({});
 
   const [clientSuggestions, setClientSuggestions] = useState<any[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeSuggestionField, setActiveSuggestionField] = useState<"nome" | "documento" | null>(null);
 
   const searchClients = async (query: string) => {
     if (query.length < 2) {
@@ -137,7 +137,7 @@ function ParceiroPDV() {
       cidade: client.cidade || "",
       uf: client.uf || "",
     }));
-    setShowSuggestions(false);
+    setActiveSuggestionField(null);
   };
 
   const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false);
@@ -1271,16 +1271,16 @@ function ParceiroPDV() {
                     required
                     placeholder="Ex: João Silva ou Construtora X"
                     value={clientForm.nome}
-                    onFocus={() => { if(clientForm.nome.length >= 2) setShowSuggestions(true); }}
-                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                    onFocus={() => { if(clientForm.nome.length >= 2) setActiveSuggestionField("nome"); }}
+                    onBlur={() => setTimeout(() => setActiveSuggestionField(null), 200)}
                     onChange={(e) => {
                       const val = e.target.value;
                       setClientForm({ ...clientForm, nome: val });
                       searchClients(val);
-                      setShowSuggestions(true);
+                      setActiveSuggestionField("nome");
                     }}
                   />
-                  {showSuggestions && clientSuggestions.length > 0 && (
+                  {activeSuggestionField === "nome" && clientSuggestions.length > 0 && (
                     <div className="absolute top-[100%] left-0 right-0 z-[100] mt-1 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl max-h-60 overflow-y-auto">
                       {clientSuggestions.map((c) => (
                         <div
@@ -1310,14 +1310,14 @@ function ParceiroPDV() {
                     <Input
                       placeholder="Apenas números"
                       value={clientForm.documento}
-                      onFocus={() => { if(clientForm.documento.length >= 2) setShowSuggestions(true); }}
-                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                      onFocus={() => { if(clientForm.documento.length >= 2) setActiveSuggestionField("documento"); }}
+                      onBlur={() => setTimeout(() => setActiveSuggestionField(null), 200)}
                       onChange={(e) => {
                         const val = e.target.value;
                         setCnpjErro("");
                         setClientForm({ ...clientForm, documento: val });
                         searchClients(val);
-                        setShowSuggestions(true);
+                        setActiveSuggestionField("documento");
                       }}
                     />
                     <Button
@@ -1336,6 +1336,29 @@ function ParceiroPDV() {
                       )}
                     </Button>
                   </div>
+                  {activeSuggestionField === "documento" && clientSuggestions.length > 0 && (
+                    <div className="absolute top-[100%] left-0 right-0 z-[100] mt-1 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                      {clientSuggestions.map((c) => (
+                        <div
+                          key={c.id}
+                          className="flex items-center gap-3 px-3 py-2 hover:bg-zinc-800 cursor-pointer border-b border-zinc-800 last:border-0"
+                          onClick={() => selectClient(c)}
+                        >
+                          <div className="bg-zinc-800 rounded-full p-1.5 shrink-0">
+                            <User className="w-4 h-4 text-zinc-400" />
+                          </div>
+                          <div className="flex flex-col">
+                            <p className="text-sm font-medium text-zinc-100">{c.nome}</p>
+                            {(c.cpf_cnpj || c.telefone) && (
+                              <p className="text-[11px] text-zinc-400 mt-0.5">
+                                {[c.cpf_cnpj, c.telefone].filter(Boolean).join(" • ")}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {cnpjErro && <p className="text-xs text-destructive">{cnpjErro}</p>}
                 </div>
                 <div className="grid gap-2">
