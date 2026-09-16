@@ -1367,6 +1367,7 @@ function ParceiroPDV() {
                       ))}
                     </div>
                   )}
+                  <p className="text-[11px] text-red-500 font-medium -mt-1">Aperte na lupa para puxar os dados</p>
                   {cnpjErro && <p className="text-xs text-destructive">{cnpjErro}</p>}
                 </div>
                 <div className="grid gap-2">
@@ -1561,6 +1562,7 @@ function ParceiroPDV() {
                     {newClientCnpjLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                   </Button>
                 </div>
+                <p className="text-[11px] text-red-500 font-medium -mt-1">Aperte na lupa para puxar os dados</p>
                 {newClientCnpjErro && <p className="text-xs text-destructive">{newClientCnpjErro}</p>}
               </div>
               <div className="grid gap-2">
