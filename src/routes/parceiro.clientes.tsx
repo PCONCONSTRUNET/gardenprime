@@ -1,8 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabaseParceiro as supabase } from "@/lib/supabase";
-import {
-  Users, Plus, Search, X, Save, ArrowLeft, Loader2, Phone, MapPin, ChevronRight,
+  Users, Plus, Search, X, Save, ArrowLeft, Loader2, Phone, MapPin, ChevronRight, Edit,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,7 +15,7 @@ export const Route = createFileRoute("/parceiro/clientes")({
 
 function ParceiroClientes() {
   const navigate = useNavigate();
-  const [view, setView] = useState<"list" | "new">("list");
+  const [view, setView] = useState<"list" | "new" | "edit">("list");
   const [clientes, setClientes] = useState<any[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -130,18 +129,30 @@ function ParceiroClientes() {
         bairro: form.bairro || null, cidade: form.cidade || null, uf: form.uf || null,
         status: form.status,
       };
-      const { data, error } = await supabase.from("clientes").insert([payload]).select().single();
-      if (error) throw error;
 
-      if (vendedorId) {
-        const savedStr = localStorage.getItem(`novos_clientes_${vendedorId}`);
-        let savedIds = [];
-        try { savedIds = savedStr ? JSON.parse(savedStr) : []; } catch(e){}
-        savedIds.push(data.id);
-        localStorage.setItem(`novos_clientes_${vendedorId}`, JSON.stringify([...new Set(savedIds)]));
+      let resultData;
+
+      if (view === "edit" && form.id) {
+        const { data, error } = await supabase.from("clientes").update(payload).eq("id", form.id).select().single();
+        if (error) throw error;
+        resultData = data;
+        setClientes((prev) => prev.map((c) => (c.id === data.id ? data : c)));
+      } else {
+        const { data, error } = await supabase.from("clientes").insert([payload]).select().single();
+        if (error) throw error;
+        resultData = data;
+
+        if (vendedorId) {
+          const savedStr = localStorage.getItem(`novos_clientes_${vendedorId}`);
+          let savedIds = [];
+          try { savedIds = savedStr ? JSON.parse(savedStr) : []; } catch(e){}
+          savedIds.push(data.id);
+          localStorage.setItem(`novos_clientes_${vendedorId}`, JSON.stringify([...new Set(savedIds)]));
+        }
+
+        setClientes((prev) => [data, ...prev]);
       }
 
-      setClientes((prev) => [data, ...prev]);
       setForm(emptyForm);
       setView("list");
     } catch (err: any) {
@@ -156,7 +167,7 @@ function ParceiroClientes() {
   );
 
   // ─── FORM VIEW ───
-  if (view === "new") {
+  if (view === "new" || view === "edit") {
     return (
       <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-28">
         <div className="flex items-center gap-3">
@@ -167,8 +178,12 @@ function ParceiroClientes() {
             <ArrowLeft className="w-4 h-4 text-slate-600" />
           </button>
           <div>
-            <h1 className="text-xl font-bold text-slate-800 font-display">Novo Cliente</h1>
-            <p className="text-xs text-slate-500">Preencha os dados abaixo</p>
+            <h1 className="text-xl font-bold text-slate-800 font-display">
+              {view === "edit" ? "Editar Cliente" : "Novo Cliente"}
+            </h1>
+            <p className="text-xs text-slate-500">
+              {view === "edit" ? "Atualize os dados abaixo" : "Preencha os dados abaixo"}
+            </p>
           </div>
         </div>
 
@@ -255,7 +270,7 @@ function ParceiroClientes() {
           disabled={saving}
         >
           {saving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Save className="w-5 h-5 mr-2" />}
-          {saving ? "Salvando..." : "Salvar Cliente"}
+          {saving ? "Salvando..." : view === "edit" ? "Salvar Alterações" : "Salvar Cliente"}
         </Button>
       </div>
     );
@@ -349,7 +364,21 @@ function ParceiroClientes() {
       <Sheet open={!!selectedCliente} onOpenChange={(open) => !open && setSelectedCliente(null)}>
         <SheetContent side="bottom" className="rounded-t-3xl h-[85vh] p-0 flex flex-col bg-slate-50">
           <SheetHeader className="p-5 pb-4 border-b bg-white rounded-t-3xl shrink-0 relative">
-            <SheetTitle className="text-left font-display">Ficha do Cliente</SheetTitle>
+            <div className="flex items-center justify-between">
+              <SheetTitle className="text-left font-display">Ficha do Cliente</SheetTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-emerald-700 border-emerald-700 hover:bg-emerald-50 h-8 gap-1.5 px-3 rounded-lg"
+                onClick={() => {
+                  setForm(selectedCliente);
+                  setView("edit");
+                  setSelectedCliente(null);
+                }}
+              >
+                <Edit className="w-3.5 h-3.5" /> Editar
+              </Button>
+            </div>
           </SheetHeader>
           
           <div className="flex-1 overflow-y-auto p-5 space-y-5">
