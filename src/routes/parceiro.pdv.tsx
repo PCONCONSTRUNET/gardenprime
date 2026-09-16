@@ -755,17 +755,27 @@ function ParceiroPDV() {
           </div>
           <Bell className="w-5 h-5" />
         </div>
-        <div className="flex items-center gap-3">
-          <div className="w-14 h-14 bg-slate-200 rounded-full overflow-hidden shrink-0 border-2 border-white/20">
-            <img src={vendedorInfo?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${vendedorInfo?.nome}&backgroundColor=e2e8f0`} alt="Avatar" className="w-full h-full object-cover" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-14 h-14 bg-slate-200 rounded-full overflow-hidden shrink-0 border-2 border-white/20">
+              <img src={vendedorInfo?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${vendedorInfo?.nome}&backgroundColor=e2e8f0`} alt="Avatar" className="w-full h-full object-cover" />
+            </div>
+            <div>
+              <p className="font-bold text-base leading-tight">{vendedorInfo.nome.split(" ")[0]}</p>
+              <p className="text-xs text-white/90 font-medium">Vendas de hoje: R$ {(vendedorInfo.vendas_hoje || 0).toFixed(2).replace(".", ",")}</p>
+              <p className="text-xs text-white/90 font-medium">
+                 Comissão: {vendedorInfo.tipo_comissao === "Fixo" ? `R$ ${vendedorInfo.valor_comissao?.toFixed(2)}` : `${vendedorInfo.valor_comissao}%`}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="font-bold text-base leading-tight">{vendedorInfo.nome.split(" ")[0]}</p>
-            <p className="text-xs text-white/90 font-medium">Vendas de hoje: R$ {(vendedorInfo.vendas_hoje || 0).toFixed(2).replace(".", ",")}</p>
-            <p className="text-xs text-white/90 font-medium">
-               Comissão: {vendedorInfo.tipo_comissao === "Fixo" ? `R$ ${vendedorInfo.valor_comissao?.toFixed(2)}` : `${vendedorInfo.valor_comissao}%`}
-            </p>
-          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white h-8 px-3 text-xs"
+            onClick={() => setIsClientModalOpen(true)}
+          >
+            Cadastrar cliente
+          </Button>
         </div>
         
         {/* Search bar overlapping */}
