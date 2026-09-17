@@ -143,7 +143,13 @@ function ImprimirDAV() {
     minute: "2-digit",
   });
 
-  const validadeStr = dav.validade ? new Date(dav.validade).toLocaleDateString("pt-BR") : null;
+  const validadeStr = dav.validade
+    ? new Date(dav.validade).toLocaleDateString("pt-BR")
+    : (() => {
+        const d = new Date(dav.created_at);
+        d.setDate(d.getDate() + 30);
+        return d.toLocaleDateString("pt-BR");
+      })();
 
   const handleVoltar = () => {
     // 1. Se foi aberto em uma nova aba com window.open e possui opener
@@ -283,7 +289,7 @@ function ImprimirDAV() {
             <div className="text-xs leading-tight">
               <p className="text-[10px] text-white/70 font-normal leading-none mb-1">Validade</p>
               <p className="text-[11px] sm:text-xs text-white font-medium whitespace-nowrap leading-none">
-                {validadeStr || "--/--/----"}
+                {validadeStr}
               </p>
             </div>
           </div>
