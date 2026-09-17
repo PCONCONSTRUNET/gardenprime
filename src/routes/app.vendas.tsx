@@ -12,11 +12,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Calculator, Trash2, Check, X, Pencil, Search, Ban, Zap, Download } from "lucide-react";
+import { Plus, Calculator, Trash2, Check, X, Pencil, Search, Ban, Zap, Download, Printer } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useConfirm } from "@/contexts/ConfirmContext";
-import { downloadOrderPdf } from "@/lib/order-pdf";
+import { downloadOrderPdf, openOrderPdf } from "@/lib/order-pdf";
 import { AsaasCobrancaModal } from "@/components/asaas-cobranca-modal";
 import {
   Sheet,
@@ -520,8 +520,19 @@ function Vendas() {
                   </svg>
                   Enviar WhatsApp
                 </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
                 <Button
-                  className="flex-1 bg-slate-900"
+                  variant="outline"
+                  className="h-10 border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5"
+                  onClick={() => openOrderPdf(selectedVenda?.id)}
+                >
+                  <Printer className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                  Imprimir PDF
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-10 border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5"
                   onClick={() => downloadOrderPdf(
                     {
                       ...selectedVenda,
@@ -533,7 +544,8 @@ function Vendas() {
                     vendaItens
                   )}
                 >
-                  <Download className="h-4 w-4 mr-2" /> Baixar PDF
+                  <Download className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                  Baixar PDF
                 </Button>
               </div>
               <Button

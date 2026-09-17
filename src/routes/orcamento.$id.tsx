@@ -233,7 +233,7 @@ function ImprimirDAV() {
             <div className="text-[10px] sm:text-xs text-slate-700 space-y-1">
               <p>CNPJ: 63.874.628/0001-36 | Inscr. Estadual: 266.037.553.113</p>
               <p>Rua Santa Teresinha, 86 - Paraisolândia, Charqueada - SP</p>
-              <p>(19) 99714-1112 | contato@gardenprime.com.br</p>
+              <p>(19) 99714-1112 | contatogardenprime@gmail.com</p>
             </div>
           </div>
           <div className="hidden sm:block text-right transform -rotate-2">

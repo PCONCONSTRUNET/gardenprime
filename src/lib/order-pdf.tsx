@@ -541,7 +541,7 @@ export async function generateOrderPdfDoc(
   doc.text("Rua Santa Teresinha, 86 - Paraisolândia", infoX, y + 12);
   doc.text("Charqueada - SP", infoX, y + 15);
   doc.text("(19) 99714-1112", infoX, y + 19);
-  doc.text("contato@gardenprime.com.br", infoX, y + 23);
+  doc.text("contatogardenprime@gmail.com", infoX, y + 23);
 
   // Slogan Top Right
   doc.setFont("times", "italic");
@@ -576,9 +576,15 @@ export async function generateOrderPdfDoc(
   doc.setTextColor(255, 255, 255);
   doc.text(`${dataEmissao} às ${horaEmissao}`, margin + 80, y + 13);
 
-  // Validade
-  let validadeStr = "--/--/----";
-  if ((order as any).validade) validadeStr = new Date((order as any).validade).toLocaleDateString("pt-BR");
+  // Validade – padrão: 30 dias a partir da emissão
+  let validadeStr: string;
+  if ((order as any).validade) {
+    validadeStr = new Date((order as any).validade).toLocaleDateString("pt-BR");
+  } else {
+    const base = order.created_at ? new Date(order.created_at) : new Date();
+    base.setDate(base.getDate() + 30);
+    validadeStr = base.toLocaleDateString("pt-BR");
+  }
   doc.setFontSize(6);
   doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
   doc.text("Validade", margin + 120, y + 8);
