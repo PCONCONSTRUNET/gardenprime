@@ -12,7 +12,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Calculator, Trash2, Check, X, Pencil, Search, Ban, Zap, Download, Printer } from "lucide-react";
+import {
+  Plus,
+  Calculator,
+  Trash2,
+  Check,
+  X,
+  Pencil,
+  Search,
+  Ban,
+  Zap,
+  Download,
+  Printer,
+  ShoppingCart,
+  PackagePlus,
+  ChevronsUpDown,
+  Save,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useConfirm } from "@/contexts/ConfirmContext";
@@ -32,6 +48,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/vendas")({
   head: () => ({ meta: [{ title: "Vendas — GARDEN PRIME ERP" }] }),
@@ -53,13 +79,24 @@ function Vendas() {
   const [isEditingTotal, setIsEditingTotal] = useState(false);
   const [newTotalValue, setNewTotalValue] = useState("");
 
+  // Item editing states
+  const [isEditingItems, setIsEditingItems] = useState(false);
+  const [editItens, setEditItens] = useState<any[]>([]);
+  const [removedIds, setRemovedIds] = useState<string[]>([]);
+  const [newItems, setNewItems] = useState<any[]>([]);
+  const [produtos, setProdutos] = useState<any[]>([]);
+  const [openProdutoPop, setOpenProdutoPop] = useState(false);
+  const [selectedProdutoId, setSelectedProdutoId] = useState("");
+  const [newQtd, setNewQtd] = useState(1);
+  const [newUnitario, setNewUnitario] = useState(0);
+  const [savingItems, setSavingItems] = useState(false);
+
   // ASAAS Modal
   const [openAsaas, setOpenAsaas] = useState(false);
   const [asaasCliente, setAsaasCliente] = useState<any>(null);
 
   const fetchVendas = async () => {
     try {
-      // Usando junção (join) com clientes para pegar todos os dados do cliente
       const { data, error } = await supabase
         .from("vendas")
         .select(`*, clientes (*)`)
@@ -80,6 +117,17 @@ function Vendas() {
     fetchVendas();
   }, []);
 
+  // Fetch products for editing
+  const fetchProdutos = async () => {
+    if (produtos.length > 0) return;
+    const { data } = await supabase
+      .from("produtos")
+      .select("id, nome, codigo, valor, estoque, imagem")
+      .eq("status", "Ativo")
+      .order("nome");
+    if (data) setProdutos(data);
+  };
+
   const filteredVendas = vendas.filter((v) => {
     if (!searchTerm) return true;
     const lower = searchTerm.toLowerCase();
@@ -93,11 +141,12 @@ function Vendas() {
     setSelectedVenda(venda);
     setOpenSheet(true);
     setIsEditingTotal(false);
+    setIsEditingItems(false);
     setLoadingItens(true);
     try {
       const { data, error } = await supabase
         .from("vendas_itens")
-        .select("*, produtos(nome, codigo, imagem)")
+        .select("*, produtos(nome, codigo, imagem, estoque, valor)")
         .eq("venda_id", venda.id);
       if (!error && data) setVendaItens(data);
     } catch (err) {
@@ -106,6 +155,166 @@ function Vendas() {
       setLoadingItens(false);
     }
   };
+
+  // ─── Item editing ────────────────────────────────────────────────────────────
+
+  const handleStartEditItems = async () => {
+    await fetchProdutos();
+    setEditItens(vendaItens.map((i) => ({ ...i })));
+    setRemovedIds([]);
+    setNewItems([]);
+    setSelectedProdutoId("");
+    setNewQtd(1);
+    setNewUnitario(0);
+    setIsEditingItems(true);
+  };
+
+  const handleCancelEditItems = () => {
+    setIsEditingItems(false);
+    setEditItens([]);
+    setRemovedIds([]);
+    setNewItems([]);
+  };
+
+  const handleRemoveExistingItem = (itemId: string) => {
+    setEditItens((prev) => prev.filter((i) => i.id !== itemId));
+    setRemovedIds((prev) => [...prev, itemId]);
+  };
+
+  const handleRemoveNewItem = (idx: number) => {
+    setNewItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSelectProduto = (prodId: string) => {
+    const prod = produtos.find((p) => p.id === prodId);
+    if (prod) setNewUnitario(Number(prod.valor));
+    setSelectedProdutoId(prodId);
+    setOpenProdutoPop(false);
+  };
+
+  const handleAddNewItem = () => {
+    if (!selectedProdutoId || newQtd <= 0) return;
+    const prod = produtos.find((p) => p.id === selectedProdutoId);
+    if (!prod) return;
+    setNewItems((prev) => [
+      ...prev,
+      {
+        produto_id: prod.id,
+        nome: prod.nome,
+        imagem: prod.imagem,
+        quantidade: newQtd,
+        valor_unitario: newUnitario,
+        subtotal: newUnitario * newQtd,
+        estoque: prod.estoque,
+      },
+    ]);
+    setSelectedProdutoId("");
+    setNewQtd(1);
+    setNewUnitario(0);
+  };
+
+  const handleSaveItems = async () => {
+    setSavingItems(true);
+    try {
+      const vendaId = selectedVenda.id;
+      const isVendaComEstoque = ["Pago", "Faturado", "Entregue"].includes(selectedVenda.status);
+
+      // 1. Remove itens marcados para remoção
+      for (const itemId of removedIds) {
+        // Se venda baixou estoque, devolver
+        if (isVendaComEstoque) {
+          const removed = vendaItens.find((i) => i.id === itemId);
+          if (removed) {
+            const { data: prod } = await supabase
+              .from("produtos")
+              .select("estoque")
+              .eq("id", removed.produto_id)
+              .single();
+            if (prod) {
+              await supabase
+                .from("produtos")
+                .update({ estoque: prod.estoque + removed.quantidade })
+                .eq("id", removed.produto_id);
+            }
+          }
+        }
+        await supabase.from("vendas_itens").delete().eq("id", itemId);
+      }
+
+      // 2. Inserir novos itens
+      for (const item of newItems) {
+        // Se venda baixou estoque, decrementar
+        if (isVendaComEstoque) {
+          const { data: prod } = await supabase
+            .from("produtos")
+            .select("estoque")
+            .eq("id", item.produto_id)
+            .single();
+          if (prod) {
+            const novoEstoque = prod.estoque - item.quantidade;
+            if (novoEstoque < 0) {
+              alert(`Estoque insuficiente para ${item.nome}. Disponível: ${prod.estoque}`);
+              setSavingItems(false);
+              return;
+            }
+            await supabase
+              .from("produtos")
+              .update({ estoque: novoEstoque })
+              .eq("id", item.produto_id);
+          }
+        }
+        await supabase.from("vendas_itens").insert({
+          venda_id: vendaId,
+          produto_id: item.produto_id,
+          quantidade: item.quantidade,
+          valor_unitario: item.valor_unitario,
+          subtotal: item.subtotal,
+        });
+      }
+
+      // 3. Recalcular total
+      const { data: allItens } = await supabase
+        .from("vendas_itens")
+        .select("subtotal")
+        .eq("venda_id", vendaId);
+
+      const novoTotal = (allItens || []).reduce(
+        (acc: number, i: any) => acc + Number(i.subtotal),
+        0
+      );
+
+      await supabase.from("vendas").update({ valor_total: novoTotal }).eq("id", vendaId);
+
+      // Atualizar contas_receber se existir
+      await supabase
+        .from("contas_receber")
+        .update({ valor: novoTotal })
+        .eq("venda_id", vendaId);
+
+      // 4. Recarregar itens
+      const { data: updatedItens } = await supabase
+        .from("vendas_itens")
+        .select("*, produtos(nome, codigo, imagem, estoque, valor)")
+        .eq("venda_id", vendaId);
+
+      setVendaItens(updatedItens || []);
+      setSelectedVenda((prev: any) => ({ ...prev, valor_total: novoTotal }));
+      setVendas((prev) =>
+        prev.map((v) => (v.id === vendaId ? { ...v, valor_total: novoTotal } : v))
+      );
+
+      setIsEditingItems(false);
+      setEditItens([]);
+      setRemovedIds([]);
+      setNewItems([]);
+    } catch (err: any) {
+      alert("Erro ao salvar itens: " + err.message);
+    } finally {
+      setSavingItems(false);
+    }
+  };
+
+  // ─── Existing handlers ────────────────────────────────────────────────────────
 
   const handleShareWhatsApp = async (venda: any) => {
     try {
@@ -148,7 +357,6 @@ function Vendas() {
     )
       return;
     try {
-      // Se a venda já foi processada/faturada/paga (baixou estoque), precisa retornar o estoque
       if (["Faturado", "Pago", "Entregue"].includes(venda.status)) {
         const { data: itens } = await supabase
           .from("vendas_itens")
@@ -171,7 +379,6 @@ function Vendas() {
         }
       }
 
-      // Deleta os itens da venda primeiro para integridade referencial
       await supabase.from("vendas_itens").delete().eq("venda_id", venda.id);
       const { error } = await supabase.from("vendas").delete().eq("id", venda.id);
       if (error) throw error;
@@ -218,7 +425,7 @@ function Vendas() {
       return "bg-warning/15 text-warning border-0";
     if (status === "Rejeitado" || status === "Cancelado")
       return "bg-destructive/10 text-destructive border-0 font-semibold";
-    return "bg-info/15 text-info border-0 font-semibold"; // Orçamento ou Em separação
+    return "bg-info/15 text-info border-0 font-semibold";
   };
 
   const handleStatusChange = async (id: string, newStatus: string) => {
@@ -251,7 +458,6 @@ function Vendas() {
         .eq("id", selectedVenda.id);
       if (err1) throw err1;
 
-      // Also update contas_receber if it exists
       const { error: err2 } = await supabase
         .from("contas_receber")
         .update({ valor: val })
@@ -267,6 +473,12 @@ function Vendas() {
       alert("Erro ao atualizar valor: " + err.message);
     }
   };
+
+  // Preview totals while editing items
+  const editTotal = [
+    ...editItens.map((i) => i.subtotal),
+    ...newItems.map((i) => i.subtotal),
+  ].reduce((a, b) => a + Number(b), 0);
 
   return (
     <>
@@ -400,8 +612,8 @@ function Vendas() {
         </Table>
       </Card>
 
-      <Sheet open={openSheet} onOpenChange={setOpenSheet}>
-        <SheetContent className="w-[400px] sm:w-[540px] sm:max-w-md overflow-y-auto">
+      <Sheet open={openSheet} onOpenChange={(o) => { setOpenSheet(o); if (!o) handleCancelEditItems(); }}>
+        <SheetContent className="w-[400px] sm:w-[560px] sm:max-w-lg overflow-y-auto">
           <SheetHeader>
             <SheetTitle>Detalhes da Operação</SheetTitle>
             <SheetDescription>
@@ -501,9 +713,8 @@ function Vendas() {
               </div>
             </div>
 
-            {/* Ações / Botões Movidos para o Topo */}
+            {/* Ações / Botões */}
             <div className="flex flex-col gap-3 pt-6 border-t pb-2">
-              {/* Botão ASAAS (Oculto a pedido) */}
               <div className="flex gap-3">
                 <Button
                   className="flex-1"
@@ -596,60 +807,277 @@ function Vendas() {
               </div>
             </div>
 
-            {/* SEÇÃO PRODUTOS */}
-
+            {/* ── SEÇÃO PRODUTOS ─────────────────────────────────────────── */}
             <div className="border-t pt-6">
               <h4 className="font-semibold mb-4 flex items-center justify-between">
                 <span>Produtos</span>
-                <Badge variant="outline">{vendaItens.length} itens</Badge>
-              </h4>
-              {loadingItens ? (
-                <p className="text-sm text-muted-foreground">Carregando itens...</p>
-              ) : vendaItens.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhum item encontrado.</p>
-              ) : (
-                <div className="space-y-3">
-                  {vendaItens.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex justify-between items-center p-3 rounded-lg border border-border/50 bg-background hover:bg-muted/20 transition-colors"
+                <div className="flex items-center gap-2">
+                  {!isEditingItems && (
+                    <Badge variant="outline">{vendaItens.length} itens</Badge>
+                  )}
+                  {isEditingItems ? (
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-destructive hover:bg-destructive/10 text-xs"
+                        onClick={handleCancelEditItems}
+                        disabled={savingItems}
+                      >
+                        <X className="h-3 w-3 mr-1" /> Cancelar
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="h-7 bg-gradient-brand text-primary-foreground text-xs"
+                        onClick={handleSaveItems}
+                        disabled={savingItems}
+                      >
+                        <Save className="h-3 w-3 mr-1" />
+                        {savingItems ? "Salvando..." : "Salvar Itens"}
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1"
+                      onClick={handleStartEditItems}
+                      disabled={loadingItens}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-md bg-accent text-lg">
-                          {item.produtos?.imagem ? (
-                            <img
-                              src={item.produtos.imagem}
-                              alt={item.produtos.nome}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <span className="opacity-50">📦</span>
-                          )}
-                        </div>
-                        <div>
-                          <div className="font-semibold text-sm">
-                            {item.produtos?.nome || "Produto Desconhecido"}
+                      <PackagePlus className="h-3 w-3" /> Editar Itens
+                    </Button>
+                  )}
+                </div>
+              </h4>
+
+              {/* Modo edição */}
+              {isEditingItems ? (
+                <div className="space-y-4">
+                  {/* Itens existentes editáveis */}
+                  <div className="space-y-2">
+                    {editItens.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex justify-between items-center p-3 rounded-lg border border-border/50 bg-background"
+                      >
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md bg-accent text-base">
+                            {item.produtos?.imagem ? (
+                              <img src={item.produtos.imagem} alt={item.produtos.nome} className="h-full w-full object-cover" />
+                            ) : (
+                              <span className="opacity-50">📦</span>
+                            )}
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            {item.quantidade}x R${" "}
-                            {Number(item.valor_unitario).toLocaleString("pt-BR", {
+                          <div className="min-w-0">
+                            <div className="font-semibold text-sm truncate">{item.produtos?.nome || "Produto"}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {item.quantidade}x R$ {Number(item.valor_unitario).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-medium text-sm">
+                            R$ {Number(item.subtotal).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          </span>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-destructive hover:bg-destructive/10 shrink-0"
+                            onClick={() => handleRemoveExistingItem(item.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Novos itens adicionados */}
+                    {newItems.map((item, idx) => (
+                      <div
+                        key={`new-${idx}`}
+                        className="flex justify-between items-center p-3 rounded-lg border border-brand/30 bg-brand/5"
+                      >
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md bg-accent text-base">
+                            {item.imagem ? (
+                              <img src={item.imagem} alt={item.nome} className="h-full w-full object-cover" />
+                            ) : (
+                              <span className="opacity-50">📦</span>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-semibold text-sm truncate">{item.nome}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {item.quantidade}x R$ {Number(item.valor_unitario).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge variant="outline" className="text-[10px] border-brand/40 text-brand">novo</Badge>
+                          <span className="font-medium text-sm">
+                            R$ {Number(item.subtotal).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          </span>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-destructive hover:bg-destructive/10 shrink-0"
+                            onClick={() => handleRemoveNewItem(idx)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {editItens.length === 0 && newItems.length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">Nenhum item. Adicione produtos abaixo.</p>
+                    )}
+                  </div>
+
+                  {/* Formulário para adicionar produto */}
+                  <div className="rounded-xl border border-dashed border-brand/30 bg-muted/20 p-4 space-y-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                      <ShoppingCart className="h-3.5 w-3.5" /> Adicionar Produto
+                    </p>
+                    <Popover open={openProdutoPop} onOpenChange={setOpenProdutoPop}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between h-9 font-normal text-sm"
+                        >
+                          {selectedProdutoId
+                            ? (() => {
+                                const p = produtos.find((p) => p.id === selectedProdutoId);
+                                return p ? `${p.nome} (Estoque: ${p.estoque})` : "Selecionar produto...";
+                              })()
+                            : "Selecionar ou buscar produto..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[340px] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Buscar produto por nome..." />
+                          <CommandList>
+                            <CommandEmpty>Nenhum produto encontrado.</CommandEmpty>
+                            <CommandGroup>
+                              {produtos.map((p) => (
+                                <CommandItem
+                                  key={p.id}
+                                  value={`${p.codigo || ""} ${p.nome} ${p.id}`}
+                                  onSelect={() => handleSelectProduto(p.id)}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      selectedProdutoId === p.id ? "opacity-100" : "opacity-0",
+                                    )}
+                                  />
+                                  <span className="text-sm">
+                                    {p.nome} — R$ {Number(p.valor).toFixed(2)} (Est: {p.estoque})
+                                  </span>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+
+                    <div className="flex gap-2">
+                      <div className="flex-1 space-y-1">
+                        <label className="text-xs text-muted-foreground">Qtd</label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={newQtd}
+                          onChange={(e) => setNewQtd(Number(e.target.value))}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <label className="text-xs text-muted-foreground">Valor Unit. (R$)</label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={newUnitario}
+                          onChange={(e) => setNewUnitario(parseFloat(e.target.value) || 0)}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div className="flex items-end">
+                        <Button
+                          size="sm"
+                          className="h-8 bg-gradient-brand text-primary-foreground"
+                          onClick={handleAddNewItem}
+                          disabled={!selectedProdutoId || newQtd <= 0}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Preview do novo total */}
+                  <div className="flex justify-between items-center p-3 bg-muted/40 rounded-lg">
+                    <span className="text-sm font-semibold text-muted-foreground">Novo Total Estimado:</span>
+                    <span className="font-bold text-base text-brand">
+                      R$ {editTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                /* Modo visualização */
+                <div>
+                  {loadingItens ? (
+                    <p className="text-sm text-muted-foreground">Carregando itens...</p>
+                  ) : vendaItens.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nenhum item encontrado.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {vendaItens.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex justify-between items-center p-3 rounded-lg border border-border/50 bg-background hover:bg-muted/20 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-md bg-accent text-lg">
+                              {item.produtos?.imagem ? (
+                                <img
+                                  src={item.produtos.imagem}
+                                  alt={item.produtos.nome}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <span className="opacity-50">📦</span>
+                              )}
+                            </div>
+                            <div>
+                              <div className="font-semibold text-sm">
+                                {item.produtos?.nome || "Produto Desconhecido"}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {item.quantidade}x R${" "}
+                                {Number(item.valor_unitario).toLocaleString("pt-BR", {
+                                  minimumFractionDigits: 2,
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right font-medium text-sm">
+                            R${" "}
+                            {Number(item.subtotal).toLocaleString("pt-BR", {
                               minimumFractionDigits: 2,
                             })}
                           </div>
                         </div>
-                      </div>
-                      <div className="text-right font-medium text-sm">
-                        R${" "}
-                        {Number(item.subtotal).toLocaleString("pt-BR", {
-                          minimumFractionDigits: 2,
-                        })}
-                      </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </div>
-
           </div>
         </SheetContent>
       </Sheet>
