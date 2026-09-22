@@ -34,7 +34,7 @@ import {
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { useConfirm } from "@/contexts/ConfirmContext";
-import { downloadOrderPdf, openOrderPdf } from "@/lib/order-pdf";
+import { downloadOrderPdf, openOrderPdf, shareOrderWhatsApp } from "@/lib/order-pdf";
 import {
   Sheet,
   SheetContent,
@@ -320,29 +320,18 @@ function DAVList() {
   const handleShareWhatsApp = async (dav: any) => {
     try {
       const { data: itens } = await supabase.from("dav_items").select("*").eq("dav_id", dav.id);
+      
+      const mappedDav = {
+        ...dav,
+        cliente: dav.clientes || null,
+        cliente_nome: dav.cliente_nome || dav.clientes?.nome,
+        valor_total: dav.total || dav.valor_total,
+      };
 
-      let msg = `*ORÇAMENTO - GARDEN PRIME*\n`;
-      msg += `Nº: ${dav.numero ? String(dav.numero).padStart(3, "0") : dav.id.substring(0, 8).toUpperCase()}\n`;
-      msg += `Data: ${new Date(dav.created_at).toLocaleDateString()}\n`;
-      msg += `Cliente: ${dav.cliente_nome}\n\n`;
-      msg += `*ITENS DO ORÇAMENTO:*\n`;
-
-      if (itens) {
-        itens.forEach((item: any) => {
-          msg += `• ${item.qtd}x ${item.produto} - R$ ${Number(item.total).toFixed(2).replace(".", ",")}\n`;
-        });
-      }
-
-      msg += `\n*TOTAL: R$ ${Number(dav.total).toFixed(2).replace(".", ",")}*\n\n`;
-
-      const linkPdf = `${window.location.origin}/orcamento/${dav.id}`;
-      msg += `📄 *Acesse o documento formal em PDF aqui:*\n${linkPdf}`;
-
-      const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
-      window.open(url, "_blank");
-    } catch (err) {
+      await shareOrderWhatsApp(mappedDav, itens || []);
+    } catch (err: any) {
       console.error(err);
-      alert("Erro ao gerar mensagem do WhatsApp");
+      alert("Erro ao compartilhar no WhatsApp: " + (err.message || err));
     }
   };
 

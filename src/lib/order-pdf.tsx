@@ -151,7 +151,7 @@ export function isOrderDav(order: OrderData): boolean {
 /**
  * Constrói texto da mensagem do WhatsApp formatado
  */
-export function buildWhatsAppMessage(order: OrderData, items: OrderItem[]): string {
+export function buildWhatsAppMessage(order: OrderData, items: OrderItem[], includeLink = true): string {
   const isDAV = isOrderDav(order);
   const num = getOrderNumber(order);
   const docType = isDAV ? "ORÇAMENTO" : "PEDIDO";
@@ -174,7 +174,7 @@ export function buildWhatsAppMessage(order: OrderData, items: OrderItem[]): stri
   const vTot = Number(order.valor_total || order.total || 0).toFixed(2).replace(".", ",");
   msg += `\n*TOTAL: R$ ${vTot}*\n`;
 
-  if (typeof window !== "undefined" && order.id) {
+  if (includeLink && typeof window !== "undefined" && order.id) {
     const linkPdf = `${window.location.origin}/orcamento/${order.id}`;
     msg += `\n📄 *Acesse o documento formal em PDF aqui:*\n${linkPdf}`;
   }
@@ -799,7 +799,8 @@ export async function shareOrderWhatsApp(rawOrder: OrderData, rawItems?: OrderIt
     ]);
 
     const { file } = await generateOrderPdfDoc(enriched.order, enriched.items, logos);
-    const msg = buildWhatsAppMessage(enriched.order, enriched.items);
+    const msgWithLink = buildWhatsAppMessage(enriched.order, enriched.items, true);
+    const msgWithoutLink = buildWhatsAppMessage(enriched.order, enriched.items, false);
 
     const isDAV = isOrderDav(enriched.order);
     const num = getOrderNumber(enriched.order);
@@ -809,7 +810,7 @@ export async function shareOrderWhatsApp(rawOrder: OrderData, rawItems?: OrderIt
     if (typeof navigator !== "undefined" && navigator.canShare) {
       const shareDataWithFile = {
         title,
-        text: msg,
+        text: msgWithoutLink,
         files: [file],
       };
 
@@ -827,7 +828,7 @@ export async function shareOrderWhatsApp(rawOrder: OrderData, rawItems?: OrderIt
     }
 
     // 3. Fallback: Abre o WhatsApp (wa.me) com a mensagem completa e link do PDF
-    const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    const url = `https://wa.me/?text=${encodeURIComponent(msgWithLink)}`;
     window.open(url, "_blank");
     return true;
   } catch (err: any) {

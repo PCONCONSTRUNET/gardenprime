@@ -32,7 +32,7 @@ import {
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useConfirm } from "@/contexts/ConfirmContext";
-import { downloadOrderPdf, openOrderPdf } from "@/lib/order-pdf";
+import { downloadOrderPdf, openOrderPdf, shareOrderWhatsApp } from "@/lib/order-pdf";
 import { AsaasCobrancaModal } from "@/components/asaas-cobranca-modal";
 import {
   Sheet,
@@ -323,27 +323,17 @@ function Vendas() {
         .select("*, produtos(nome)")
         .eq("venda_id", venda.id);
 
-      let msg = `*${venda.tipo === "DAV" ? "ORÇAMENTO" : "PEDIDO"} - GARDEN PRIME*\n`;
-      msg += `Nº: ${venda.numero_venda}\n`;
-      msg += `Data: ${new Date(venda.created_at).toLocaleDateString()}\n\n`;
-      msg += `*ITENS:*\n`;
+      const mappedVenda = {
+        ...venda,
+        cliente: venda.clientes || venda.cliente || null,
+        cliente_nome: venda.clientes?.nome || venda.cliente_nome,
+        valor_total: venda.valor_total || venda.total,
+      };
 
-      if (itens) {
-        itens.forEach((item) => {
-          msg += `• ${item.quantidade}x ${item.produtos?.nome || "Produto"} - R$ ${Number(item.subtotal).toFixed(2).replace(".", ",")}\n`;
-        });
-      }
-
-      msg += `\n*TOTAL: R$ ${Number(venda.valor_total).toFixed(2).replace(".", ",")}*\n\n`;
-
-      const linkPdf = `${window.location.origin}/orcamento/${venda.id}`;
-      msg += `📄 *Acesse o documento formal em PDF aqui:*\n${linkPdf}`;
-
-      const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
-      window.open(url, "_blank");
-    } catch (err) {
+      await shareOrderWhatsApp(mappedVenda, itens || []);
+    } catch (err: any) {
       console.error(err);
-      alert("Erro ao gerar mensagem do WhatsApp");
+      alert("Erro ao compartilhar no WhatsApp: " + (err.message || err));
     }
   };
 
