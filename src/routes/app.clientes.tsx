@@ -23,6 +23,8 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import { MesclarClientesModal } from "@/components/mesclar-clientes-modal";
+import { Users } from "lucide-react";
 
 export const Route = createFileRoute("/app/clientes")({
   head: () => ({ meta: [{ title: "Clientes — GARDEN PRIME ERP" }] }),
@@ -38,6 +40,7 @@ function Clientes() {
   const [openSheet, setOpenSheet] = useState(false);
   const [clientVendas, setClientVendas] = useState<any[]>([]);
   const [loadingVendas, setLoadingVendas] = useState(false);
+  const [openMesclar, setOpenMesclar] = useState(false);
 
   const fetchClientes = async () => {
     try {
@@ -103,12 +106,22 @@ function Clientes() {
         title="Clientes"
         subtitle={`${clientes.length} clientes cadastrados`}
         actions={
-          <Button asChild className="bg-gradient-brand text-primary-foreground">
-            <Link to="/app/cliente-novo">
-              <Plus className="mr-2 h-4 w-4" />
-              Novo Cliente
-            </Link>
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="border-primary text-primary hover:bg-primary/10"
+              onClick={() => setOpenMesclar(true)}
+            >
+              <Users className="mr-2 h-4 w-4" />
+              Mesclar Duplicados
+            </Button>
+            <Button asChild className="bg-gradient-brand text-primary-foreground">
+              <Link to="/app/cliente-novo">
+                <Plus className="mr-2 h-4 w-4" />
+                Novo Cliente
+              </Link>
+            </Button>
+          </div>
         }
       />
 
@@ -321,6 +334,13 @@ function Clientes() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <MesclarClientesModal
+        open={openMesclar}
+        onOpenChange={setOpenMesclar}
+        clientes={clientes}
+        onSuccess={() => fetchClientes()}
+      />
     </>
   );
 }
