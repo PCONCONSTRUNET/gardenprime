@@ -176,6 +176,33 @@ function NovoCliente() {
 
     setLoading(true);
     try {
+      // Verificação de duplicidade
+      let query = supabase.from("clientes").select("id").limit(1);
+      
+      if (cliente.cpf_cnpj) {
+        query = query.eq("cpf_cnpj", cliente.cpf_cnpj);
+      } else {
+        query = query.eq("nome", cliente.nome);
+      }
+
+      // Se for edição, exclui o próprio ID da busca
+      if (isEditing) {
+        query = query.neq("id", id);
+      }
+
+      const { data: existingClient, error: searchError } = await query;
+      if (searchError) throw searchError;
+
+      if (existingClient && existingClient.length > 0) {
+        alert(
+          `Já existe um cliente cadastrado com este ${
+            cliente.cpf_cnpj ? "CNPJ/CPF" : "Nome"
+          }.`
+        );
+        setLoading(false);
+        return;
+      }
+
       // Envia apenas as colunas conhecidas da tabela clientes
       const payload: any = {
         nome: cliente.nome,

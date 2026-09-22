@@ -150,6 +150,27 @@ function NovaVenda() {
 
     setLoadingCliente(true);
     try {
+      // Verificação de duplicidade
+      let query = supabase.from("clientes").select("id, nome").limit(1);
+      if (novoCliente.cpf_cnpj) {
+        query = query.eq("cpf_cnpj", novoCliente.cpf_cnpj);
+      } else {
+        query = query.eq("nome", novoCliente.nome);
+      }
+
+      const { data: existingClient, error: searchError } = await query;
+      if (searchError) throw searchError;
+
+      if (existingClient && existingClient.length > 0) {
+        alert(
+          `Já existe um cliente cadastrado com este ${
+            novoCliente.cpf_cnpj ? "CNPJ/CPF" : "Nome"
+          }.`
+        );
+        setLoadingCliente(false);
+        return;
+      }
+
       const payload = {
         nome: novoCliente.nome,
         cpf_cnpj: novoCliente.cpf_cnpj,
