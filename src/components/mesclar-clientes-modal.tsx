@@ -115,7 +115,7 @@ export function MesclarClientesModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(val) => !isMerging && onOpenChange(val)}>
+    <Dialog open={open} onOpenChange={(val: boolean) => !isMerging && onOpenChange(val)}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
