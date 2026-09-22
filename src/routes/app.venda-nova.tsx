@@ -47,6 +47,7 @@ function NovaVenda() {
 
   // Form State
   const [clienteId, setClienteId] = useState("");
+  const [openCliente, setOpenCliente] = useState(false);
   const [tipo] = useState("VENDA");
   const [status, setStatus] = useState("Pago");
 
@@ -318,18 +319,57 @@ function NovaVenda() {
 
             <div className="space-y-2">
               <Label>Cliente</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                value={clienteId}
-                onChange={(e) => setClienteId(e.target.value)}
-              >
-                <option value="">Selecione um cliente...</option>
-                {clientes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nome} ({c.cidade || "S/ Cidade"})
-                  </option>
-                ))}
-              </select>
+              <Popover open={openCliente} onOpenChange={setOpenCliente}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openCliente}
+                    className="w-full justify-between h-10 font-normal px-3"
+                  >
+                    {clienteId
+                      ? (() => {
+                          const c = clientes.find((cl) => cl.id === clienteId);
+                          return c ? `${c.nome} (${c.cidade || "S/ Cidade"})` : "Selecione um cliente...";
+                        })()
+                      : "Selecione um cliente..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[450px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar por nome, CNPJ, telefone..." />
+                    <CommandList>
+                      <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        {clientes.map((c) => (
+                          <CommandItem
+                            key={c.id}
+                            value={`${c.nome} ${c.cpf_cnpj || ""} ${c.telefone || ""}`}
+                            onSelect={() => {
+                              setClienteId(c.id === clienteId ? "" : c.id);
+                              setOpenCliente(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                clienteId === c.id ? "opacity-100" : "opacity-0",
+                              )}
+                            />
+                            <div className="flex flex-col">
+                              <span className="font-medium">{c.nome}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {c.cpf_cnpj ? `CNPJ: ${c.cpf_cnpj}` : "Sem documento"} • {c.telefone ? `Tel: ${c.telefone}` : "Sem telefone"} • {c.cidade || "S/ Cidade"}
+                              </span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           </Card>
 
