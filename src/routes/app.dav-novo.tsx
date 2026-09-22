@@ -29,7 +29,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import { Save, Plus, Trash2, Check, ChevronsUpDown, Search } from "lucide-react";
+import { Save, Plus, Trash2, Check, ChevronsUpDown, Search, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -47,6 +47,7 @@ function NovoDAV() {
   const isEditing = !!search.id;
   const [loading, setLoading] = useState(false);
   const [isFetchingInfo, setIsFetchingInfo] = useState(isEditing);
+  const [loadingCNPJ, setLoadingCNPJ] = useState(false);
 
   const [cliente, setCliente] = useState({
     nome: "",
@@ -105,6 +106,39 @@ function NovoDAV() {
       .ilike("nome", `%${q}%`)
       .limit(10);
     setClientesBuscaLista(data || []);
+  };
+
+  const handleBuscarCNPJ = async () => {
+    const cnpjNumeros = cliente.cnpj.replace(/\D/g, "");
+    if (cnpjNumeros.length !== 14) {
+      alert("Por favor, insira um CNPJ válido com 14 dígitos.");
+      return;
+    }
+
+    setLoadingCNPJ(true);
+    try {
+      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjNumeros}`);
+      if (!response.ok) {
+        throw new Error("CNPJ não encontrado ou erro na API");
+      }
+      const data = await response.json();
+
+      setCliente((prev) => ({
+        ...prev,
+        nome: data.razao_social || data.nome_fantasia || prev.nome,
+        cep: data.cep ? data.cep.toString().replace(/^(\d{5})(\d{3})$/, "$1-$2") : prev.cep,
+        endereco: data.logradouro || prev.endereco,
+        numero: data.numero || prev.numero,
+        bairro: data.bairro || prev.bairro,
+        cidade: data.municipio || prev.cidade,
+        uf: data.uf || prev.uf,
+        telefone: data.ddd_telefone_1 || prev.telefone,
+      }));
+    } catch (error: any) {
+      alert(error.message || "Erro ao buscar CNPJ");
+    } finally {
+      setLoadingCNPJ(false);
+    }
   };
 
   const addItem = () =>
@@ -495,11 +529,23 @@ function NovoDAV() {
             </div>
             <div className="space-y-2">
               <Label>CNPJ / CPF</Label>
-              <Input
-                value={cliente.cnpj}
-                onChange={(e) => setCliente({ ...cliente, cnpj: e.target.value })}
-                placeholder="00.000.000/0000-00"
-              />
+              <div className="flex gap-2">
+                <Input
+                  value={cliente.cnpj}
+                  onChange={(e) => setCliente({ ...cliente, cnpj: e.target.value })}
+                  placeholder="00.000.000/0000-00"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  type="button"
+                  onClick={handleBuscarCNPJ}
+                  disabled={loadingCNPJ}
+                  title="Buscar dados do CNPJ"
+                >
+                  {loadingCNPJ ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
             <div className="space-y-2">
               <Label>CEP</Label>
