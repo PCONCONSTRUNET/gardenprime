@@ -183,9 +183,13 @@ function PublicCatalogo() {
     fetchProdutos();
   }, []);
 
-  const categorias = Array.from(new Set(produtos.map((p) => p.categoria))).filter(
-    Boolean,
-  ) as string[];
+  const categorias = Array.from(new Set(produtos.map((p) => p.categoria)))
+    .filter(Boolean)
+    .sort((a, b) => {
+      if ((a as string).toLowerCase() === "jardinagem") return -1;
+      if ((b as string).toLowerCase() === "jardinagem") return 1;
+      return 0;
+    }) as string[];
 
   const filtrados = produtos.filter((p) => {
     const matchBusca =
@@ -379,7 +383,13 @@ function PublicCatalogo() {
               Nenhum produto encontrado com essa busca.
             </p>
           ) : (
-            Array.from(new Set(filtrados.map((p) => p.categoria || "Outros"))).map((cat) => {
+            Array.from(new Set(filtrados.map((p) => p.categoria || "Outros")))
+              .sort((a, b) => {
+                if (a.toLowerCase() === "jardinagem") return -1;
+                if (b.toLowerCase() === "jardinagem") return 1;
+                return 0;
+              })
+              .map((cat) => {
               const produtosDaCategoria = filtrados.filter(
                 (p) => (p.categoria || "Outros") === cat,
               );

@@ -234,9 +234,13 @@ function ParceiroPDV() {
     }
   };
 
-  const dynamicCategories = Array.from(new Set(produtos.map((p) => p.categoria))).filter(
-    Boolean,
-  ) as string[];
+  const dynamicCategories = Array.from(new Set(produtos.map((p) => p.categoria)))
+    .filter(Boolean)
+    .sort((a, b) => {
+      if ((a as string).toLowerCase() === "jardinagem") return -1;
+      if ((b as string).toLowerCase() === "jardinagem") return 1;
+      return 0;
+    }) as string[];
   const categorias = dynamicCategories;
 
   const toggleCategory = (cat: string) => {

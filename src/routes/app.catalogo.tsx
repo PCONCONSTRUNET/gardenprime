@@ -213,7 +213,12 @@ function Catalogo() {
     doc.text("Catálogo de Produtos", margin, yPos);
     yPos += 12;
 
-    const categorias = Array.from(new Set(filtrados.map((p) => p.categoria || "Outros")));
+    const categorias = Array.from(new Set(filtrados.map((p) => p.categoria || "Outros")))
+      .sort((a, b) => {
+        if (a.toLowerCase() === "jardinagem") return -1;
+        if (b.toLowerCase() === "jardinagem") return 1;
+        return 0;
+      });
 
     for (const cat of categorias) {
       const prodsCat = filtrados.filter((p) => (p.categoria || "Outros") === cat);
@@ -315,7 +320,13 @@ function Catalogo() {
 
   const categoriasUnicas = [
     "Todos",
-    ...Array.from(new Set(produtos.map((p) => p.categoria))).filter(Boolean),
+    ...Array.from(new Set(produtos.map((p) => p.categoria)))
+      .filter(Boolean)
+      .sort((a, b) => {
+        if ((a as string).toLowerCase() === "jardinagem") return -1;
+        if ((b as string).toLowerCase() === "jardinagem") return 1;
+        return 0;
+      }),
   ] as string[];
 
   // Cores fixas para a vitrine para não precisar gravar background no banco
@@ -432,7 +443,13 @@ function Catalogo() {
             Nenhum produto encontrado na busca.
           </p>
         ) : (
-          Array.from(new Set(filtrados.map((p) => p.categoria || "Outros"))).map((cat) => {
+          Array.from(new Set(filtrados.map((p) => p.categoria || "Outros")))
+            .sort((a, b) => {
+              if (a.toLowerCase() === "jardinagem") return -1;
+              if (b.toLowerCase() === "jardinagem") return 1;
+              return 0;
+            })
+            .map((cat) => {
             const produtosDaCategoria = filtrados.filter((p) => (p.categoria || "Outros") === cat);
             return (
               <div key={cat} className="space-y-4">
