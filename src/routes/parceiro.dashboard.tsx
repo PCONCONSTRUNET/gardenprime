@@ -784,10 +784,10 @@ function ParceiroDashboard() {
                     type="button"
                     variant="outline"
                     className="h-10 border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5"
-                    onClick={() => downloadOrderPdf(selectedSaleForDetails, saleItems)}
+                    onClick={() => openOrderPdf(selectedSaleForDetails.id)}
                   >
-                    <Download className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                    <span>Baixar PDF</span>
+                    <Printer className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                    <span>Imprimir PDF</span>
                   </Button>
                 </div>
               </>

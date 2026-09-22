@@ -1240,11 +1240,13 @@ function ParceiroPDV() {
                         valor_unitario: i.u,
                         subtotal: i.t,
                       }));
-                      downloadOrderPdf(orderObj, itemsList);
+                      if (orderObj && orderObj.id) {
+                        openOrderPdf(orderObj.id);
+                      }
                     }}
                   >
-                    <Download className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                    <span>Baixar PDF</span>
+                    <Printer className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                    <span>Imprimir PDF</span>
                   </Button>
                 </div>
               </>

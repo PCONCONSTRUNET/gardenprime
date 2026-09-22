@@ -538,8 +538,8 @@ function DAVList() {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-primary"
-                      title="Baixar PDF"
-                      onClick={() => downloadOrderPdf(v)}
+                      title="Imprimir PDF"
+                      onClick={() => openOrderPdf(v.id)}
                     >
                       <Printer className="h-4 w-4" />
                     </Button>
