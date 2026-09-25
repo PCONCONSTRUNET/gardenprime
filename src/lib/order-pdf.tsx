@@ -157,7 +157,7 @@ export function buildWhatsAppMessage(order: OrderData, items: OrderItem[], inclu
   const docType = isDAV ? "ORÇAMENTO" : "PEDIDO";
   const clienteNome = order.cliente?.nome || order.clientes?.nome || (order as any).cliente_nome || "Cliente";
 
-  let msg = `*${docType} - GARDEN PRIME*\n`;
+  let msg = `*${docType} - GARDEN PLUS*\n`;
   msg += `Nº: ${num}\n`;
   msg += `Data: ${new Date(order.created_at).toLocaleDateString("pt-BR")}\n`;
   msg += `Cliente: ${clienteNome}\n\n`;
@@ -521,7 +521,7 @@ export async function generateOrderPdfDoc(
     doc.setFont("helvetica", "bold");
     doc.setFontSize(20);
     doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
-    doc.text("GARDEN PRIME", margin, y + 10);
+    doc.text("GARDEN PLUS", margin, y + 10);
     doc.setFontSize(10);
     doc.text("TERRA VEGETAL E VASOS", margin, y + 15);
   }
@@ -536,12 +536,12 @@ export async function generateOrderPdfDoc(
   doc.setFontSize(7);
   doc.setTextColor(50, 50, 50);
   const infoX = div1X + 4;
-  doc.text("CNPJ: 63.874.628/0001-36", infoX, y + 5);
-  doc.text("Inscr. Estadual: 266.037.553.113", infoX, y + 8);
-  doc.text("Rua Santa Teresinha, 86 - Paraisolândia", infoX, y + 12);
+  doc.text("CNPJ: 50.387.381/0001-81", infoX, y + 5);
+  doc.text("Inscr. Estadual: 266031100110", infoX, y + 8);
+  doc.text("MATEUS RODRIGUES DA COSTA 327, JARDIM SANTA RITA", infoX, y + 12);
   doc.text("Charqueada - SP", infoX, y + 15);
-  doc.text("(19) 99714-1112", infoX, y + 19);
-  doc.text("contatogardenprime@gmail.com", infoX, y + 23);
+  doc.text("(19) 99930-8784", infoX, y + 19);
+  doc.text("garden-plus@hotmail.com", infoX, y + 23);
 
   // Slogan Top Right
   doc.setFont("times", "italic");

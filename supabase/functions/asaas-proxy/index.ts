@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, asaas-target-path, asaas-environment",
+    "authorization, x-client-info, apikey, content-type, asaas-target-path, asaas-environment, asaas-method",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
 };
 
@@ -31,29 +31,52 @@ serve(async (req) => {
       throw new Error("ASAAS_API_KEY não configurada nos secrets do Supabase");
     }
 
-    let body: string | undefined = undefined;
-    if (req.method !== "GET" && req.method !== "HEAD") {
-      body = await req.text();
+    // Permite sobrescrever o método via header (supabase.functions.invoke sempre usa POST)
+    const forwardMethod = req.headers.get("asaas-method") || req.method;
+
+    const contentType = req.headers.get("content-type") || "";
+    const isMultipart = contentType.includes("multipart/form-data");
+
+    let requestBody: BodyInit | undefined = undefined;
+    let requestHeaders: Record<string, string> = {
+      "access_token": apiKey,
+      "User-Agent": "GardenPrimeERP/1.0.0",
+    };
+
+    if (forwardMethod !== "GET" && forwardMethod !== "HEAD") {
+      if (isMultipart) {
+        // Para uploads de arquivo: repassa o FormData diretamente sem modificar
+        requestBody = await req.formData();
+        // Não define Content-Type — o fetch define automaticamente com o boundary correto
+      } else {
+        requestBody = await req.text();
+        requestHeaders["Content-Type"] = "application/json";
+      }
+    } else {
+      requestHeaders["Content-Type"] = "application/json";
     }
 
-    console.log(`[ASAAS Proxy] ${req.method} ${baseUrl}${targetPath}`);
+    console.log(`[ASAAS Proxy] ${forwardMethod} ${baseUrl}${targetPath} | multipart=${isMultipart}`);
 
     const response = await fetch(`${baseUrl}${targetPath}`, {
-      method: req.method,
-      headers: {
-        "Content-Type": "application/json",
-        "access_token": apiKey,
-        "User-Agent": "GardenPrimeERP/1.0.0",
-      },
-      body: body || undefined,
+      method: forwardMethod,
+      headers: requestHeaders,
+      body: requestBody,
     });
 
     const data = await response.text();
-
     console.log(`[ASAAS Proxy] Resposta: ${response.status}`);
 
-    return new Response(data, {
-      status: response.status,
+    // Sempre retorna 200 para o supabase-js não ocultar o erro com "non-2xx status code".
+    let parsed: any;
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      parsed = { raw: data };
+    }
+
+    return new Response(JSON.stringify({ _asaas_status: response.status, ...parsed }), {
+      status: 200,
       headers: {
         ...corsHeaders,
         "Content-Type": "application/json",

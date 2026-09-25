@@ -42,12 +42,12 @@ function DeclaracaoConteudo() {
   if (!venda) return <div className="p-8 text-center font-sans">Carregando formulário...</div>;
 
   const remetente = {
-    nome: config?.razao_social || "Douglas de Almeida",
-    endereco: config?.endereco || "Rua Bom Jesus, 267 - Paraisolandia",
+    nome: config?.razao_social || "GARDEN PLUS LTDA",
+    endereco: config?.endereco || "MATEUS RODRIGUES DA COSTA 327, JARDIM SANTA RITA",
     cidade: "Charqueada",
     uf: "SP",
-    cep: "13.519-008",
-    cpf_cnpj: config?.cnpj || "63.874.628/0001-36",
+    cep: "13518-482",
+    cpf_cnpj: config?.cnpj || "50.387.381/0001-81",
   };
 
   const destinatario = venda.clientes || {};

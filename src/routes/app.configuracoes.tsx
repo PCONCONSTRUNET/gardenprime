@@ -27,7 +27,14 @@ import {
 import { useState, useEffect } from "react";
 import { useConfirm } from "@/contexts/ConfirmContext";
 import { supabase } from "@/lib/supabase";
-import { testarConexao, BRASIL_NFE_TOKEN, labelAmbiente } from "@/lib/brasilnfe";
+import { emitirNotaFiscalAsaas } from "@/lib/asaas";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/app/configuracoes")({
   head: () => ({ meta: [{ title: "Configurações — GARDEN PRIME ERP" }] }),
@@ -38,24 +45,19 @@ function Configuracoes() {
   const confirm = useConfirm();
   const [savingProfile, setSavingProfile] = useState(false);
   const [perfil, setPerfil] = useState({
-    razao_social: "",
-    cnpj: "",
-    inscricao_estadual: "",
-    regime_tributario: "",
-    endereco: "",
-    telefone: "",
-    email_contato: "",
+    razao_social: "GARDEN PLUS LTDA",
+    cnpj: "50.387.381/0001-81",
+    inscricao_estadual: "266031100110",
+    regime_tributario: "Simples Nacional",
+    endereco: "MATEUS RODRIGUES DA COSTA 327, JARDIM SANTA RITA, Charqueada - SP, 13518-482",
+    telefone: "19 99930 8784",
+    email_contato: "garden-plus@hotmail.com",
   });
   const [users, setUsers] = useState<any[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [loadingConfigs, setLoadingConfigs] = useState(true);
 
-  // ASAAS config
-  const [asaasKey, setAsaasKey] = useState("");
-  const [asaasAmbiente, setAsaasAmbiente] = useState<"sandbox" | "producao">("sandbox");
-  const [showAsaasKey, setShowAsaasKey] = useState(false);
-  const [savingAsaas, setSavingAsaas] = useState(false);
-  const [asaasTested, setAsaasTested] = useState<null | boolean>(null);
+  // ASAAS config foi movido para FiscalTab
 
   const [novoUserNome, setNovoUserNome] = useState("");
   const [novoUserEmail, setNovoUserEmail] = useState("");
@@ -90,7 +92,22 @@ function Configuracoes() {
         if (data && !error) {
           // Remover os campos id e created_at caso existam no retorno para evitar erro no upsert depois
           const { id, created_at, ...rest } = data;
-          setPerfil((prev) => ({ ...prev, ...rest }));
+          if (rest.razao_social === "Garden Prime" || !rest.razao_social) {
+            // Auto-migrate to Garden Plus
+            const newPerfil = {
+              razao_social: "GARDEN PLUS LTDA",
+              cnpj: "50.387.381/0001-81",
+              inscricao_estadual: "266031100110",
+              regime_tributario: "Simples Nacional",
+              endereco: "MATEUS RODRIGUES DA COSTA 327, JARDIM SANTA RITA, Charqueada - SP, 13518-482",
+              telefone: "19 99930 8784",
+              email_contato: "garden-plus@hotmail.com",
+            };
+            setPerfil(newPerfil);
+            supabase.from("configuracoes").upsert([{ id: 1, ...newPerfil }]).then();
+          } else {
+            setPerfil((prev) => ({ ...prev, ...rest }));
+          }
         }
       } catch (err) {
         console.error("Erro ao carregar configurações", err);
@@ -469,166 +486,230 @@ function Configuracoes() {
 // ─── Componente Aba Fiscal ────────────────────────────────────────────────────
 
 function FiscalTab() {
-  const [testando, setTestando] = useState(false);
-  const [resultadoTeste, setResultadoTeste] = useState<boolean | null>(null);
-  const [showToken, setShowToken] = useState(false);
+  // ASAAS config
+  const [asaasKey, setAsaasKey] = useState("");
+  const [asaasAmbiente, setAsaasAmbiente] = useState<"sandbox" | "producao">("producao");
+  const [showAsaasKey, setShowAsaasKey] = useState(false);
+  const [savingAsaas, setSavingAsaas] = useState(false);
+  const [asaasTested, setAsaasTested] = useState<null | boolean>(null);
 
-  const handleTestarConexao = async () => {
-    setTestando(true);
-    setResultadoTeste(null);
+  // Carrega o ambiente salvo do banco ao montar o componente
+  useEffect(() => {
+    supabase
+      .from("configuracoes")
+      .select("valor")
+      .eq("chave", "asaas_ambiente")
+      .single()
+      .then(({ data }) => {
+        if (data?.valor === "sandbox" || data?.valor === "producao") {
+          setAsaasAmbiente(data.valor);
+        }
+      });
+  }, []);
+
+
+  // States para NFS-e Asaas
+  const [modalNfseOpen, setModalNfseOpen] = useState(false);
+  const [nfseForm, setNfseForm] = useState({
+    customer: "",
+    value: "10.00",
+    serviceDescription: "Serviço prestado - Teste de integração",
+    serviceListItem: "01.01",
+  });
+  const [nfseEmitting, setNfseEmitting] = useState(false);
+  const [nfseResult, setNfseResult] = useState<any>(null);
+
+  // States para configuração fiscal (fiscalInfo)
+  const [fiscalInfo, setFiscalInfo] = useState({
+    municipalInscription: "",
+    rpsSerie: "RPS",
+    rpsNumber: "1",
+    loteNumber: "1",
+    specialTaxRegime: "MUNICIPAL_MICROENTREPRENEUR",
+    culturalProjectsPromoter: false,
+    simpleSocialTaxRegime: false,
+    email: "garden-plus@hotmail.com",
+    municipalUsername: "",
+    municipalPassword: "",
+  });
+  const [municipalOptions, setMunicipalOptions] = useState<any>(null);
+  const [municipalServices, setMunicipalServices] = useState<any[]>([]);
+  const [loadingFiscalStep, setLoadingFiscalStep] = useState<number>(0);
+  const [fiscalSaved, setFiscalSaved] = useState<boolean | null>(null);
+  const [fiscalMsg, setFiscalMsg] = useState("");
+
+  // States para upload de certificado A1
+  const [certFile, setCertFile] = useState<File | null>(null);
+  const [certPassword, setCertPassword] = useState("");
+  const [uploadingCert, setUploadingCert] = useState(false);
+  const [certResult, setCertResult] = useState<{ success: boolean; msg: string } | null>(null);
+
+  const handleUploadCertificado = async () => {
+    if (!certFile || !certPassword) return;
+    setUploadingCert(true);
+    setCertResult(null);
     try {
-      const ok = await testarConexao();
-      setResultadoTeste(ok);
-    } catch {
-      setResultadoTeste(false);
+      const formData = new FormData();
+      formData.append("certificate", certFile);
+      formData.append("certificatePassword", certPassword);
+
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || anonKey;
+
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/asaas-proxy`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "asaas-target-path": "/v3/fiscalInfo/certificate",
+            "asaas-environment": asaasAmbiente,
+          },
+          body: formData,
+        }
+      );
+      const result = await response.json().catch(() => ({ raw: "Resposta não-JSON" }));
+      if (result._asaas_status >= 400 || result.errors?.length) {
+        const msg = result.errors?.map((e: any) => e.description).join(", ")
+          || result.message
+          || `Erro ASAAS (status ${result._asaas_status}): ${JSON.stringify(result)}`;
+        setCertResult({ success: false, msg });
+      } else {
+        setCertResult({ success: true, msg: "✅ Certificado enviado com sucesso! Agora tente emitir a NFS-e." });
+      }
+    } catch (err: any) {
+      setCertResult({ success: false, msg: err.message });
     } finally {
-      setTestando(false);
+      setUploadingCert(false);
+    }
+  };
+
+  const handleTestarNfse = async () => {
+    setNfseEmitting(true);
+    setNfseResult(null);
+    try {
+      // Chama a proxy diretamente usando o ambiente selecionado na tela
+      const { data, error } = await supabase.functions.invoke("asaas-proxy", {
+        body: JSON.stringify({
+          customer: nfseForm.customer,
+          serviceDescription: nfseForm.serviceDescription,
+          value: Number(nfseForm.value),
+          effectiveDate: new Date().toISOString().split("T")[0],
+          serviceListItem: nfseForm.serviceListItem,
+        }),
+        headers: {
+          "asaas-target-path": "/v3/invoices",
+          "asaas-environment": asaasAmbiente,
+        },
+      });
+      if (error) throw new Error(error.message);
+      const result = typeof data === "string" ? JSON.parse(data) : data;
+      if (result?._asaas_status >= 400) {
+        const msg = result.errors?.map((e: any) => e.description).join(", ") || result.message || `Status ${result._asaas_status}`;
+        throw new Error(msg);
+      }
+      if (result?.errors?.length) throw new Error(result.errors.map((e: any) => e.description).join(", "));
+      setNfseResult({ success: true, data: result });
+    } catch (err: any) {
+      setNfseResult({ success: false, error: err.message });
+    } finally {
+      setNfseEmitting(false);
+    }
+  };
+
+  // ── Passo 1: Consultar opções do município
+  const handleConsultarMunicipio = async () => {
+    setLoadingFiscalStep(1);
+    setFiscalMsg("");
+    try {
+      const { data, error } = await supabase.functions.invoke("asaas-proxy", {
+        headers: {
+          "asaas-target-path": "/v3/fiscalInfo/municipalOptions",
+          "asaas-environment": asaasAmbiente,
+          "asaas-method": "GET",
+        },
+      });
+      if (error) throw new Error(error.message);
+      const result = typeof data === "string" ? JSON.parse(data) : data;
+      setMunicipalOptions(result);
+      setFiscalMsg("✅ Opções do município carregadas com sucesso!");
+    } catch (err: any) {
+      setFiscalMsg("❌ Erro ao consultar município: " + err.message);
+    } finally {
+      setLoadingFiscalStep(0);
+    }
+  };
+
+  // ── Passo 2: Salvar dados fiscais
+  const handleSalvarFiscalInfo = async () => {
+    setLoadingFiscalStep(2);
+    setFiscalMsg("");
+    try {
+      const payload: any = {
+        municipalInscription: fiscalInfo.municipalInscription,
+        rpsSerie: fiscalInfo.rpsSerie,
+        rpsNumber: Number(fiscalInfo.rpsNumber),
+        loteNumber: Number(fiscalInfo.loteNumber),
+        specialTaxRegime: fiscalInfo.specialTaxRegime,
+        culturalProjectsPromoter: fiscalInfo.culturalProjectsPromoter,
+        simpleSocialTaxRegime: fiscalInfo.simpleSocialTaxRegime,
+        email: fiscalInfo.email,
+        simplesNacional: fiscalInfo.simpleSocialTaxRegime,
+      };
+
+      // Se o município exigir login e senha (authenticationType === "USER_AND_PASSWORD")
+      if (fiscalInfo.municipalUsername && fiscalInfo.municipalPassword) {
+        payload.username = fiscalInfo.municipalUsername;
+        payload.password = fiscalInfo.municipalPassword;
+      }
+      
+      const { data, error } = await supabase.functions.invoke("asaas-proxy", {
+        body: JSON.stringify(payload),
+        headers: {
+          "asaas-target-path": "/v3/fiscalInfo",
+          "asaas-environment": asaasAmbiente,
+        },
+      });
+      if (error) throw new Error(error.message);
+      const result = typeof data === "string" ? JSON.parse(data) : data;
+      if (result?.errors?.length) throw new Error(result.errors.map((e: any) => e.description).join(", "));
+      setFiscalSaved(true);
+      setFiscalMsg("✅ Dados fiscais salvos no ASAAS com sucesso!");
+    } catch (err: any) {
+      setFiscalSaved(false);
+      setFiscalMsg("❌ Erro ao salvar dados fiscais: " + err.message);
+    } finally {
+      setLoadingFiscalStep(0);
+    }
+  };
+
+  // ── Passo 3: Consultar serviços disponíveis
+  const handleConsultarServicos = async () => {
+    setLoadingFiscalStep(3);
+    setFiscalMsg("");
+    try {
+      const { data, error } = await supabase.functions.invoke("asaas-proxy", {
+        headers: {
+          "asaas-target-path": "/v3/fiscalInfo/services",
+          "asaas-environment": asaasAmbiente,
+          "asaas-method": "GET",
+        },
+      });
+      if (error) throw new Error(error.message);
+      const result = typeof data === "string" ? JSON.parse(data) : data;
+      setMunicipalServices(result?.data || result || []);
+      setFiscalMsg("✅ Serviços municipais carregados!");
+    } catch (err: any) {
+      setFiscalMsg("❌ Erro ao consultar serviços: " + err.message);
+    } finally {
+      setLoadingFiscalStep(0);
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* Card de Status */}
-      <Card className="shadow-card border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-primary" />
-            Brasil NFe — Integração Fiscal
-          </CardTitle>
-          <CardDescription>
-            API para emissão de NF-e, NFC-e e outros documentos fiscais diretamente à SEFAZ.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Token */}
-          <div>
-            <Label className="mb-1.5 block">Token de Autenticação</Label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Input
-                  type={showToken ? "text" : "password"}
-                  value={BRASIL_NFE_TOKEN}
-                  readOnly
-                  className="pr-10 font-mono text-xs"
-                />
-                <button
-                  type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  onClick={() => setShowToken((v) => !v)}
-                >
-                  {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              <Button
-                variant="outline"
-                onClick={handleTestarConexao}
-                disabled={testando}
-                className="shrink-0"
-              >
-                {testando ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Testando…
-                  </>
-                ) : (
-                  <>Testar Conexão</>
-                )}
-              </Button>
-            </div>
-            {resultadoTeste === true && (
-              <p className="flex items-center gap-2 text-sm text-success mt-2">
-                <CheckCircle2 className="h-4 w-4" />
-                Conexão com Brasil NFe estabelecida com sucesso!
-              </p>
-            )}
-            {resultadoTeste === false && (
-              <p className="flex items-center gap-2 text-sm text-destructive mt-2">
-                <XCircle className="h-4 w-4" />
-                Falha na conexão. Verifique o token e tente novamente.
-              </p>
-            )}
-          </div>
-
-          {/* Ambiente Padrão */}
-          <div className="rounded-xl border p-4 bg-warning/5 border-warning/20">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="font-semibold text-sm">Ambiente Padrão: Homologação</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  As emissões são feitas em homologação por padrão (sem valor fiscal). Para
-                  produção, altere o ambiente diretamente no modal de emissão de cada NF-e.
-                </p>
-              </div>
-              <Badge className="bg-warning/15 text-warning border-0 shrink-0 ml-4">
-                Homologação
-              </Badge>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Card Documentos Suportados */}
-      <Card className="shadow-card">
-        <CardHeader>
-          <CardTitle className="text-base">Documentos Suportados</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              {
-                doc: "NF-e",
-                mod: "Modelo 55",
-                desc: "Nota Fiscal Eletrônica para operações entre empresas",
-                status: "Ativo",
-              },
-              {
-                doc: "NFC-e",
-                mod: "Modelo 65",
-                desc: "Nota Fiscal ao Consumidor Eletrônica (PDV)",
-                status: "Em breve",
-              },
-              {
-                doc: "NFS-e",
-                mod: "Modelo 10",
-                desc: "Nota Fiscal de Serviços Eletrônica",
-                status: "Em breve",
-              },
-              {
-                doc: "CT-e",
-                mod: "Modelo 57",
-                desc: "Conhecimento de Transporte Eletrônico",
-                status: "Em breve",
-              },
-            ].map((item) => (
-              <div key={item.doc} className="flex items-start gap-3 rounded-lg border p-3">
-                <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/10 text-primary shrink-0">
-                  <FileText className="h-4 w-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold text-sm">
-                      {item.doc}{" "}
-                      <span className="text-muted-foreground font-normal text-xs">
-                        ({item.mod})
-                      </span>
-                    </p>
-                    <Badge
-                      className={
-                        item.status === "Ativo"
-                          ? "bg-success/15 text-success border-0 text-xs"
-                          : "bg-muted text-muted-foreground border-0 text-xs"
-                      }
-                    >
-                      {item.status}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Card ASAAS */}
       <Card className="shadow-card">
@@ -729,10 +810,10 @@ function FiscalTab() {
                 try {
                   // Testa buscando dados da conta
                   const { data, error } = await supabase.functions.invoke("asaas-proxy", {
-                    body: JSON.stringify({}),
                     headers: {
                       "asaas-target-path": "/v3/myAccount",
                       "asaas-environment": asaasAmbiente,
+                      "asaas-method": "GET",
                     },
                   });
                   setAsaasTested(!error && !data?.errors?.length);
@@ -781,8 +862,390 @@ function FiscalTab() {
               <li>Clique em <strong>Salvar Configurações</strong></li>
             </ol>
           </div>
+
+          <div className="pt-4 border-t border-border mt-4">
+            <div className="flex items-center justify-between">
+               <div>
+                  <h4 className="text-sm font-semibold">Testar Emissão NFS-e</h4>
+                  <p className="text-xs text-muted-foreground">Emite uma nota fiscal de serviço no Asaas.</p>
+               </div>
+               <Button variant="secondary" size="sm" onClick={() => setModalNfseOpen(true)}>
+                  Abrir Teste
+               </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
+
+      {/* ── Card Senha Portal Nacional (gov.br) ── */}
+      <Card className="shadow-card border-green-500/20">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-lg bg-green-500/10">
+              <Shield className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <CardTitle className="text-base">Autenticação Portal Nacional NFS-e</CardTitle>
+              <CardDescription className="text-xs">
+                Sua conta usa o Portal Nacional da NFS-e (gov.br). Informe sua senha do gov.br para autenticar a emissão.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-md bg-green-50 dark:bg-green-950/30 p-3 text-xs text-green-800 dark:text-green-300">
+            <p className="font-semibold mb-1">✅ Usuário já configurado no ASAAS</p>
+            <p>Usuário (CNPJ): <span className="font-mono font-bold">63.874.628/0001-36</span></p>
+            <p className="mt-1 text-green-600">Apenas a senha do gov.br precisa ser enviada.</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs">Senha do gov.br</Label>
+            <Input
+              type="password"
+              placeholder="Sua senha de acesso ao gov.br"
+              value={certPassword}
+              onChange={(e) => setCertPassword(e.target.value)}
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Esta é a mesma senha que você usa para acessar o Portal Nacional da NFS-e.
+            </p>
+          </div>
+
+          {certResult && (
+            <p className={`text-xs ${certResult.success ? "text-success" : "text-destructive"}`}>
+              {certResult.msg}
+            </p>
+          )}
+
+          <Button
+            className="bg-green-600 hover:bg-green-700 text-white w-full"
+            disabled={uploadingCert || !certPassword}
+            onClick={async () => {
+              setUploadingCert(true);
+              setCertResult(null);
+              try {
+                const { data, error } = await supabase.functions.invoke("asaas-proxy", {
+                  body: JSON.stringify({
+                    municipalInscription: "63874628000136",
+                    rpsSerie: "RPS",
+                    rpsNumber: 1,
+                    loteNumber: 1,
+                    specialTaxRegime: "MUNICIPAL_MICROENTREPRENEUR",
+                    culturalProjectsPromoter: false,
+                    simpleSocialTaxRegime: false,
+                    email: "contatogardenprime@gmail.com",
+                    simplesNacional: false,
+                    username: "63874628000136",
+                    password: certPassword,
+                  }),
+                  headers: {
+                    "asaas-target-path": "/v3/fiscalInfo",
+                    "asaas-environment": asaasAmbiente,
+                  },
+                });
+                if (error) throw new Error(error.message);
+                const result = typeof data === "string" ? JSON.parse(data) : data;
+                if (result?._asaas_status >= 400 || result?.errors?.length) {
+                  const msg = result.errors?.map((e: any) => e.description).join(", ") || result.message || `Status ${result._asaas_status}`;
+                  setCertResult({ success: false, msg });
+                } else {
+                  setCertResult({ success: true, msg: "✅ Credenciais salvas! Agora tente emitir a NFS-e." });
+                }
+              } catch (err: any) {
+                setCertResult({ success: false, msg: err.message });
+              } finally {
+                setUploadingCert(false);
+              }
+            }}
+          >
+            {uploadingCert ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Shield className="h-4 w-4 mr-2" />}
+            Salvar Senha no ASAAS
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* ── Card Configuração Fiscal NFS-e ── */}
+      <Card className="shadow-card border-blue-500/20">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-lg bg-blue-500/10">
+              <FileText className="h-5 w-5 text-blue-500" />
+            </div>
+            <div>
+              <CardTitle className="text-base">Configuração Fiscal NFS-e (ASAAS)</CardTitle>
+              <CardDescription className="text-xs">
+                Obrigatório antes de emitir qualquer NFS-e. Configure os dados fiscais da empresa no ASAAS.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-5">
+
+          {/* Passo 1 */}
+          <div className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold flex items-center gap-2">
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white text-[10px] font-bold">1</span>
+                  Consultar Exigências do Município
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">Verifica quais dados a prefeitura do seu CNPJ exige para emissão de NFS-e.</p>
+              </div>
+              <Button
+                size="sm" variant="outline"
+                disabled={loadingFiscalStep === 1}
+                onClick={handleConsultarMunicipio}
+              >
+                {loadingFiscalStep === 1 ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                Consultar
+              </Button>
+            </div>
+            {municipalOptions && (
+              <pre className="text-[10px] bg-muted rounded p-2 overflow-auto max-h-32">
+                {JSON.stringify(municipalOptions, null, 2)}
+              </pre>
+            )}
+          </div>
+
+          {/* Passo 2 */}
+          <div className="rounded-lg border p-4 space-y-4">
+            <p className="text-sm font-semibold flex items-center gap-2">
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white text-[10px] font-bold">2</span>
+              Dados Fiscais da Empresa
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1 col-span-2">
+                <Label className="text-xs">Inscrição Municipal</Label>
+                <Input
+                  placeholder="Ex: 12345678"
+                  value={fiscalInfo.municipalInscription}
+                  onChange={(e) => setFiscalInfo({ ...fiscalInfo, municipalInscription: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Série RPS</Label>
+                <Input
+                  value={fiscalInfo.rpsSerie}
+                  onChange={(e) => setFiscalInfo({ ...fiscalInfo, rpsSerie: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Nº RPS Inicial</Label>
+                <Input
+                  type="number"
+                  value={fiscalInfo.rpsNumber}
+                  onChange={(e) => setFiscalInfo({ ...fiscalInfo, rpsNumber: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Nº Lote Inicial</Label>
+                <Input
+                  type="number"
+                  value={fiscalInfo.loteNumber}
+                  onChange={(e) => setFiscalInfo({ ...fiscalInfo, loteNumber: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">E-mail para notas</Label>
+                <Input
+                  type="email"
+                  value={fiscalInfo.email}
+                  onChange={(e) => setFiscalInfo({ ...fiscalInfo, email: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1 col-span-2">
+                <Label className="text-xs">Regime Tributário Especial</Label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={fiscalInfo.specialTaxRegime}
+                  onChange={(e) => setFiscalInfo({ ...fiscalInfo, specialTaxRegime: e.target.value })}
+                >
+                  <option value="MUNICIPAL_MICROENTREPRENEUR">MEI</option>
+                  <option value="ESTIMATED">Estimado</option>
+                  <option value="PROFESSIONAL_SOCIETY">Sociedade de Profissionais</option>
+                  <option value="COOPERATIVE">Cooperativa</option>
+                  <option value="INDIVIDUAL_MICROENTREPRENEUR">Microempresário Individual</option>
+                  <option value="MICRO_ENTERPRISE_OR_SMALL_BUSINESS">ME / EPP</option>
+                  <option value="NONE">Nenhum</option>
+                </select>
+              </div>
+
+              {municipalOptions?.authenticationType === "USER_AND_PASSWORD" && (
+                <div className="col-span-2 grid grid-cols-2 gap-3 p-3 border rounded-md bg-orange-50/50 dark:bg-orange-950/20">
+                  <div className="col-span-2 text-xs font-semibold text-orange-600">Autenticação da Prefeitura (Exigido pelo Município)</div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Usuário da Prefeitura</Label>
+                    <Input
+                      value={fiscalInfo.municipalUsername}
+                      onChange={(e) => setFiscalInfo({ ...fiscalInfo, municipalUsername: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Senha da Prefeitura</Label>
+                    <Input
+                      type="password"
+                      value={fiscalInfo.municipalPassword}
+                      onChange={(e) => setFiscalInfo({ ...fiscalInfo, municipalPassword: e.target.value })}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="col-span-2 flex items-center gap-4 mt-2">
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={fiscalInfo.culturalProjectsPromoter}
+                    onChange={(e) => setFiscalInfo({ ...fiscalInfo, culturalProjectsPromoter: e.target.checked })}
+                  />
+                  Promotor de projetos culturais
+                </label>
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={fiscalInfo.simpleSocialTaxRegime}
+                    onChange={(e) => setFiscalInfo({ ...fiscalInfo, simpleSocialTaxRegime: e.target.checked })}
+                  />
+                  Optante pelo Simples Nacional
+                </label>
+              </div>
+            </div>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white w-full"
+              disabled={loadingFiscalStep === 2 || !fiscalInfo.municipalInscription}
+              onClick={handleSalvarFiscalInfo}
+            >
+              {loadingFiscalStep === 2 ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+              Salvar Dados Fiscais no ASAAS
+            </Button>
+          </div>
+
+          {/* Passo 3 */}
+          <div className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold flex items-center gap-2">
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white text-[10px] font-bold">3</span>
+                  Serviços Municipais Disponíveis
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">Lista os códigos de serviço disponíveis no seu município para usar ao emitir NFS-e.</p>
+              </div>
+              <Button
+                size="sm" variant="outline"
+                disabled={loadingFiscalStep === 3}
+                onClick={handleConsultarServicos}
+              >
+                {loadingFiscalStep === 3 ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                Carregar
+              </Button>
+            </div>
+            {municipalServices.length > 0 && (
+              <div className="max-h-40 overflow-auto rounded border text-[11px]">
+                <table className="w-full">
+                  <thead className="bg-muted sticky top-0">
+                    <tr>
+                      <th className="px-2 py-1 text-left font-medium">Código</th>
+                      <th className="px-2 py-1 text-left font-medium">Descrição</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {municipalServices.map((s: any, i: number) => (
+                      <tr key={i} className="border-t">
+                        <td className="px-2 py-1 font-mono">{s.code || s.id || "—"}</td>
+                        <td className="px-2 py-1 text-muted-foreground">{s.description || s.name || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Mensagem de feedback */}
+          {fiscalMsg && (
+            <p className={`text-xs px-1 ${fiscalMsg.startsWith("✅") ? "text-success" : "text-destructive"}`}>
+              {fiscalMsg}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Modal de Teste NFS-e */}
+      <Dialog open={modalNfseOpen} onOpenChange={setModalNfseOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Testar Emissão NFS-e (Asaas)</DialogTitle>
+            <DialogDescription>
+              Preencha os dados abaixo para simular a criação de uma Nota Fiscal de Serviço no Asaas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>ID do Cliente (Asaas Customer ID)</Label>
+              <Input
+                placeholder="cus_00000..."
+                value={nfseForm.customer}
+                onChange={(e) => setNfseForm({ ...nfseForm, customer: e.target.value })}
+              />
+              <p className="text-[10px] text-muted-foreground">Obrigatório. Pegue um ID de cliente existente no Asaas.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Valor (R$)</Label>
+                <Input
+                  type="number"
+                  value={nfseForm.value}
+                  onChange={(e) => setNfseForm({ ...nfseForm, value: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Item da Lista de Serviços (LC 116/2003)</Label>
+                <Input
+                  value={nfseForm.serviceListItem}
+                  onChange={(e) => setNfseForm({ ...nfseForm, serviceListItem: e.target.value })}
+                  placeholder="Ex: 01.01, 14.01..."
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Descrição do Serviço</Label>
+              <Input
+                value={nfseForm.serviceDescription}
+                onChange={(e) => setNfseForm({ ...nfseForm, serviceDescription: e.target.value })}
+              />
+            </div>
+            {nfseResult && (
+              <div className={`p-3 rounded-md text-xs ${nfseResult.success ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`}>
+                {nfseResult.success ? (
+                  <>
+                    <p className="font-bold mb-1">Sucesso!</p>
+                    <p>ID: {nfseResult.data.id}</p>
+                    <p>Status: {nfseResult.data.statusDescription || nfseResult.data.status}</p>
+                    {nfseResult.data.pdfUrl && (
+                      <a href={nfseResult.data.pdfUrl} target="_blank" rel="noreferrer" className="underline mt-1 block">Ver PDF da Nota</a>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="font-bold mb-1">Erro ao emitir:</p>
+                    <p>{nfseResult.error}</p>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setModalNfseOpen(false)}>
+              Fechar
+            </Button>
+            <Button onClick={handleTestarNfse} disabled={nfseEmitting || !nfseForm.customer}>
+              {nfseEmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Emitir NFS-e
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

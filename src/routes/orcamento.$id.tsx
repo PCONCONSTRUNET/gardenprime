@@ -97,7 +97,7 @@ function ImprimirDAV() {
             frete_valor: v.frete_valor || 0,
             total: v.valor_total,
             vendedor: v.vendedor?.nome || "",
-            emissor_nome: "GARDEN PRIME",
+            emissor_nome: "GARDEN PLUS LTDA",
             isVenda: v.tipo !== "DAV",
             rawVenda: v,
           };
@@ -237,9 +237,9 @@ function ImprimirDAV() {
             <GardenPrimeLogo horizontal size="large" />
             <div className="w-px h-16 bg-[#C5A059] mx-2 hidden sm:block"></div>
             <div className="text-[10px] sm:text-xs text-slate-700 space-y-1">
-              <p>CNPJ: 63.874.628/0001-36 | Inscr. Estadual: 266.037.553.113</p>
-              <p>Rua Santa Teresinha, 86 - Paraisolândia, Charqueada - SP</p>
-              <p>(19) 99714-1112 | contatogardenprime@gmail.com</p>
+              <p>CNPJ: 50.387.381/0001-81 | Inscr. Estadual: 266031100110</p>
+              <p>MATEUS RODRIGUES DA COSTA 327, JARDIM SANTA RITA, Charqueada - SP</p>
+              <p>(19) 99930-8784 | garden-plus@hotmail.com</p>
             </div>
           </div>
           <div className="hidden sm:block text-right transform -rotate-2">

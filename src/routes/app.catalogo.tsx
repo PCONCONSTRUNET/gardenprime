@@ -187,14 +187,14 @@ function Catalogo() {
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(30, 41, 59);
-    doc.text("GARDEN PRIME", margin, yPos + 19);
+    doc.text("GARDEN PLUS LTDA", margin, yPos + 19);
 
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(71, 85, 105);
-    doc.text("CNPJ: 63.874.628/0001-36  •  Insc. Estadual: 266.037.553.113", margin, yPos + 24);
-    doc.text("Rua Santa Teresinha, 86 - Paraisolândia, Charqueada - SP", margin, yPos + 28.5);
-    doc.text("Tel: (19) 99714-1112  •  contatogardenprime@gmail.com", margin, yPos + 33);
+    doc.text("CNPJ: 50.387.381/0001-81  •  Insc. Estadual: 266031100110", margin, yPos + 24);
+    doc.text("MATEUS RODRIGUES DA COSTA 327, JARDIM SANTA RITA, Charqueada - SP", margin, yPos + 28.5);
+    doc.text("Tel: (19) 99930-8784  •  garden-plus@hotmail.com", margin, yPos + 33);
 
     // Garden Plus (Canto direito: somente logo e nome, sem contatos)
     const rightColX = pageWidth - margin - 50;

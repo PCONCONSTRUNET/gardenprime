@@ -77,6 +77,14 @@ async function asaasRequest<T = any>(
   // funcData pode ser string ou objeto dependendo do content-type
   const result = typeof funcData === "string" ? JSON.parse(funcData) : funcData;
 
+  // A proxy sempre retorna 200, mas embute o status real em _asaas_status
+  if (result?._asaas_status && result._asaas_status >= 400) {
+    const msgs = result.errors?.map((e: any) => e.description).join(", ")
+      || result.message
+      || `Status ${result._asaas_status}`;
+    throw new Error(`ASAAS: ${msgs}`);
+  }
+
   if (result?.errors?.length) {
     const msgs = result.errors.map((e: any) => e.description).join(", ");
     throw new Error(`ASAAS: ${msgs}`);
@@ -262,3 +270,43 @@ export const ASAAS_TIPO_LABEL: Record<string, string> = {
   CREDIT_CARD: "💳 Cartão de Crédito",
   UNDEFINED: "🔀 Multi-meios",
 };
+
+// ─── Notas Fiscais (NFS-e) ───────────────────────────────────────────────────
+
+export interface AsaasInvoicePayload {
+  customer: string;
+  serviceDescription: string;
+  observation?: string;
+  value: number;
+  deductions?: number;
+  effectiveDate: string;
+  serviceListItem?: string; // Usado para MEI/Portal Nacional
+  cityServiceCode?: string;
+  municipalServiceCode?: string;
+  municipalServiceCodeDescription?: string;
+  updatePayment?: boolean;
+}
+
+export interface AsaasInvoiceResponse {
+  id: string;
+  status: string;
+  customer: string;
+  value: number;
+  type: string;
+  statusDescription: string;
+  pdfUrl?: string;
+  xmlUrl?: string;
+  rpsNumber?: string;
+  rpsSerie?: string;
+  number?: string;
+}
+
+/**
+ * Cria uma nota fiscal de serviço no ASAAS.
+ */
+export async function emitirNotaFiscalAsaas(
+  params: AsaasInvoicePayload
+): Promise<AsaasInvoiceResponse> {
+  const response = await asaasRequest<AsaasInvoiceResponse>("POST", "/v3/invoices", params);
+  return response;
+}
