@@ -92,22 +92,7 @@ function Configuracoes() {
         if (data && !error) {
           // Remover os campos id e created_at caso existam no retorno para evitar erro no upsert depois
           const { id, created_at, ...rest } = data;
-          if (rest.razao_social === "Garden Prime" || rest.razao_social === "63.874.828 DOUGLAS DE ALMEIDA" || !rest.razao_social) {
-            // Auto-migrate to Garden Plus
-            const newPerfil = {
-              razao_social: "GARDEN PLUS LTDA",
-              cnpj: "50.387.381/0001-81",
-              inscricao_estadual: "266031100110",
-              regime_tributario: "Simples Nacional",
-              endereco: "MATEUS RODRIGUES DA COSTA 327, JARDIM SANTA RITA, Charqueada - SP, 13518-482",
-              telefone: "19 99930 8784",
-              email_contato: "garden-plus@hotmail.com",
-            };
-            setPerfil(newPerfil);
-            supabase.from("configuracoes").upsert([{ id: 1, ...newPerfil }]).then();
-          } else {
-            setPerfil((prev) => ({ ...prev, ...rest }));
-          }
+          setPerfil((prev) => ({ ...prev, ...rest }));
         }
       } catch (err) {
         console.error("Erro ao carregar configurações", err);
