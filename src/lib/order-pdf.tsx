@@ -465,7 +465,17 @@ export async function generateOrderPdfDoc(
   items: OrderItem[],
   logos?: { prime?: string | null; plus?: string | null; icons?: any },
 ): Promise<{ doc: jsPDF; blob: Blob; file: File; filename: string }> {
-    // Load images
+  // Buscar configurações da empresa
+  let config: any = null;
+  try {
+    const active = await getActiveSupabase();
+    const { data } = await active.from("configuracoes").select("*").eq("id", 1).single();
+    if (data) config = data;
+  } catch (e) {
+    console.error("Erro ao buscar configuracoes da empresa para o PDF", e);
+  }
+
+  // Load images
   const toBase64 = (url: string): Promise<string | null> =>
     fetch(url)
       .then((r) => r.blob())
@@ -521,7 +531,7 @@ export async function generateOrderPdfDoc(
     doc.setFont("helvetica", "bold");
     doc.setFontSize(20);
     doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
-    doc.text("GARDEN PLUS", margin, y + 10);
+    doc.text(config?.nome_fantasia || config?.razao_social || "GARDEN PLUS", margin, y + 10);
     doc.setFontSize(10);
     doc.text("TERRA VEGETAL E VASOS", margin, y + 15);
   }
@@ -536,12 +546,25 @@ export async function generateOrderPdfDoc(
   doc.setFontSize(7);
   doc.setTextColor(50, 50, 50);
   const infoX = div1X + 4;
-  doc.text("CNPJ: 50.387.381/0001-81", infoX, y + 5);
-  doc.text("Inscr. Estadual: 266031100110", infoX, y + 8);
-  doc.text("MATEUS RODRIGUES DA COSTA 327, JARDIM SANTA RITA", infoX, y + 12);
-  doc.text("Charqueada - SP", infoX, y + 15);
-  doc.text("(19) 99930-8784", infoX, y + 19);
-  doc.text("garden-plus@hotmail.com", infoX, y + 23);
+  doc.text(`CNPJ: ${config?.cnpj || "50.387.381/0001-81"}`, infoX, y + 5);
+  doc.text(`Inscr. Estadual: ${config?.inscricao_estadual || "266031100110"}`, infoX, y + 8);
+  
+  const tipo = config?.tipo_logradouro ? config.tipo_logradouro + " " : "";
+  const end = config?.endereco || "MATEUS RODRIGUES DA COSTA";
+  const numero = config?.numero ? " " + config.numero : "";
+  const compl = config?.complemento ? " " + config.complemento : "";
+  const bairro = config?.bairro ? ", " + config.bairro : "";
+  doc.text(`${tipo}${end}${numero}${compl}${bairro}`, infoX, y + 12);
+  
+  const mun = config?.municipio || "Charqueada";
+  const uf = config?.uf || "SP";
+  const cep = config?.cep ? " - CEP " + config.cep : "";
+  doc.text(`${mun} - ${uf}${cep}`, infoX, y + 15);
+  
+  const cel = config?.celular || config?.telefone || "(19) 99930-8784";
+  doc.text(cel, infoX, y + 19);
+  
+  doc.text(config?.email_contato || "garden-plus@hotmail.com", infoX, y + 23);
 
   // Slogan Top Right
   doc.setFont("times", "italic");
