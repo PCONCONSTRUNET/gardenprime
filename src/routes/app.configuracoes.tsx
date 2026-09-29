@@ -159,8 +159,16 @@ function Configuracoes() {
   const handleSaveSettings = async () => {
     setSavingProfile(true);
     try {
-      const { error } = await supabase.from("configuracoes").upsert([{ id: 1, ...perfil }]);
+      const { data, error } = await supabase
+        .from("configuracoes")
+        .update(perfil)
+        .eq("id", 1)
+        .select();
+        
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Não foi possível salvar as configurações. Verifique suas permissões (RLS).");
+      }
       alert("Configurações salvas com sucesso!");
     } catch (err: any) {
       alert(
