@@ -44,14 +44,32 @@ export const Route = createFileRoute("/app/configuracoes")({
 function Configuracoes() {
   const confirm = useConfirm();
   const [savingProfile, setSavingProfile] = useState(false);
-  const [perfil, setPerfil] = useState({
-    razao_social: "GARDEN PLUS LTDA",
-    cnpj: "50.387.381/0001-81",
-    inscricao_estadual: "266031100110",
-    regime_tributario: "Simples Nacional",
-    endereco: "MATEUS RODRIGUES DA COSTA 327, JARDIM SANTA RITA, Charqueada - SP, 13518-482",
-    telefone: "19 99930 8784",
-    email_contato: "garden-plus@hotmail.com",
+  const [perfil, setPerfil] = useState<any>({
+    razao_social: "",
+    nome_fantasia: "",
+    responsavel: "",
+    cep: "",
+    tipo_logradouro: "",
+    numero: "",
+    complemento: "",
+    bairro: "",
+    uf: "",
+    municipio: "",
+    fax: "",
+    celular: "",
+    inscricao_municipal: "",
+    site: "",
+    ramo_atividade: "",
+    cnae: "",
+    compra_sistema: "",
+    optante_simples_nacional: true,
+    codigo_regime_tributario: "",
+    cnpj: "",
+    inscricao_estadual: "",
+    regime_tributario: "",
+    endereco: "",
+    telefone: "",
+    email_contato: "",
   });
   const [users, setUsers] = useState<any[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -251,68 +269,276 @@ function Configuracoes() {
                   <span className="ml-3 text-muted-foreground">Carregando dados...</span>
                 </div>
               ) : (
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
+                <div className="grid gap-4 md:grid-cols-4">
+                  {/* Linha 1 */}
+                  <div className="md:col-span-2">
                     <Label>Razão Social</Label>
                     <Input
                       className="mt-1.5"
                       value={perfil.razao_social || ""}
-                      onChange={(e) => setPerfil((p) => ({ ...p, razao_social: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <Label>CNPJ</Label>
-                    <Input
-                      className="mt-1.5"
-                      value={perfil.cnpj || ""}
-                      onChange={(e) => setPerfil((p) => ({ ...p, cnpj: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <Label>Inscrição Estadual</Label>
-                    <Input
-                      className="mt-1.5"
-                      value={perfil.inscricao_estadual || ""}
-                      onChange={(e) =>
-                        setPerfil((p) => ({ ...p, inscricao_estadual: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label>Regime Tributário</Label>
-                    <Input
-                      className="mt-1.5"
-                      value={perfil.regime_tributario || ""}
-                      onChange={(e) =>
-                        setPerfil((p) => ({ ...p, regime_tributario: e.target.value }))
-                      }
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, razao_social: e.target.value }))}
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <Label>Endereço</Label>
+                    <Label>Nome Fantasia</Label>
+                    <Input
+                      className="mt-1.5"
+                      value={perfil.nome_fantasia || ""}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, nome_fantasia: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Linha 2 */}
+                  <div className="md:col-span-4">
+                    <Label>Responsável</Label>
+                    <Input
+                      className="mt-1.5"
+                      value={perfil.responsavel || ""}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, responsavel: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Linha 3 (Endereço completo) */}
+                  <div className="md:col-span-1">
+                    <Label>CEP</Label>
+                    <Input
+                      className="mt-1.5"
+                      value={perfil.cep || ""}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, cep: e.target.value }))}
+                    />
+                  </div>
+                  <div className="md:col-span-1">
+                    <Label>Tipo</Label>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background mt-1.5"
+                      value={perfil.tipo_logradouro || ""}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, tipo_logradouro: e.target.value }))}
+                    >
+                      <option value="">Selecione...</option>
+                      <option value="Rua">Rua</option>
+                      <option value="Avenida">Avenida</option>
+                      <option value="Praça">Praça</option>
+                      <option value="Rodovia">Rodovia</option>
+                      <option value="Outro">Outro</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Logradouro / Endereço</Label>
                     <Input
                       className="mt-1.5"
                       value={perfil.endereco || ""}
-                      onChange={(e) => setPerfil((p) => ({ ...p, endereco: e.target.value }))}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, endereco: e.target.value }))}
                     />
                   </div>
-                  <div>
+
+                  {/* Linha 4 */}
+                  <div className="md:col-span-1">
+                    <Label>Número</Label>
+                    <Input
+                      className="mt-1.5"
+                      value={perfil.numero || ""}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, numero: e.target.value }))}
+                    />
+                  </div>
+                  <div className="md:col-span-1">
+                    <Label>Complemento</Label>
+                    <Input
+                      className="mt-1.5"
+                      value={perfil.complemento || ""}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, complemento: e.target.value }))}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Bairro</Label>
+                    <Input
+                      className="mt-1.5"
+                      value={perfil.bairro || ""}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, bairro: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Linha 5 */}
+                  <div className="md:col-span-1">
+                    <Label>UF</Label>
+                    <Input
+                      className="mt-1.5"
+                      value={perfil.uf || ""}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, uf: e.target.value }))}
+                    />
+                  </div>
+                  <div className="md:col-span-3">
+                    <Label>Município</Label>
+                    <Input
+                      className="mt-1.5"
+                      value={perfil.municipio || ""}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, municipio: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Linha 6 (Contatos) */}
+                  <div className="md:col-span-1">
                     <Label>Telefone</Label>
                     <Input
                       className="mt-1.5"
                       value={perfil.telefone || ""}
-                      onChange={(e) => setPerfil((p) => ({ ...p, telefone: e.target.value }))}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, telefone: e.target.value }))}
                     />
                   </div>
-                  <div>
-                    <Label>E-mail de Contato</Label>
+                  <div className="md:col-span-1">
+                    <Label>Fax</Label>
+                    <Input
+                      className="mt-1.5"
+                      value={perfil.fax || ""}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, fax: e.target.value }))}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Celular / 0800</Label>
+                    <Input
+                      className="mt-1.5"
+                      value={perfil.celular || ""}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, celular: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Linha 7 (Documentos) */}
+                  <div className="md:col-span-1">
+                    <Label>CNPJ / CPF</Label>
+                    <Input
+                      className="mt-1.5"
+                      value={perfil.cnpj || ""}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, cnpj: e.target.value }))}
+                    />
+                  </div>
+                  <div className="md:col-span-1">
+                    <Label>IE / RG</Label>
+                    <Input
+                      className="mt-1.5"
+                      value={perfil.inscricao_estadual || ""}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, inscricao_estadual: e.target.value }))}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Insc. Municipal</Label>
+                    <Input
+                      className="mt-1.5"
+                      value={perfil.inscricao_municipal || ""}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, inscricao_municipal: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Linha 8 (Digital) */}
+                  <div className="md:col-span-2">
+                    <Label>E-mail</Label>
                     <Input
                       className="mt-1.5"
                       value={perfil.email_contato || ""}
-                      onChange={(e) => setPerfil((p) => ({ ...p, email_contato: e.target.value }))}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, email_contato: e.target.value }))}
                     />
                   </div>
-                  <div className="md:col-span-2 flex justify-end">
+                  <div className="md:col-span-2">
+                    <Label>Site</Label>
+                    <Input
+                      className="mt-1.5"
+                      value={perfil.site || ""}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, site: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Linha 9 */}
+                  <div className="md:col-span-1">
+                    <Label>Ramo Atividade</Label>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background mt-1.5"
+                      value={perfil.ramo_atividade || ""}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, ramo_atividade: e.target.value }))}
+                    >
+                      <option value="">Selecione...</option>
+                      <option value="Comércio">Comércio</option>
+                      <option value="Serviços">Serviços</option>
+                      <option value="Indústria">Indústria</option>
+                      <option value="Outros">Outros</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-1">
+                    <Label>CNAE</Label>
+                    <Input
+                      className="mt-1.5"
+                      value={perfil.cnae || ""}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, cnae: e.target.value }))}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Compra do Sistema</Label>
+                    <Input
+                      className="mt-1.5"
+                      value={perfil.compra_sistema || ""}
+                      onChange={(e) => setPerfil((p: any) => ({ ...p, compra_sistema: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Linha 10 (Opções radio/select) */}
+                  <div className="md:col-span-2">
+                    <Label>Optante Simples Nacional</Label>
+                    <div className="flex items-center gap-4 mt-2">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="optante_simples_nacional"
+                          checked={perfil.optante_simples_nacional === true}
+                          onChange={() => setPerfil((p: any) => ({ ...p, optante_simples_nacional: true }))}
+                        />
+                        Sim
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="optante_simples_nacional"
+                          checked={perfil.optante_simples_nacional === false}
+                          onChange={() => setPerfil((p: any) => ({ ...p, optante_simples_nacional: false }))}
+                        />
+                        Não
+                      </label>
+                    </div>
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Código do Regime Tributário</Label>
+                    <div className="flex flex-col gap-2 mt-2">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="radio"
+                          name="codigo_regime_tributario"
+                          value="Normal"
+                          checked={perfil.codigo_regime_tributario === "Normal"}
+                          onChange={(e) => setPerfil((p: any) => ({ ...p, codigo_regime_tributario: e.target.value }))}
+                        />
+                        Normal
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="radio"
+                          name="codigo_regime_tributario"
+                          value="Excedido"
+                          checked={perfil.codigo_regime_tributario === "Excedido"}
+                          onChange={(e) => setPerfil((p: any) => ({ ...p, codigo_regime_tributario: e.target.value }))}
+                        />
+                        Excedido o sublimite da receita bruta
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="radio"
+                          name="codigo_regime_tributario"
+                          value="Microempreendedor Individual - MEI"
+                          checked={perfil.codigo_regime_tributario === "Microempreendedor Individual - MEI"}
+                          onChange={(e) => setPerfil((p: any) => ({ ...p, codigo_regime_tributario: e.target.value }))}
+                        />
+                        Microempreendedor Individual - MEI
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Botão de Salvar */}
+                  <div className="md:col-span-4 flex justify-end mt-4">
                     <Button
                       onClick={handleSaveSettings}
                       disabled={savingProfile}
