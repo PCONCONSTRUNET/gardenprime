@@ -92,7 +92,7 @@ function Configuracoes() {
         if (data && !error) {
           // Remover os campos id e created_at caso existam no retorno para evitar erro no upsert depois
           const { id, created_at, ...rest } = data;
-          if (rest.razao_social === "Garden Prime" || !rest.razao_social) {
+          if (rest.razao_social === "Garden Prime" || rest.razao_social === "63.874.828 DOUGLAS DE ALMEIDA" || !rest.razao_social) {
             // Auto-migrate to Garden Plus
             const newPerfil = {
               razao_social: "GARDEN PLUS LTDA",
