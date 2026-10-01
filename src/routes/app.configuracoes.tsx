@@ -110,7 +110,7 @@ function Configuracoes() {
         if (data && !error) {
           // Remover os campos id e created_at caso existam no retorno para evitar erro no upsert depois
           const { id, created_at, ...rest } = data;
-          setPerfil((prev) => ({ ...prev, ...rest }));
+          setPerfil((prev: any) => ({ ...prev, ...rest }));
         }
       } catch (err) {
         console.error("Erro ao carregar configurações", err);

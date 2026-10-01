@@ -301,7 +301,7 @@ function Dashboard() {
       });
 
       // Comparativo 6 meses
-      const vendasVsCompras = [];
+      const vendasVsCompras: any[] = [];
       for (let i = 5; i >= 0; i--) {
         const d = new Date();
         d.setMonth(d.getMonth() - i);
@@ -349,8 +349,7 @@ function Dashboard() {
         mixCategorias: mixCategorias,
         vendasVsCompras,
         vendasChartData,
-        topVendedores: [] as any[],
-    alertas: {
+        alertas: {
            estoqueCritico: alertasEstoqueCritico?.length || 0,
            pedidosAguardando: pedAguardando,
            entregasAtrasadas: 0, // Necessário lógica de atraso
@@ -710,7 +709,7 @@ function Dashboard() {
                       <div className="h-8 w-8 rounded-full bg-secondary grid place-items-center text-xs font-medium text-muted-foreground shrink-0">
                         {v.name
                           .split(" ")
-                          .map((n) => n[0])
+                          .map((n: string) => n[0])
                           .join("")}
                       </div>
                       <div className="flex-1 min-w-0">

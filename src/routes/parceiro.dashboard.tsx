@@ -23,6 +23,7 @@ import {
   Loader2,
   Trash2,
   Ban,
+  Printer,
 } from "lucide-react";
 import {
   WhatsAppIcon,

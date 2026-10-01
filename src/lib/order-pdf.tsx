@@ -108,7 +108,7 @@ async function getActiveSupabase() {
   return supabaseParceiro;
 }
 
-async function queryDb<T>(fn: (client: typeof supabase) => Promise<{ data: T | null; error: any }>): Promise<T | null> {
+async function queryDb<T>(fn: (client: typeof supabase) => PromiseLike<{ data: T | null; error: any }>): Promise<T | null> {
   const active = await getActiveSupabase();
   try {
     const res = await fn(active);

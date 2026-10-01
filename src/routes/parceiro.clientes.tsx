@@ -28,7 +28,7 @@ function ParceiroClientes() {
 
   const emptyForm = {
     nome: "", cpf_cnpj: "", telefone: "", cep: "", endereco: "",
-    numero: "", bairro: "", cidade: "", uf: "", status: "Ativo",
+    numero: "", bairro: "", cidade: "", uf: "", status: "Ativo", id: undefined as string | undefined
   };
   const [form, setForm] = useState(emptyForm);
 

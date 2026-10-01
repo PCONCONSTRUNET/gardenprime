@@ -23,6 +23,7 @@ import {
   Plus,
   Minus,
   X,
+  Printer,
   ArrowRight,
   ChevronRight,
   FileText,
