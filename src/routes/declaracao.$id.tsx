@@ -42,11 +42,15 @@ function DeclaracaoConteudo() {
   if (!venda) return <div className="p-8 text-center font-sans">Carregando formulário...</div>;
 
   const remetente = {
-    nome: config?.razao_social || "GARDEN PLUS LTDA",
-    endereco: config?.endereco || "MATEUS RODRIGUES DA COSTA 327, JARDIM SANTA RITA",
-    cidade: "Charqueada",
-    uf: "SP",
-    cep: "13518-482",
+    nome: config?.nome_fantasia || config?.razao_social || "GARDEN PLUS LTDA",
+    endereco: (config?.tipo_logradouro ? config.tipo_logradouro + " " : "") +
+              (config?.endereco || "MATEUS RODRIGUES DA COSTA") +
+              (config?.numero ? ", " + config.numero : "") +
+              (config?.complemento ? " " + config.complemento : "") +
+              (config?.bairro ? ", " + config.bairro : ""),
+    cidade: config?.municipio || "Charqueada",
+    uf: config?.uf || "SP",
+    cep: config?.cep || "13518-482",
     cpf_cnpj: config?.cnpj || "50.387.381/0001-81",
   };
 

@@ -131,6 +131,8 @@ function Catalogo() {
   });
 
   const gerarPDF = async () => {
+    const { data: config } = await supabase.from("configuracoes").select("*").eq("id", 1).single();
+
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -187,14 +189,21 @@ function Catalogo() {
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(30, 41, 59);
-    doc.text("GARDEN PLUS LTDA", margin, yPos + 19);
+    doc.text(config?.nome_fantasia || config?.razao_social || "GARDEN PLUS LTDA", margin, yPos + 19);
 
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(71, 85, 105);
-    doc.text("CNPJ: 50.387.381/0001-81  •  Insc. Estadual: 266031100110", margin, yPos + 24);
-    doc.text("MATEUS RODRIGUES DA COSTA 327, JARDIM SANTA RITA, Charqueada - SP", margin, yPos + 28.5);
-    doc.text("Tel: (19) 99930-8784  •  garden-plus@hotmail.com", margin, yPos + 33);
+    doc.text(`CNPJ: ${config?.cnpj || "50.387.381/0001-81"}  •  Insc. Estadual: ${config?.inscricao_estadual || "266031100110"}`, margin, yPos + 24);
+    const tipoLog = config?.tipo_logradouro ? config.tipo_logradouro + " " : "";
+    const end = config?.endereco || "MATEUS RODRIGUES DA COSTA";
+    const num = config?.numero ? ", " + config.numero : "";
+    const compl = config?.complemento ? " " + config.complemento : "";
+    const bairro = config?.bairro ? ", " + config.bairro : "";
+    const cid = config?.municipio || "Charqueada";
+    const uf = config?.uf || "SP";
+    doc.text(`${tipoLog}${end}${num}${compl}${bairro}, ${cid} - ${uf}`, margin, yPos + 28.5);
+    doc.text(`Tel: ${config?.celular || config?.telefone || "(19) 99930-8784"}  •  ${config?.email_contato || "garden-plus@hotmail.com"}`, margin, yPos + 33);
 
     // Garden Plus (Canto direito: somente logo e nome, sem contatos)
     const rightColX = pageWidth - margin - 50;

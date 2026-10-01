@@ -551,7 +551,7 @@ export async function generateOrderPdfDoc(
   
   const tipo = config?.tipo_logradouro ? config.tipo_logradouro + " " : "";
   const end = config?.endereco || "MATEUS RODRIGUES DA COSTA";
-  const numero = config?.numero ? " " + config.numero : "";
+  const numero = config?.numero ? ", " + config.numero : "";
   const compl = config?.complemento ? " " + config.complemento : "";
   const bairro = config?.bairro ? ", " + config.bairro : "";
   doc.text(`${tipo}${end}${numero}${compl}${bairro}`, infoX, y + 12);

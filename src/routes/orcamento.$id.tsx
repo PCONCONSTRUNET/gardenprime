@@ -15,9 +15,13 @@ function ImprimirDAV() {
   const [dav, setDav] = useState<any>(null);
   const [itens, setItens] = useState<any[]>([]);
   const [sharing, setSharing] = useState(false);
+  const [config, setConfig] = useState<any>(null);
 
   useEffect(() => {
     async function loadData() {
+      const { data: conf } = await supabase.from("configuracoes").select("*").eq("id", 1).single();
+      if (conf) setConfig(conf);
+
       let { data: d } = await supabase.from("davs").select("*").eq("id", id).single();
 
       let itemsData: any[] = [];
@@ -237,9 +241,14 @@ function ImprimirDAV() {
             <GardenPrimeLogo horizontal size="large" />
             <div className="w-px h-16 bg-[#C5A059] mx-2 hidden sm:block"></div>
             <div className="text-[10px] sm:text-xs text-slate-700 space-y-1">
-              <p>CNPJ: 50.387.381/0001-81 | Inscr. Estadual: 266031100110</p>
-              <p>MATEUS RODRIGUES DA COSTA 327, JARDIM SANTA RITA, Charqueada - SP</p>
-              <p>(19) 99930-8784 | garden-plus@hotmail.com</p>
+              <p>CNPJ: {config?.cnpj || "50.387.381/0001-81"} | Inscr. Estadual: {config?.inscricao_estadual || "266031100110"}</p>
+              <p>
+                {config?.tipo_logradouro ? config.tipo_logradouro + " " : ""}
+                {config?.endereco || "MATEUS RODRIGUES DA COSTA"}{config?.numero ? ", " + config.numero : ""}
+                {config?.complemento ? " " + config.complemento : ""}{config?.bairro ? ", " + config.bairro : ""}
+                {", " + (config?.municipio || "Charqueada") + " - " + (config?.uf || "SP")}
+              </p>
+              <p>{config?.celular || config?.telefone || "(19) 99930-8784"} | {config?.email_contato || "garden-plus@hotmail.com"}</p>
             </div>
           </div>
           <div className="hidden sm:block text-right transform -rotate-2">
