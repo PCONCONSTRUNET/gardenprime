@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import {
   Plus,
+  Minus,
   Calculator,
   Trash2,
   Check,
@@ -181,8 +182,28 @@ function Vendas() {
     setRemovedIds((prev) => [...prev, itemId]);
   };
 
+  const handleChangeExistingQty = (itemId: string, delta: number) => {
+    setEditItens((prev) =>
+      prev.map((i) => {
+        if (i.id !== itemId) return i;
+        const novaQtd = Math.max(1, i.quantidade + delta);
+        return { ...i, quantidade: novaQtd, subtotal: novaQtd * Number(i.valor_unitario) };
+      })
+    );
+  };
+
   const handleRemoveNewItem = (idx: number) => {
     setNewItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleChangeNewItemQty = (idx: number, delta: number) => {
+    setNewItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== idx) return item;
+        const novaQtd = Math.max(1, item.quantidade + delta);
+        return { ...item, quantidade: novaQtd, subtotal: novaQtd * Number(item.valor_unitario) };
+      })
+    );
   };
 
   const handleSelectProduto = (prodId: string) => {
@@ -239,6 +260,36 @@ function Vendas() {
           }
         }
         await supabase.from("vendas_itens").delete().eq("id", itemId);
+      }
+
+      // 1b. Atualizar quantidade dos itens existentes que foram alterados
+      for (const item of editItens) {
+        const original = vendaItens.find((i) => i.id === item.id);
+        if (!original || original.quantidade === item.quantidade) continue;
+        const diff = item.quantidade - original.quantidade; // positivo = aumentou, negativo = diminuiu
+        if (isVendaComEstoque) {
+          const { data: prod } = await supabase
+            .from("produtos")
+            .select("estoque")
+            .eq("id", item.produto_id)
+            .single();
+          if (prod) {
+            const novoEstoque = prod.estoque - diff;
+            if (diff > 0 && novoEstoque < 0) {
+              alert(`Estoque insuficiente para ${item.produtos?.nome || "produto"}. Disponível: ${prod.estoque}`);
+              setSavingItems(false);
+              return;
+            }
+            await supabase
+              .from("produtos")
+              .update({ estoque: novoEstoque })
+              .eq("id", item.produto_id);
+          }
+        }
+        await supabase
+          .from("vendas_itens")
+          .update({ quantidade: item.quantidade, subtotal: item.subtotal })
+          .eq("id", item.id);
       }
 
       // 2. Inserir novos itens
@@ -848,7 +899,7 @@ function Vendas() {
                     {editItens.map((item) => (
                       <div
                         key={item.id}
-                        className="flex justify-between items-center p-3 rounded-lg border border-border/50 bg-background"
+                        className="flex justify-between items-center p-3 rounded-lg border border-border/50 bg-background gap-2"
                       >
                         <div className="flex items-center gap-3 flex-1 min-w-0">
                           <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md bg-accent text-base">
@@ -861,12 +912,30 @@ function Vendas() {
                           <div className="min-w-0">
                             <div className="font-semibold text-sm truncate">{item.produtos?.nome || "Produto"}</div>
                             <div className="text-xs text-muted-foreground">
-                              {item.quantidade}x R$ {Number(item.valor_unitario).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                              R$ {Number(item.valor_unitario).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / un
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="font-medium text-sm">
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-6 w-6 rounded-full"
+                            onClick={() => handleChangeExistingQty(item.id, -1)}
+                            disabled={item.quantidade <= 1}
+                          >
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="w-7 text-center text-sm font-semibold tabular-nums">{item.quantidade}</span>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-6 w-6 rounded-full"
+                            onClick={() => handleChangeExistingQty(item.id, 1)}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                          <span className="font-medium text-sm w-20 text-right">
                             R$ {Number(item.subtotal).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                           </span>
                           <Button
@@ -885,7 +954,7 @@ function Vendas() {
                     {newItems.map((item, idx) => (
                       <div
                         key={`new-${idx}`}
-                        className="flex justify-between items-center p-3 rounded-lg border border-brand/30 bg-brand/5"
+                        className="flex justify-between items-center p-3 rounded-lg border border-brand/30 bg-brand/5 gap-2"
                       >
                         <div className="flex items-center gap-3 flex-1 min-w-0">
                           <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md bg-accent text-base">
@@ -898,13 +967,31 @@ function Vendas() {
                           <div className="min-w-0">
                             <div className="font-semibold text-sm truncate">{item.nome}</div>
                             <div className="text-xs text-muted-foreground">
-                              {item.quantidade}x R$ {Number(item.valor_unitario).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                              R$ {Number(item.valor_unitario).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / un
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Badge variant="outline" className="text-[10px] border-brand/40 text-brand">novo</Badge>
-                          <span className="font-medium text-sm">
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Badge variant="outline" className="text-[10px] border-brand/40 text-brand mr-1">novo</Badge>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-6 w-6 rounded-full"
+                            onClick={() => handleChangeNewItemQty(idx, -1)}
+                            disabled={item.quantidade <= 1}
+                          >
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="w-7 text-center text-sm font-semibold tabular-nums">{item.quantidade}</span>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-6 w-6 rounded-full"
+                            onClick={() => handleChangeNewItemQty(idx, 1)}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                          <span className="font-medium text-sm w-20 text-right">
                             R$ {Number(item.subtotal).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                           </span>
                           <Button
