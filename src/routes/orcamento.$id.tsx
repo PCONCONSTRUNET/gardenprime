@@ -332,35 +332,35 @@ function ImprimirDAV() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
               <div className="flex">
                 <span className="w-20 font-semibold text-slate-800 shrink-0">Nome:</span>
-                <span className="text-slate-600 truncate">{dav.cliente_nome || "-"}</span>
+                <span className="flex-1 break-words text-slate-600">{dav.cliente_nome || "-"}</span>
               </div>
               <div className="flex">
                 <span className="w-20 font-semibold text-slate-800 shrink-0">Bairro:</span>
-                <span className="text-slate-600 truncate">{dav.rawVenda?.cliente?.bairro || dav.bairro || "-"}</span>
+                <span className="flex-1 break-words text-slate-600">{dav.rawVenda?.cliente?.bairro || dav.bairro || "-"}</span>
               </div>
               <div className="flex">
                 <span className="w-20 font-semibold text-slate-800 shrink-0">CNPJ/CPF:</span>
-                <span className="text-slate-600 truncate">{dav.cliente_cnpj || "-"}</span>
+                <span className="flex-1 break-words text-slate-600">{dav.cliente_cnpj || "-"}</span>
               </div>
               <div className="flex">
                 <span className="w-20 font-semibold text-slate-800 shrink-0">Cidade:</span>
-                <span className="text-slate-600 truncate">{dav.rawVenda?.cliente?.cidade || dav.cidade || "-"}</span>
+                <span className="flex-1 break-words text-slate-600">{dav.rawVenda?.cliente?.cidade || dav.cidade || "-"}</span>
               </div>
               <div className="flex">
                 <span className="w-20 font-semibold text-slate-800 shrink-0">Telefone:</span>
-                <span className="text-slate-600 truncate">{dav.cliente_telefone || "-"}</span>
+                <span className="flex-1 break-words text-slate-600">{dav.cliente_telefone || "-"}</span>
               </div>
               <div className="flex">
                 <span className="w-20 font-semibold text-slate-800 shrink-0">UF:</span>
-                <span className="text-slate-600 truncate">{dav.rawVenda?.cliente?.uf || dav.uf || "-"}</span>
+                <span className="flex-1 break-words text-slate-600">{dav.rawVenda?.cliente?.uf || dav.uf || "-"}</span>
               </div>
               <div className="flex">
                 <span className="w-20 font-semibold text-slate-800 shrink-0">Endereço:</span>
-                <span className="flex-1 truncate text-slate-600">{dav.rawVenda?.cliente?.endereco || dav.cliente_endereco || "-"}</span>
+                <span className="flex-1 break-words text-slate-600">{dav.rawVenda?.cliente?.endereco || dav.cliente_endereco || "-"}</span>
               </div>
               <div className="flex">
                 <span className="w-20 font-semibold text-slate-800 shrink-0">E-mail:</span>
-                <span className="text-slate-600 truncate">{dav.rawVenda?.cliente?.email || dav.email || "-"}</span>
+                <span className="flex-1 break-words text-slate-600">{dav.rawVenda?.cliente?.email || dav.email || "-"}</span>
               </div>
             </div>
           </div>
