@@ -326,41 +326,41 @@ function ImprimirDAV() {
               </div>
               <span className="tracking-wide">
                 <span className="text-[#B89547] font-bold">DADOS</span>{" "}
-                <span className="text-slate-900 font-bold">DO CLIENTE</span>
+                <span className="text-black font-bold">DO CLIENTE</span>
               </span>
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
-              <div className="flex">
-                <span className="w-20 font-semibold text-slate-800 shrink-0">Nome:</span>
-                <span className="flex-1 break-words text-slate-600">{dav.cliente_nome || "-"}</span>
+              <div className="flex sm:col-span-2 print:col-span-2">
+                <span className="w-20 font-bold text-black shrink-0">Nome:</span>
+                <span className="flex-1 break-words font-bold text-black">{dav.cliente_nome || "-"}</span>
               </div>
               <div className="flex">
-                <span className="w-20 font-semibold text-slate-800 shrink-0">Bairro:</span>
-                <span className="flex-1 break-words text-slate-600">{dav.rawVenda?.cliente?.bairro || dav.bairro || "-"}</span>
+                <span className="w-20 font-bold text-black shrink-0">CNPJ/CPF:</span>
+                <span className="flex-1 break-words font-bold text-black">{dav.cliente_cnpj || "-"}</span>
               </div>
               <div className="flex">
-                <span className="w-20 font-semibold text-slate-800 shrink-0">CNPJ/CPF:</span>
-                <span className="flex-1 break-words text-slate-600">{dav.cliente_cnpj || "-"}</span>
+                <span className="w-20 font-bold text-black shrink-0">Telefone:</span>
+                <span className="flex-1 break-words font-bold text-black">{dav.cliente_telefone || "-"}</span>
               </div>
               <div className="flex">
-                <span className="w-20 font-semibold text-slate-800 shrink-0">Cidade:</span>
-                <span className="flex-1 break-words text-slate-600">{dav.rawVenda?.cliente?.cidade || dav.cidade || "-"}</span>
+                <span className="w-20 font-bold text-black shrink-0">E-mail:</span>
+                <span className="flex-1 break-words font-bold text-black">{dav.rawVenda?.cliente?.email || dav.email || "-"}</span>
               </div>
               <div className="flex">
-                <span className="w-20 font-semibold text-slate-800 shrink-0">Telefone:</span>
-                <span className="flex-1 break-words text-slate-600">{dav.cliente_telefone || "-"}</span>
+                <span className="w-20 font-bold text-black shrink-0">Bairro:</span>
+                <span className="flex-1 break-words font-bold text-black">{dav.rawVenda?.cliente?.bairro || dav.bairro || "-"}</span>
               </div>
               <div className="flex">
-                <span className="w-20 font-semibold text-slate-800 shrink-0">UF:</span>
-                <span className="flex-1 break-words text-slate-600">{dav.rawVenda?.cliente?.uf || dav.uf || "-"}</span>
+                <span className="w-20 font-bold text-black shrink-0">Cidade:</span>
+                <span className="flex-1 break-words font-bold text-black">{dav.rawVenda?.cliente?.cidade || dav.cidade || "-"}</span>
               </div>
               <div className="flex">
-                <span className="w-20 font-semibold text-slate-800 shrink-0">Endereço:</span>
-                <span className="flex-1 break-words text-slate-600">{dav.rawVenda?.cliente?.endereco || dav.cliente_endereco || "-"}</span>
+                <span className="w-20 font-bold text-black shrink-0">UF:</span>
+                <span className="flex-1 break-words font-bold text-black">{dav.rawVenda?.cliente?.uf || dav.uf || "-"}</span>
               </div>
-              <div className="flex">
-                <span className="w-20 font-semibold text-slate-800 shrink-0">E-mail:</span>
-                <span className="flex-1 break-words text-slate-600">{dav.rawVenda?.cliente?.email || dav.email || "-"}</span>
+              <div className="flex sm:col-span-2 print:col-span-2">
+                <span className="w-20 font-bold text-black shrink-0">Endereço:</span>
+                <span className="flex-1 break-words whitespace-normal font-bold text-black">{dav.rawVenda?.cliente?.endereco || dav.cliente_endereco || "-"}</span>
               </div>
             </div>
           </div>
@@ -368,7 +368,7 @@ function ImprimirDAV() {
           <div className="bg-[#FAF7EE] border border-[#EAE3D2] rounded-xl p-4 text-center w-full sm:w-[200px] flex flex-col justify-center items-center shrink-0">
              <Handshake className="w-8 h-8 text-[#A57F33] mb-1.5 stroke-[1.75]" />
              <p className="text-[#A57F33] font-bold text-xs mb-1">Obrigado pela sua confiança!</p>
-             <p className="text-[9px] text-slate-500 leading-tight">Estamos à disposição para lhe atender sempre!</p>
+             <p className="text-[9px] text-black font-semibold leading-tight">Estamos à disposição para lhe atender sempre!</p>
           </div>
         </div>
 
@@ -376,18 +376,18 @@ function ImprimirDAV() {
         <div className="mb-6">
           <h2 className="font-bold text-sm mb-3 flex items-center gap-2">
             <Package className="w-5 h-5 text-[#B89547] shrink-0" strokeWidth={2} />
-            <span className="text-slate-900 tracking-wider uppercase font-bold">PRODUTOS</span>
+            <span className="text-black tracking-wider uppercase font-bold">PRODUTOS</span>
           </h2>
           
           <div className="overflow-x-auto rounded-xl border border-slate-200 overflow-hidden shadow-xs">
             <table className="w-full text-left text-xs whitespace-nowrap">
               <thead className="bg-[#112321] text-white">
                 <tr>
-                  <th className="p-3 text-left pl-4 font-semibold text-xs">Código</th>
-                  <th className="p-3 text-left font-semibold text-xs">Produto</th>
-                  <th className="p-3 text-center font-semibold text-xs">Qtd</th>
-                  <th className="p-3 text-right font-semibold text-xs">Vlr. Unit.</th>
-                  <th className="p-3 text-right pr-4 font-semibold text-xs">Vlr. Total</th>
+                  <th className="p-3 text-left pl-4 font-bold text-xs">Código</th>
+                  <th className="p-3 text-left font-bold text-xs">Produto</th>
+                  <th className="p-3 text-center font-bold text-xs">Qtd</th>
+                  <th className="p-3 text-right font-bold text-xs">Vlr. Unit.</th>
+                  <th className="p-3 text-right pr-4 font-bold text-xs">Vlr. Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -404,23 +404,23 @@ function ImprimirDAV() {
                             </div>
                           ) : (
                             <div className="w-10 h-10 rounded-md border border-slate-100 bg-slate-50 flex items-center justify-center shrink-0">
-                              <Package className="w-4 h-4 text-slate-300" />
+                              <Package className="w-4 h-4 text-slate-400" />
                             </div>
                           )}
-                          <span className="font-semibold text-slate-700 text-xs">{it.codigo || "-"}</span>
+                          <span className="font-bold text-black text-xs">{it.codigo || "-"}</span>
                         </div>
                       </td>
                       <td className="p-3">
-                        <p className="font-bold text-slate-900 text-xs">{it.produto}</p>
+                        <p className="font-black text-black text-xs">{it.produto}</p>
                         {desc && (
-                          <p className="text-[10px] text-slate-500 max-w-[240px] sm:max-w-md truncate mt-0.5">{desc}</p>
+                          <p className="text-[10px] text-black font-semibold max-w-[240px] sm:max-w-md truncate mt-0.5">{desc}</p>
                         )}
                       </td>
-                      <td className="p-3 text-center font-bold text-slate-800 text-xs">{it.qtd}</td>
-                      <td className="p-3 text-right text-slate-600 text-xs whitespace-nowrap">
+                      <td className="p-3 text-center font-black text-black text-xs">{it.qtd}</td>
+                      <td className="p-3 text-right text-black font-bold text-xs whitespace-nowrap">
                         R$ {Number(it.valor_unitario || 0).toFixed(2).replace(".", ",")}
                       </td>
-                      <td className="p-3 pr-4 text-right font-bold text-slate-900 text-xs whitespace-nowrap">
+                      <td className="p-3 pr-4 text-right font-black text-black text-xs whitespace-nowrap">
                         R$ {Number(it.total || 0).toFixed(2).replace(".", ",")}
                       </td>
                     </tr>
@@ -441,8 +441,8 @@ function ImprimirDAV() {
             {/* Linhas de Valores à direita */}
             <div className="flex-1 flex flex-col gap-1.5">
               <div className="flex justify-between items-center px-1 text-xs">
-                <span className="text-slate-600 font-medium">Subtotal</span>
-                <span className="text-slate-900 font-bold">
+                <span className="text-black font-bold">Subtotal</span>
+                <span className="text-black font-black">
                   R$ {Number(dav.subtotal || dav.total || 0).toFixed(2).replace(".", ",")}
                 </span>
               </div>
