@@ -644,17 +644,16 @@ function PublicCatalogo() {
       )}
 
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        {/* ... Dialog Content ... */}
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
+        <DialogContent className="w-[95vw] sm:max-w-[480px] max-h-[90dvh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl">
+          <DialogHeader className="p-5 pb-3 border-b bg-white shrink-0 text-left">
             <DialogTitle>Dados da Empresa</DialogTitle>
             <DialogDescription>
               Preencha os dados da sua empresa para enviar o pedido.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={finalizeOrder}>
-            <div className="grid gap-4 py-4">
-              <div className="space-y-2">
+          <form onSubmit={finalizeOrder} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="space-y-1.5">
                 <label className="text-sm font-medium" htmlFor="nome">
                   Nome da Empresa <span className="text-red-500">*</span>
                 </label>
@@ -666,7 +665,7 @@ function PublicCatalogo() {
                   placeholder="Sua Empresa"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <label className="text-sm font-medium" htmlFor="cnpj">
                   CNPJ <span className="text-red-500">*</span>
                 </label>
@@ -678,8 +677,8 @@ function PublicCatalogo() {
                   placeholder="00.000.000/0000-00"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
                   <label className="text-sm font-medium" htmlFor="cep">
                     CEP
                   </label>
@@ -690,7 +689,7 @@ function PublicCatalogo() {
                     placeholder="00000-000"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <label className="text-sm font-medium" htmlFor="endereco">
                     Rua / Logradouro
                   </label>
@@ -701,7 +700,7 @@ function PublicCatalogo() {
                     placeholder="Rua Exemplo"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <label className="text-sm font-medium" htmlFor="numero">
                     Número
                   </label>
@@ -712,7 +711,7 @@ function PublicCatalogo() {
                     placeholder="123"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <label className="text-sm font-medium" htmlFor="bairro">
                     Bairro
                   </label>
@@ -723,7 +722,7 @@ function PublicCatalogo() {
                     placeholder="Centro"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <label className="text-sm font-medium" htmlFor="cidade">
                     Cidade
                   </label>
@@ -734,7 +733,7 @@ function PublicCatalogo() {
                     placeholder="Sua Cidade"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <label className="text-sm font-medium" htmlFor="uf">
                     Estado (UF)
                   </label>
@@ -747,8 +746,8 @@ function PublicCatalogo() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
                   <label className="text-sm font-medium" htmlFor="telefone">
                     Telefone / WhatsApp <span className="text-red-500">*</span>
                   </label>
@@ -760,7 +759,7 @@ function PublicCatalogo() {
                     placeholder="(00) 00000-0000"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <label className="text-sm font-medium" htmlFor="email">
                     E-mail da Empresa
                   </label>
@@ -830,8 +829,13 @@ function PublicCatalogo() {
               </div>
             </div>
 
-            <DialogFooter className="flex-col sm:flex-row gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
+            <DialogFooter className="p-4 bg-slate-50 border-t shrink-0 flex flex-col-reverse sm:flex-row sm:justify-between items-stretch sm:items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setModalOpen(false)}
+                className="w-full sm:w-auto h-11"
+              >
                 Cancelar
               </Button>
 
@@ -847,7 +851,7 @@ function PublicCatalogo() {
                       setModalOpen(false);
                       setModalCartaoOpen(true);
                     }}
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-11 px-5 shadow-sm"
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-11 px-5 shadow-sm w-full sm:w-auto"
                   >
                     <CreditCard className="mr-2 h-4 w-4" />
                     Pagar com Cartão de Crédito
@@ -855,7 +859,7 @@ function PublicCatalogo() {
                   <Button
                     type="submit"
                     variant="ghost"
-                    className="text-slate-600 hover:text-slate-900 text-xs h-9"
+                    className="text-slate-600 hover:text-slate-900 text-xs h-9 w-full sm:w-auto"
                     title="Enviar pedido via WhatsApp se preferir"
                   >
                     <WhatsAppIcon className="mr-1.5 h-3.5 w-3.5" />
@@ -865,7 +869,7 @@ function PublicCatalogo() {
               ) : (
                 <Button
                   type="submit"
-                  className="bg-success text-success-foreground hover:bg-success/90 font-bold h-11 px-5"
+                  className="bg-success text-success-foreground hover:bg-success/90 font-bold h-11 px-5 w-full sm:w-auto"
                 >
                   <WhatsAppIcon className="mr-2 h-4 w-4" />
                   Enviar Pedido via WhatsApp

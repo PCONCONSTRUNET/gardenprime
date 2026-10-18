@@ -342,10 +342,10 @@ export function CartaoCreditoModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => (!loading ? onClose() : null)}>
-      <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden rounded-2xl">
+      <DialogContent className="w-[95vw] sm:max-w-[480px] max-h-[90dvh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl">
         {sucesso ? (
           // ─── TELA DE SUCESSO / COMPROVANTE ───
-          <div className="p-6 text-center space-y-5 animate-in fade-in zoom-in-95 duration-200">
+          <div className="p-6 text-center space-y-5 animate-in fade-in zoom-in-95 duration-200 overflow-y-auto flex-1">
             <div className="mx-auto w-16 h-16 bg-success/15 text-success rounded-full flex items-center justify-center">
               <CheckCircle2 className="w-10 h-10" />
             </div>
@@ -413,8 +413,8 @@ export function CartaoCreditoModal({
           </div>
         ) : (
           // ─── FORMULÁRIO DO CARTÃO DE CRÉDITO ───
-          <form onSubmit={handlePagar} className="flex flex-col">
-            <DialogHeader className="p-6 pb-4 bg-slate-900 text-white">
+          <form onSubmit={handlePagar} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+            <DialogHeader className="p-5 pb-4 bg-slate-900 text-white shrink-0 text-left">
               <div className="flex items-center justify-between">
                 <DialogTitle className="text-lg font-bold flex items-center gap-2">
                   <CreditCard className="h-5 w-5 text-emerald-400" />
@@ -433,7 +433,7 @@ export function CartaoCreditoModal({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+            <div className="p-5 space-y-4 overflow-y-auto flex-1">
               {/* Visual Card Simulation */}
               <div className="relative overflow-hidden rounded-xl bg-gradient-to-tr from-slate-900 via-slate-800 to-emerald-900 p-5 text-white shadow-lg space-y-4">
                 <div className="flex justify-between items-center">
@@ -547,7 +547,7 @@ export function CartaoCreditoModal({
               </div>
             </div>
 
-            <div className="p-4 bg-slate-50 border-t flex items-center justify-between gap-3">
+            <div className="p-4 bg-slate-50 border-t shrink-0 flex items-center justify-between gap-3">
               <Button
                 type="button"
                 variant="outline"
