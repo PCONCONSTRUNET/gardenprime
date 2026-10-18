@@ -439,47 +439,93 @@ export function CartaoCreditoModal({
         ) : (
           // ─── FORMULÁRIO DO CARTÃO DE CRÉDITO ───
           <form onSubmit={handlePagar} className="flex flex-col flex-1 min-h-0 overflow-hidden">
-            <DialogHeader className="p-5 pb-4 bg-slate-900 text-white shrink-0 text-left">
-              <div className="flex items-center justify-between">
-                <DialogTitle className="text-lg font-bold flex items-center gap-2">
-                  <CreditCard className="h-5 w-5 text-emerald-400" />
-                  Cartão de Crédito
-                </DialogTitle>
-                <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded-full">
-                  <Lock className="h-3 w-3" /> Asaas Seguro
+            {/* ── Header Premium ── */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-[#0a0f1e] via-[#111827] to-[#0c1f3f] p-5 pb-4 shrink-0">
+              {/* Glow de fundo */}
+              <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-blue-600/20 blur-2xl pointer-events-none" />
+              <div className="absolute -bottom-6 -left-6 w-24 h-24 rounded-full bg-emerald-500/15 blur-2xl pointer-events-none" />
+
+              <div className="relative flex items-start justify-between gap-3">
+                {/* Lado esquerdo: título + total */}
+                <div className="space-y-1.5">
+                  <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-blue-600/30 border border-blue-500/40 flex items-center justify-center">
+                      <CreditCard className="h-4 w-4 text-blue-300" />
+                    </div>
+                    Pagamento com Cartão
+                  </DialogTitle>
+                  <DialogDescription className="text-slate-400 text-xs">
+                    Processado com segurança via
+                  </DialogDescription>
+                  {/* Logo Asaas inline */}
+                  <img
+                    src="/asaas-logo.png"
+                    alt="Asaas"
+                    className="h-5 object-contain brightness-0 invert opacity-80 mt-0.5"
+                  />
+                </div>
+
+                {/* Lado direito: total destacado + badge */}
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-semibold px-2.5 py-1 rounded-full">
+                    <Lock className="h-3 w-3" />
+                    Ambiente Seguro
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Total do Pedido</p>
+                    <p className="text-xl font-black text-white tracking-tight">
+                      R$ {total.toFixed(2).replace(".", ",")}
+                    </p>
+                    <p className="text-[10px] text-slate-400">{cart.length} {cart.length === 1 ? "item" : "itens"}</p>
+                  </div>
                 </div>
               </div>
-              <DialogDescription className="text-slate-400 text-xs mt-1">
-                Total do Pedido:{" "}
-                <strong className="text-white text-sm">
-                  R$ {total.toFixed(2).replace(".", ",")}
-                </strong>{" "}
-                • {cart.length} itens
-              </DialogDescription>
-            </DialogHeader>
+            </div>
 
             <div className="p-5 space-y-4 overflow-y-auto flex-1">
-              {/* Visual Card Simulation */}
-              <div className="relative overflow-hidden rounded-xl bg-gradient-to-tr from-slate-900 via-slate-800 to-emerald-900 p-5 text-white shadow-lg space-y-4">
+              {/* ── Cartão Visual Premium ── */}
+              <div className="relative overflow-hidden rounded-2xl p-5 text-white shadow-xl space-y-4"
+                style={{
+                  background: "linear-gradient(135deg, #1a2a6c 0%, #b21f1f 50%, #fdbb2d 100%)",
+                }}
+              >
+                {/* Brilho no canto */}
+                <div className="absolute top-0 right-0 w-40 h-24 bg-white/10 rounded-full blur-2xl -translate-y-6 translate-x-6 pointer-events-none" />
+
                 <div className="flex justify-between items-center">
-                  <div className="w-9 h-7 rounded bg-amber-400/80 border border-amber-300 shadow-xs" />
-                  <span className="font-bold text-sm tracking-widest text-emerald-300">
-                    {bandeira || "CARTÃO"}
-                  </span>
+                  {/* Chip EMV */}
+                  <div className="relative w-10 h-7 rounded-md bg-gradient-to-br from-amber-300 to-amber-500 border border-amber-200 shadow-md overflow-hidden">
+                    <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 gap-px p-0.5 opacity-60">
+                      {Array.from({length: 9}).map((_, i) => (
+                        <div key={i} className="bg-amber-600/60 rounded-[1px]" />
+                      ))}
+                    </div>
+                  </div>
+                  {/* Bandeira / nome */}
+                  <div className="flex flex-col items-end">
+                    {bandeira ? (
+                      <span className="font-black text-base tracking-widest text-white drop-shadow">{bandeira.toUpperCase()}</span>
+                    ) : (
+                      <span className="font-bold text-sm tracking-widest text-white/70">CARTÃO</span>
+                    )}
+                    <span className="text-[9px] text-white/50 uppercase tracking-wider">Credit Card</span>
+                  </div>
                 </div>
-                <div className="font-mono text-lg tracking-widest text-slate-100 min-h-[28px]">
+
+                <div className="font-mono text-base tracking-[0.2em] text-white/90 min-h-[24px] drop-shadow">
                   {numeroCartao || "•••• •••• •••• ••••"}
                 </div>
-                <div className="flex justify-between items-end text-xs text-slate-300">
+
+                <div className="flex justify-between items-end text-xs text-white/80">
                   <div>
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wider">Titular</p>
-                    <p className="font-semibold tracking-wide uppercase truncate max-w-[200px]">
+                    <p className="text-[9px] text-white/50 uppercase tracking-widest mb-0.5">Titular</p>
+                    <p className="font-bold tracking-wide uppercase truncate max-w-[180px] drop-shadow">
                       {nomeTitular || empresaData.nome || "NOME DO TITULAR"}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wider">Validade</p>
-                    <p className="font-mono font-semibold">{validade || "MM/AA"}</p>
+                    <p className="text-[9px] text-white/50 uppercase tracking-widest mb-0.5">Validade</p>
+                    <p className="font-mono font-bold drop-shadow">{validade || "MM/AA"}</p>
                   </div>
                 </div>
               </div>
