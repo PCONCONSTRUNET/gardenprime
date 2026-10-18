@@ -61,8 +61,7 @@ function ParceiroCatalogoPage() {
   const [categoriaAtiva, setCategoriaAtiva] = useState<string>("Todas");
   const [modoApresentacao, setModoApresentacao] = useState(true); // Oculta estoque bruto para o cliente
   const [selectedProduto, setSelectedProduto] = useState<any | null>(null);
-  const [quantidadesLocais, setQuantidadesLocais] = useState<Record<string, number>>({});
-  const [modalQtd, setModalQtd] = useState<number>(1);
+  const [modalQtd, setModalQtd] = useState<number | string>(1);
   const [copiadoLink, setCopiadoLink] = useState(false);
   const [gerandoPdf, setGerandoPdf] = useState(false);
 
@@ -200,16 +199,36 @@ function ParceiroCatalogoPage() {
     return item ? item.q : 0;
   };
 
-  // Quantidade temporária para o stepper do card
-  const getLocalQtd = (produtoId: string) => {
-    return quantidadesLocais[produtoId] || 1;
-  };
-
-  const setLocalQtd = (produtoId: string, val: number) => {
-    setQuantidadesLocais((prev) => ({
-      ...prev,
-      [produtoId]: Math.max(1, val),
-    }));
+  // Atualizar quantidade direta de um item no carrinho
+  const handleSetQtdCarrinho = (produto: any, quantidade: number) => {
+    const preco = Number(produto.valorFinal || produto.valor);
+    if (quantidade <= 0) {
+      salvarCarrinho(cart.filter((i) => i.id !== produto.id));
+      return;
+    }
+    const existingIndex = cart.findIndex((i) => i.id === produto.id);
+    let novoCart: any[];
+    if (existingIndex >= 0) {
+      novoCart = cart.map((item, idx) =>
+        idx === existingIndex
+          ? { ...item, q: quantidade, t: quantidade * preco }
+          : item
+      );
+    } else {
+      novoCart = [
+        ...cart,
+        {
+          id: produto.id,
+          p: produto.nome,
+          q: quantidade,
+          u: preco,
+          t: quantidade * preco,
+          emoji: produto.emoji,
+          imagem: produto.imagem,
+        },
+      ];
+    }
+    salvarCarrinho(novoCart);
   };
 
   // Adicionar ao pedido
@@ -663,11 +682,10 @@ function ParceiroCatalogoPage() {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-4 md:gap-5">
           {produtosFiltrados.map((prod, index) => {
             const preco = Number(prod.valorFinal || prod.valor);
             const qtdCarrinho = getQtdNoCarrinho(prod.id);
-            const qtdLocal = getLocalQtd(prod.id);
             const estoque = Number(prod.estoque || 0);
 
             return (
@@ -679,7 +697,7 @@ function ParceiroCatalogoPage() {
                 <div
                   onClick={() => {
                     setSelectedProduto(prod);
-                    setModalQtd(1);
+                    setModalQtd(qtdCarrinho > 0 ? qtdCarrinho : 1);
                   }}
                   className={cn(
                     "relative aspect-square w-full overflow-hidden bg-slate-50 cursor-pointer flex items-center justify-center",
@@ -702,19 +720,19 @@ function ParceiroCatalogoPage() {
                   {/* Badges superiores */}
                   <div className="absolute top-2.5 left-2.5 right-2.5 flex items-start justify-between gap-1 pointer-events-none">
                     {prod.categoria ? (
-                      <Badge className="bg-white/90 backdrop-blur-md text-slate-800 border-0 text-[10px] font-bold shadow-sm px-2 py-0.5">
+                      <Badge className="bg-white/90 backdrop-blur-md text-slate-800 border-0 text-[10px] font-bold shadow-sm px-2 py-0.5 truncate max-w-[65%]">
                         {prod.categoria}
                       </Badge>
                     ) : <span />}
 
                     {modoApresentacao ? (
-                      <Badge className="bg-emerald-600 text-white border-0 text-[10px] font-bold shadow-sm px-2 py-0.5">
+                      <Badge className="bg-emerald-600 text-white border-0 text-[10px] font-bold shadow-sm px-2 py-0.5 shrink-0">
                         Disponível
                       </Badge>
                     ) : (
                       <Badge
                         className={cn(
-                          "border-0 text-[10px] font-bold shadow-sm px-2 py-0.5",
+                          "border-0 text-[10px] font-bold shadow-sm px-2 py-0.5 shrink-0",
                           estoque > 5
                             ? "bg-emerald-600 text-white"
                             : estoque > 0
@@ -740,7 +758,7 @@ function ParceiroCatalogoPage() {
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedProduto(prod);
-                      setModalQtd(1);
+                      setModalQtd(qtdCarrinho > 0 ? qtdCarrinho : 1);
                     }}
                     className="absolute bottom-2.5 left-2.5 w-8 h-8 rounded-full bg-white/80 hover:bg-white text-slate-700 shadow-md flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
                     title="Ver detalhes em tela cheia"
@@ -750,7 +768,7 @@ function ParceiroCatalogoPage() {
                 </div>
 
                 {/* ── CONTEÚDO DO CARD ── */}
-                <div className="p-4 flex flex-col flex-1 justify-between gap-2.5">
+                <div className="p-3 sm:p-4 flex flex-col flex-1 justify-between gap-2 sm:gap-2.5">
                   <div>
                     {/* Código do produto */}
                     <div className="flex items-center justify-between text-[11px] text-slate-400 font-semibold mb-1">
@@ -762,7 +780,7 @@ function ParceiroCatalogoPage() {
                     <h3
                       onClick={() => {
                         setSelectedProduto(prod);
-                        setModalQtd(1);
+                        setModalQtd(qtdCarrinho > 0 ? qtdCarrinho : 1);
                       }}
                       className="font-display font-bold text-slate-900 text-sm md:text-base leading-snug line-clamp-2 cursor-pointer hover:text-emerald-700 transition-colors"
                       title={prod.nome}
@@ -805,61 +823,86 @@ function ParceiroCatalogoPage() {
                   </div>
 
                   {/* Preço e Botões de Ação */}
-                  <div className="pt-2 border-t border-slate-100 mt-auto space-y-2.5">
-                    <div className="flex items-baseline justify-between">
-                      <div>
+                  <div className="pt-2 border-t border-slate-100 mt-auto space-y-2">
+                    <div className="flex items-baseline justify-between gap-1">
+                      <div className="min-w-0">
                         <span className="text-[10px] text-slate-400 uppercase font-semibold block leading-none">
                           Preço Un.
                         </span>
-                        <span className="text-lg md:text-xl font-black text-[#12794C]">
+                        <span className="text-base sm:text-lg md:text-xl font-black text-[#12794C] truncate block">
                           R$ {preco.toFixed(2).replace(".", ",")}
                         </span>
                       </div>
 
                       {/* Botão de WhatsApp rápido por produto */}
                       <button
-                        onClick={() => handleShareProdutoWhatsApp(prod)}
-                        className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleShareProdutoWhatsApp(prod);
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors shrink-0"
                         title="Enviar este produto no WhatsApp"
                       >
                         <WhatsAppIcon className="w-4 h-4" />
                       </button>
                     </div>
 
-                    {/* Controle de Adição ao Pedido */}
-                    <div className="flex items-center gap-1.5">
-                      {/* Stepper de quantidade */}
-                      <div className="flex items-center border border-slate-200 rounded-xl bg-slate-50 p-0.5">
+                    {/* Controle de Adição ao Pedido (100% responsivo, sem transbordar) */}
+                    {qtdCarrinho > 0 ? (
+                      <div className="flex items-center justify-between border border-emerald-600/30 rounded-xl bg-emerald-50/80 p-0.5 h-8 sm:h-8.5 w-full shadow-sm">
                         <button
-                          onClick={() => setLocalQtd(prod.id, qtdLocal - 1)}
-                          className="w-7 h-7 flex items-center justify-center text-slate-600 hover:bg-white rounded-lg active:scale-95 transition-all text-xs font-bold"
-                          title="Diminuir"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoverDoPedido(prod.id);
+                          }}
+                          className="w-7 h-7 flex items-center justify-center text-emerald-800 hover:bg-emerald-200/60 rounded-lg active:scale-95 transition-all text-xs font-bold shrink-0"
+                          title="Diminuir ou remover"
                         >
-                          <Minus className="w-3 h-3" />
+                          <Minus className="w-3.5 h-3.5" />
                         </button>
-                        <span className="w-7 text-center text-xs font-bold text-slate-800">
-                          {qtdLocal}
-                        </span>
+                        <div className="flex items-center justify-center gap-1 min-w-0 px-1">
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={qtdCarrinho}
+                            onClick={(e) => e.stopPropagation()}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10);
+                              if (!isNaN(val)) {
+                                handleSetQtdCarrinho(prod, val);
+                              }
+                            }}
+                            className="w-8 sm:w-10 text-center font-extrabold text-xs text-emerald-950 bg-white/70 border border-emerald-600/20 rounded outline-none p-0 focus:ring-1 focus:ring-emerald-600 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
+                          <span className="text-[10px] text-emerald-700 font-bold truncate">un</span>
+                        </div>
                         <button
-                          onClick={() => setLocalQtd(prod.id, qtdLocal + 1)}
-                          className="w-7 h-7 flex items-center justify-center text-slate-600 hover:bg-white rounded-lg active:scale-95 transition-all text-xs font-bold"
-                          title="Aumentar"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAdicionarAoPedido(prod, 1);
+                          }}
+                          className="w-7 h-7 flex items-center justify-center text-white bg-[#12794C] hover:bg-emerald-800 rounded-lg active:scale-95 transition-all text-xs font-bold shadow-sm shrink-0"
+                          title="Aumentar quantidade"
                         >
-                          <Plus className="w-3 h-3" />
+                          <Plus className="w-3.5 h-3.5" />
                         </button>
                       </div>
-
-                      {/* Botão Adicionar ao Pedido */}
+                    ) : (
                       <Button
-                        onClick={() => {
-                          handleAdicionarAoPedido(prod, qtdLocal);
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAdicionarAoPedido(prod, 1);
                         }}
-                        className="flex-1 h-8 rounded-xl bg-[#12794C] hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-1 shadow-sm active:scale-95 transition-all"
+                        className="w-full h-8 sm:h-8.5 rounded-xl bg-[#12794C] hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
                       >
-                        <Plus className="w-3.5 h-3.5" />
+                        <Plus className="w-3.5 h-3.5 shrink-0" />
                         <span>Adicionar</span>
                       </Button>
-                    </div>
+                    )}
                   </div>
                 </div>
               </Card>
@@ -870,7 +913,7 @@ function ParceiroCatalogoPage() {
 
       {/* ── MODAL DE DETALHES COMPLETOS (APRESENTAÇÃO EM TELA CHEIA) ── */}
       <Dialog open={!!selectedProduto} onOpenChange={(open) => !open && setSelectedProduto(null)}>
-        <DialogContent className="sm:max-w-2xl max-h-[92vh] overflow-y-auto rounded-3xl p-0 border-0 shadow-2xl">
+        <DialogContent className="w-[94vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl p-0 border-0 shadow-2xl">
           {selectedProduto && (
             <div>
               {/* Imagem em destaque */}
@@ -898,13 +941,13 @@ function ParceiroCatalogoPage() {
                 )}
               </div>
 
-              <div className="p-6 space-y-6">
+              <div className="p-5 sm:p-6 space-y-5 sm:space-y-6">
                 <div>
                   <div className="flex items-center justify-between text-xs text-slate-400 font-semibold mb-1">
                     <span>Código: {selectedProduto.codigo || "Sem código"}</span>
                     <span>Status: Ativo</span>
                   </div>
-                  <DialogTitle className="text-2xl font-display font-extrabold text-slate-900">
+                  <DialogTitle className="text-xl sm:text-2xl font-display font-extrabold text-slate-900">
                     {selectedProduto.nome}
                   </DialogTitle>
                   <p className="text-2xl font-black text-[#12794C] mt-2">
@@ -971,53 +1014,95 @@ function ParceiroCatalogoPage() {
                 )}
 
                 {/* Ações do Modal */}
-                <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center gap-3">
-                  <div className="flex items-center border border-slate-200 rounded-2xl bg-slate-50 p-1 w-full sm:w-auto justify-between">
-                    <button
-                      onClick={() => setModalQtd(Math.max(1, modalQtd - 1))}
-                      className="w-10 h-10 flex items-center justify-center text-slate-600 hover:bg-white rounded-xl active:scale-95 font-bold"
-                    >
-                      <Minus className="w-4 h-4" />
-                    </button>
-                    <span className="px-4 text-base font-bold text-slate-800">
-                      {modalQtd}
-                    </span>
-                    <button
-                      onClick={() => setModalQtd(modalQtd + 1)}
-                      className="w-10 h-10 flex items-center justify-center text-slate-600 hover:bg-white rounded-xl active:scale-95 font-bold"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
+                {(() => {
+                  const qtdConfirmada = Math.max(1, Number(modalQtd) || 1);
+                  return (
+                    <div className="pt-4 border-t border-slate-100 flex flex-col md:flex-row items-stretch md:items-center gap-3">
+                      {/* Stepper no Modal */}
+                      <div className="flex items-center border border-slate-200 rounded-2xl bg-slate-50 p-1 justify-between shrink-0 h-12 w-full md:w-auto gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setModalQtd((prev) => Math.max(1, (Number(prev) || 1) - 1))}
+                          className="w-10 h-10 flex items-center justify-center text-slate-600 hover:bg-white rounded-xl active:scale-95 font-bold transition-all shrink-0"
+                          title="Diminuir quantidade"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
 
-                  <Button
-                    onClick={() => {
-                      handleAdicionarAoPedido(selectedProduto, modalQtd);
-                      setSelectedProduto(null);
-                    }}
-                    className="w-full sm:flex-1 h-12 rounded-2xl bg-[#12794C] hover:bg-emerald-800 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md active:scale-95"
-                  >
-                    <ShoppingCart className="w-4 h-4" />
-                    <span>
-                      Adicionar ao Pedido (R${" "}
-                      {(
-                        Number(selectedProduto.valorFinal || selectedProduto.valor) * modalQtd
-                      )
-                        .toFixed(2)
-                        .replace(".", ",")}
-                      )
-                    </span>
-                  </Button>
+                        <div className="flex-1 md:w-28 flex items-center justify-center relative">
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={modalQtd}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "") {
+                                setModalQtd("");
+                              } else {
+                                const parsed = parseInt(val, 10);
+                                if (!isNaN(parsed)) {
+                                  setModalQtd(Math.max(1, parsed));
+                                }
+                              }
+                            }}
+                            onBlur={() => {
+                              if (modalQtd === "" || Number(modalQtd) < 1) {
+                                setModalQtd(1);
+                              }
+                            }}
+                            placeholder="1"
+                            className="w-full h-10 text-center text-base sm:text-lg font-black text-slate-900 bg-white border border-slate-200/90 rounded-xl shadow-xs focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
+                          <span className="absolute right-2.5 text-[11px] font-bold text-slate-400 pointer-events-none select-none">
+                            un
+                          </span>
+                        </div>
 
-                  <Button
-                    variant="outline"
-                    onClick={() => handleShareProdutoWhatsApp(selectedProduto)}
-                    className="w-full sm:w-auto h-12 rounded-2xl border-slate-200 text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 gap-2"
-                  >
-                    <WhatsAppIcon className="w-4 h-4 text-emerald-600" />
-                    <span>WhatsApp</span>
-                  </Button>
-                </div>
+                        <button
+                          type="button"
+                          onClick={() => setModalQtd((prev) => (Number(prev) || 1) + 1)}
+                          className="w-10 h-10 flex items-center justify-center text-slate-600 hover:bg-white rounded-xl active:scale-95 font-bold transition-all shrink-0"
+                          title="Aumentar quantidade"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Botão Adicionar ao Pedido */}
+                      <Button
+                        onClick={() => {
+                          handleAdicionarAoPedido(selectedProduto, qtdConfirmada);
+                          setSelectedProduto(null);
+                        }}
+                        className="flex-1 min-w-0 h-12 rounded-2xl bg-[#12794C] hover:bg-emerald-800 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all px-4"
+                      >
+                        <ShoppingCart className="w-4 h-4 shrink-0" />
+                        <span className="truncate">
+                          Adicionar ao Pedido • R${" "}
+                          {(
+                            Number(selectedProduto.valorFinal || selectedProduto.valor) * qtdConfirmada
+                          )
+                            .toFixed(2)
+                            .replace(".", ",")}
+                        </span>
+                      </Button>
+
+                      {/* Botão WhatsApp */}
+                      <Button
+                        variant="outline"
+                        onClick={() => handleShareProdutoWhatsApp(selectedProduto)}
+                        className="h-12 px-4 rounded-2xl border-slate-200 text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 gap-2 shrink-0 font-semibold w-full md:w-auto"
+                      >
+                        <WhatsAppIcon className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>WhatsApp</span>
+                      </Button>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}
