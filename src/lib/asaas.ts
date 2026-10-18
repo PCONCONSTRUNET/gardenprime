@@ -39,15 +39,12 @@ export interface AsaasPaymentResponse {
 
 async function getAsaasConfig(): Promise<{ ambiente: "sandbox" | "producao" }> {
   try {
-    const { data } = await supabase
-      .from("configuracoes")
-      .select("valor")
-      .eq("chave", "asaas_ambiente")
-      .single();
-    return { ambiente: (data?.valor || "sandbox") as "sandbox" | "producao" };
-  } catch {
-    return { ambiente: "sandbox" };
-  }
+    const local = typeof window !== "undefined" ? localStorage.getItem("asaas_ambiente") : null;
+    if (local === "sandbox" || local === "producao") {
+      return { ambiente: local };
+    }
+  } catch {}
+  return { ambiente: "producao" };
 }
 
 // ─── Função base de chamada ───────────────────────────────────────────────────

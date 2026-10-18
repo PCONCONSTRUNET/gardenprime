@@ -712,18 +712,14 @@ function FiscalTab() {
   const [savingAsaas, setSavingAsaas] = useState(false);
   const [asaasTested, setAsaasTested] = useState<null | boolean>(null);
 
-  // Carrega o ambiente salvo do banco ao montar o componente
+  // Carrega o ambiente salvo ao montar o componente
   useEffect(() => {
-    supabase
-      .from("configuracoes")
-      .select("valor")
-      .eq("chave", "asaas_ambiente")
-      .single()
-      .then(({ data }) => {
-        if (data?.valor === "sandbox" || data?.valor === "producao") {
-          setAsaasAmbiente(data.valor);
-        }
-      });
+    try {
+      const local = localStorage.getItem("asaas_ambiente");
+      if (local === "sandbox" || local === "producao") {
+        setAsaasAmbiente(local as "sandbox" | "producao");
+      }
+    } catch {}
   }, []);
 
 
@@ -1023,7 +1019,7 @@ function FiscalTab() {
           <div className="flex gap-3">
             <Button
               variant="outline"
-              disabled={savingAsaas || !asaasKey}
+              disabled={savingAsaas}
               onClick={async () => {
                 setSavingAsaas(true);
                 try {
@@ -1035,7 +1031,7 @@ function FiscalTab() {
                       "asaas-method": "GET",
                     },
                   });
-                  setAsaasTested(!error && !data?.errors?.length);
+                  setAsaasTested(!error && !data?.errors?.length && data?._asaas_status === 200);
                 } catch {
                   setAsaasTested(false);
                 } finally {
@@ -1049,16 +1045,15 @@ function FiscalTab() {
 
             <Button
               className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-              disabled={savingAsaas || !asaasKey}
+              disabled={savingAsaas}
               onClick={async () => {
                 setSavingAsaas(true);
                 try {
-                  // Salva o ambiente nas configuracoes da tabela
-                  await supabase.from("configuracoes").upsert([
-                    { chave: "asaas_ambiente", valor: asaasAmbiente },
-                  ], { onConflict: "chave" });
+                  localStorage.setItem("asaas_ambiente", asaasAmbiente);
                   alert(
-                    "Configurações salvas! Lembre-se de adicionar a chave ASAAS_API_KEY nos secrets da Edge Function no painel do Supabase."
+                    `Configurações salvas com sucesso! Ambiente ativo: ${
+                      asaasAmbiente === "producao" ? "Produção" : "Sandbox"
+                    }.`
                   );
                 } catch (err: any) {
                   alert("Erro ao salvar: " + err.message);
