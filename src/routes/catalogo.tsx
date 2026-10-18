@@ -4,11 +4,12 @@ import { supabase } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { ShoppingCart, Trash2, Search, Check, ChevronsUpDown } from "lucide-react";
+import { ShoppingCart, Trash2, Search, Check, ChevronsUpDown, CreditCard } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { GardenPrimeLogo } from "@/components/garden-prime-logo";
 import { ColorDock } from "@/components/color-dock";
+import { CartaoCreditoModal } from "@/components/cartao-credito-modal";
 import {
   Dialog,
   DialogContent,
@@ -61,9 +62,11 @@ function PublicCatalogo() {
   const [partner, setPartner] = useState<any>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalCartaoOpen, setModalCartaoOpen] = useState(false);
   const [empresaData, setEmpresaData] = useState({
     nome: "",
     cnpj: "",
+    email: "",
     cep: "",
     endereco: "",
     numero: "",
@@ -253,6 +256,7 @@ function PublicCatalogo() {
     if (empresaData.bairro) mensagem += `Bairro: ${empresaData.bairro}\n`;
     if (empresaData.cidade) mensagem += `Cidade/UF: ${empresaData.cidade}/${empresaData.uf}\n`;
     if (empresaData.telefone) mensagem += `Telefone: ${empresaData.telefone}\n`;
+    if (empresaData.email) mensagem += `E-mail: ${empresaData.email}\n`;
     mensagem += `*FORMA DE PAGAMENTO:* ${empresaData.pagamento === "Boleto a Prazo" ? descBoleto : empresaData.pagamento}\n`;
     if (empresaData.pagamento === "Boleto a Prazo") {
       mensagem += `*PRAZO DO BOLETO:* ${prazoBoleto}\n`;
@@ -743,16 +747,31 @@ function PublicCatalogo() {
                   />
                 </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="telefone">
-                  Telefone / WhatsApp
-                </label>
-                <Input
-                  id="telefone"
-                  value={empresaData.telefone}
-                  onChange={(e) => setEmpresaData({ ...empresaData, telefone: e.target.value })}
-                  placeholder="(00) 00000-0000"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="telefone">
+                    Telefone / WhatsApp <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    id="telefone"
+                    required
+                    value={empresaData.telefone}
+                    onChange={(e) => setEmpresaData({ ...empresaData, telefone: e.target.value })}
+                    placeholder="(00) 00000-0000"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="email">
+                    E-mail da Empresa
+                  </label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={empresaData.email}
+                    onChange={(e) => setEmpresaData({ ...empresaData, email: e.target.value })}
+                    placeholder="contato@empresa.com.br"
+                  />
+                </div>
               </div>
 
               <div className="space-y-2 border-t pt-3 mt-1">
@@ -766,15 +785,15 @@ function PublicCatalogo() {
                     <>
                       <label className="text-sm font-medium">Forma de Pagamento</label>
                       <select
-                        className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                        className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 font-medium"
                         value={empresaData.pagamento}
                         onChange={(e) => setEmpresaData({ ...empresaData, pagamento: e.target.value })}
                       >
                         <option value="Boleto a Prazo">Boleto a Prazo ({prazoAtual})</option>
-                        <option value="Dinheiro / Pix">Dinheiro / Pix</option>
-                        <option value="Cartão de Crédito">Cartão de Crédito</option>
-                        <option value="Cartão de Débito">Cartão de Débito</option>
+                        <option value="Dinheiro / Pix">Dinheiro / Pix (via WhatsApp)</option>
+                        <option value="Cartão de Crédito">💳 Cartão de Crédito (Pagamento Online)</option>
                       </select>
+
                       {empresaData.pagamento === "Boleto a Prazo" && (
                         <div className="p-3 bg-emerald-50/80 border border-emerald-200/80 rounded-xl space-y-1.5">
                           <div className="flex items-center justify-between text-xs">
@@ -793,26 +812,79 @@ function PublicCatalogo() {
                           </div>
                         </div>
                       )}
+
+                      {empresaData.pagamento === "Cartão de Crédito" && (
+                        <div className="p-3 bg-blue-50/90 border border-blue-200/80 rounded-xl space-y-1 animate-in fade-in">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
+                            <CreditCard className="h-4 w-4 text-blue-600" />
+                            Pagamento Direto via Cartão de Crédito (Asaas)
+                          </div>
+                          <p className="text-[11px] text-blue-800 leading-relaxed">
+                            Ao clicar no botão abaixo, abrirá o formulário seguro para digitar o cartão e parcelar em até 12x. Seu pedido é <strong>aprovado instantaneamente</strong> com emissão de guia e comprovante!
+                          </p>
+                        </div>
+                      )}
                     </>
                   );
                 })()}
               </div>
             </div>
-            <DialogFooter>
+
+            <DialogFooter className="flex-col sm:flex-row gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
                 Cancelar
               </Button>
-              <Button
-                type="submit"
-                className="bg-success text-success-foreground hover:bg-success/90"
-              >
-                <WhatsAppIcon className="mr-2 h-4 w-4" />
-                Enviar Pedido
-              </Button>
+
+              {empresaData.pagamento === "Cartão de Crédito" ? (
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (!empresaData.nome || !empresaData.cnpj) {
+                        alert("Por favor, preencha o Nome da Empresa e o CNPJ.");
+                        return;
+                      }
+                      setModalOpen(false);
+                      setModalCartaoOpen(true);
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-11 px-5 shadow-sm"
+                  >
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Pagar com Cartão de Crédito
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="ghost"
+                    className="text-slate-600 hover:text-slate-900 text-xs h-9"
+                    title="Enviar pedido via WhatsApp se preferir"
+                  >
+                    <WhatsAppIcon className="mr-1.5 h-3.5 w-3.5" />
+                    Ou enviar no WhatsApp
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="submit"
+                  className="bg-success text-success-foreground hover:bg-success/90 font-bold h-11 px-5"
+                >
+                  <WhatsAppIcon className="mr-2 h-4 w-4" />
+                  Enviar Pedido via WhatsApp
+                </Button>
+              )}
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Pagamento com Cartão de Crédito via Asaas */}
+      <CartaoCreditoModal
+        open={modalCartaoOpen}
+        onClose={() => setModalCartaoOpen(false)}
+        cart={cart}
+        empresaData={empresaData}
+        partner={partner}
+        onSuccessOrder={() => setCart([])}
+      />
 
       <footer className="bg-slate-900 text-slate-400 py-12 px-4 mt-20 pb-32 lg:pb-12">
         <div className="max-w-6xl mx-auto grid gap-8 md:grid-cols-2">

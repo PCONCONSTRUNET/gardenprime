@@ -234,6 +234,138 @@ export async function cancelarCobrancaAsaas(asaasId: string): Promise<void> {
     .eq("asaas_id", asaasId);
 }
 
+// ─── Pagamento Direto com Cartão de Crédito ──────────────────────────────────
+
+export interface AsaasCreditCardData {
+  holderName: string;
+  number: string;
+  expiryMonth: string;
+  expiryYear: string;
+  ccv: string;
+}
+
+export interface AsaasCartaoPaymentParams {
+  cliente: {
+    id?: string;
+    nome: string;
+    cpf_cnpj: string;
+    email?: string;
+    telefone?: string;
+    cep?: string;
+    endereco?: string;
+    numero?: string;
+    bairro?: string;
+    cidade?: string;
+    uf?: string;
+    asaas_customer_id?: string;
+  };
+  valor: number;
+  parcelas: number;
+  cartao: AsaasCreditCardData;
+  descricao?: string;
+  venda_id?: string;
+}
+
+export async function pagarComCartaoCreditoAsaas(
+  params: AsaasCartaoPaymentParams
+): Promise<AsaasPaymentResponse & { cobranca_id?: string }> {
+  // 1. Obter ou criar customer no ASAAS
+  let asaasCustomerId = params.cliente.asaas_customer_id;
+  if (!asaasCustomerId) {
+    const payloadCustomer: any = {
+      name: params.cliente.nome,
+      notificationDisabled: true,
+    };
+    if (params.cliente.cpf_cnpj) payloadCustomer.cpfCnpj = params.cliente.cpf_cnpj.replace(/\D/g, "");
+    if (params.cliente.email) payloadCustomer.email = params.cliente.email;
+    if (params.cliente.telefone) payloadCustomer.mobilePhone = params.cliente.telefone.replace(/\D/g, "");
+    if (params.cliente.cep) payloadCustomer.postalCode = params.cliente.cep.replace(/\D/g, "");
+    if (params.cliente.endereco) payloadCustomer.address = params.cliente.endereco;
+    if (params.cliente.numero) payloadCustomer.addressNumber = params.cliente.numero;
+
+    const custResp = await asaasRequest<AsaasCustomer>("POST", "/v3/customers", payloadCustomer);
+    asaasCustomerId = custResp.id;
+
+    if (params.cliente.id) {
+      try {
+        await supabase.from("clientes").update({ asaas_customer_id: asaasCustomerId }).eq("id", params.cliente.id);
+      } catch {}
+    }
+  }
+
+  // 2. Montar payload do pagamento via Cartão
+  const numLimpo = params.cartao.number.replace(/\D/g, "");
+  const ccvLimpo = params.cartao.ccv.replace(/\D/g, "");
+  const mesFormatado = params.cartao.expiryMonth.replace(/\D/g, "").padStart(2, "0");
+  let anoFormatado = params.cartao.expiryYear.replace(/\D/g, "");
+  if (anoFormatado.length === 2) anoFormatado = `20${anoFormatado}`;
+
+  const payload: any = {
+    customer: asaasCustomerId,
+    billingType: "CREDIT_CARD",
+    value: params.valor,
+    dueDate: new Date().toISOString().split("T")[0],
+    description: params.descricao || "Pedido Catálogo Garden Prime",
+    externalReference: params.venda_id || undefined,
+    creditCard: {
+      holderName: params.cartao.holderName.trim().toUpperCase(),
+      number: numLimpo,
+      expiryMonth: mesFormatado,
+      expiryYear: anoFormatado,
+      ccv: ccvLimpo,
+    },
+    creditCardHolderInfo: {
+      name: params.cartao.holderName.trim().toUpperCase(),
+      email: params.cliente.email || "contatogardenprime@gmail.com",
+      cpfCnpj: params.cliente.cpf_cnpj.replace(/\D/g, ""),
+      postalCode: (params.cliente.cep || "13519-022").replace(/\D/g, ""),
+      addressNumber: params.cliente.numero || "S/N",
+      addressComplement: null,
+      phone: (params.cliente.telefone || "19997141112").replace(/\D/g, ""),
+      mobilePhone: (params.cliente.telefone || "19997141112").replace(/\D/g, ""),
+    },
+  };
+
+  if (params.parcelas && params.parcelas > 1) {
+    payload.installmentCount = params.parcelas;
+    payload.installmentValue = Number((params.valor / params.parcelas).toFixed(2));
+  }
+
+  const paymentResponse = await asaasRequest<AsaasPaymentResponse>(
+    "POST",
+    "/v3/payments",
+    payload
+  );
+
+  // 3. Tenta salvar na tabela asaas_cobrancas caso permitido
+  let cobrancaId: string | undefined;
+  try {
+    const { data: cobrancaSalva } = await supabase
+      .from("asaas_cobrancas")
+      .insert({
+        asaas_id: paymentResponse.id,
+        tipo: "CREDIT_CARD",
+        status: paymentResponse.status || "CONFIRMED",
+        valor: params.valor,
+        vencimento: new Date().toISOString().split("T")[0],
+        descricao: params.descricao,
+        cliente_id: params.cliente.id || null,
+        venda_id: params.venda_id || null,
+        invoice_url: paymentResponse.invoiceUrl || null,
+        asaas_customer_id: asaasCustomerId,
+        raw_response: paymentResponse as any,
+      })
+      .select("id")
+      .maybeSingle();
+
+    if (cobrancaSalva?.id) cobrancaId = cobrancaSalva.id;
+  } catch (err) {
+    console.warn("Aviso ao persistir em asaas_cobrancas:", err);
+  }
+
+  return { ...paymentResponse, cobranca_id: cobrancaId };
+}
+
 // ─── Mapeamento de forma de pagamento ────────────────────────────────────────
 
 /**
