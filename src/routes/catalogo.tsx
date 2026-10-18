@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { ShoppingCart, Trash2, Search, Check, ChevronsUpDown, CreditCard } from "lucide-react";
+import { ShoppingCart, Trash2, Search, Check, ChevronsUpDown, CreditCard, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { GardenPrimeLogo } from "@/components/garden-prime-logo";
@@ -77,6 +77,125 @@ function PublicCatalogo() {
     pagamento: "Boleto a Prazo",
     condicaoBoleto: "28, 35, 42 dias",
   });
+
+  const [cnpjLoading, setCnpjLoading] = useState(false);
+  const [cnpjErro, setCnpjErro] = useState("");
+  const [cepLoading, setCepLoading] = useState(false);
+
+  const formatCnpj = (v: string) => {
+    const limpo = v.replace(/\D/g, "").slice(0, 14);
+    if (limpo.length <= 2) return limpo;
+    if (limpo.length <= 5) return `${limpo.slice(0, 2)}.${limpo.slice(2)}`;
+    if (limpo.length <= 8) return `${limpo.slice(0, 2)}.${limpo.slice(2, 5)}.${limpo.slice(5)}`;
+    if (limpo.length <= 12) return `${limpo.slice(0, 2)}.${limpo.slice(2, 5)}.${limpo.slice(5, 8)}/${limpo.slice(8)}`;
+    return `${limpo.slice(0, 2)}.${limpo.slice(2, 5)}.${limpo.slice(5, 8)}/${limpo.slice(8, 12)}-${limpo.slice(12, 14)}`;
+  };
+
+  const formatCep = (v: string) => {
+    const limpo = v.replace(/\D/g, "").slice(0, 8);
+    if (limpo.length <= 5) return limpo;
+    return `${limpo.slice(0, 5)}-${limpo.slice(5)}`;
+  };
+
+  const formatTelefone = (v: string) => {
+    const limpo = v.replace(/\D/g, "").slice(0, 11);
+    if (limpo.length <= 2) return limpo ? `(${limpo}` : "";
+    if (limpo.length <= 6) return `(${limpo.slice(0, 2)}) ${limpo.slice(2)}`;
+    if (limpo.length <= 10) return `(${limpo.slice(0, 2)}) ${limpo.slice(2, 6)}-${limpo.slice(6)}`;
+    return `(${limpo.slice(0, 2)}) ${limpo.slice(2, 7)}-${limpo.slice(7, 11)}`;
+  };
+
+  const buscarCnpj = async (cnpjParaBuscar?: string) => {
+    const valor = cnpjParaBuscar || empresaData.cnpj;
+    const cnpjLimpo = valor.replace(/\D/g, "");
+    if (cnpjLimpo.length !== 14) {
+      setCnpjErro("Digite um CNPJ válido com 14 dígitos.");
+      return;
+    }
+    setCnpjErro("");
+    setCnpjLoading(true);
+
+    try {
+      let data: any = null;
+
+      // 1ª tentativa: BrasilAPI
+      try {
+        const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
+        if (res.ok) {
+          data = await res.json();
+        }
+      } catch (e) {
+        console.warn("BrasilAPI falhou, tentando fallback MinhaReceita...", e);
+      }
+
+      // 2ª tentativa (fallback): MinhaReceita
+      if (!data) {
+        try {
+          const resFallback = await fetch(`https://minhareceita.org/${cnpjLimpo}`);
+          if (resFallback.ok) {
+            data = await resFallback.json();
+          }
+        } catch (e) {
+          console.warn("MinhaReceita falhou:", e);
+        }
+      }
+
+      if (!data) {
+        setCnpjErro("CNPJ não encontrado na Receita Federal ou serviço temporariamente fora do ar.");
+        return;
+      }
+
+      const telefone = data.ddd_telefone_1 ? formatTelefone(data.ddd_telefone_1) : empresaData.telefone;
+      const cepLimpo = data.cep ? String(data.cep).replace(/\D/g, "") : "";
+      const tipoLogradouro = data.descricao_tipo_de_logradouro ? data.descricao_tipo_de_logradouro + " " : "";
+      const nomeEmpresa = data.nome_fantasia || data.razao_social || empresaData.nome;
+      const logradouroFinal = (tipoLogradouro + (data.logradouro || "")).trim();
+      const cidadeFinal = data.municipio
+        ? data.municipio.charAt(0) + data.municipio.slice(1).toLowerCase()
+        : empresaData.cidade;
+
+      setEmpresaData((prev) => ({
+        ...prev,
+        cnpj: formatCnpj(cnpjLimpo),
+        nome: nomeEmpresa || prev.nome,
+        email: data.email || prev.email,
+        telefone: telefone || prev.telefone,
+        cep: cepLimpo ? formatCep(cepLimpo) : prev.cep,
+        endereco: logradouroFinal || prev.endereco,
+        numero: data.numero || prev.numero,
+        bairro: data.bairro || prev.bairro,
+        cidade: cidadeFinal || prev.cidade,
+        uf: data.uf || prev.uf,
+      }));
+    } catch {
+      setCnpjErro("Erro ao consultar CNPJ. Tente novamente.");
+    } finally {
+      setCnpjLoading(false);
+    }
+  };
+
+  const buscarCep = async (cepParaBuscar?: string) => {
+    const valor = (cepParaBuscar || empresaData.cep).replace(/\D/g, "");
+    if (valor.length !== 8) return;
+    setCepLoading(true);
+    try {
+      const res = await fetch(`https://brasilapi.com.br/api/cep/v1/${valor}`);
+      if (res.ok) {
+        const data = await res.json();
+        setEmpresaData((prev) => ({
+          ...prev,
+          endereco: prev.endereco || data.street || "",
+          bairro: prev.bairro || data.neighborhood || "",
+          cidade: prev.cidade || data.city || "",
+          uf: prev.uf || data.state || "",
+        }));
+      }
+    } catch {
+      // ignore
+    } finally {
+      setCepLoading(false);
+    }
+  };
 
   const addToCart = (produto: any) => {
     setCart((prev) => {
@@ -653,40 +772,106 @@ function PublicCatalogo() {
           </DialogHeader>
           <form onSubmit={finalizeOrder} className="flex flex-col flex-1 min-h-0 overflow-hidden">
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {/* Campo de CNPJ com botão Puxar Dados */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-semibold text-slate-800" htmlFor="cnpj">
+                    CNPJ <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[11px] text-emerald-700 font-medium bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    ⚡ Busca Automática
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      id="cnpj"
+                      required
+                      value={empresaData.cnpj}
+                      onChange={(e) => {
+                        setCnpjErro("");
+                        const formatado = formatCnpj(e.target.value);
+                        setEmpresaData((prev) => ({ ...prev, cnpj: formatado }));
+                        if (formatado.replace(/\D/g, "").length === 14 && !empresaData.nome) {
+                          buscarCnpj(formatado);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          buscarCnpj();
+                        }
+                      }}
+                      placeholder="00.000.000/0000-00"
+                      maxLength={18}
+                      className="font-mono font-medium h-10"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => buscarCnpj()}
+                    disabled={cnpjLoading}
+                    className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 h-10 shadow-xs flex items-center gap-1.5"
+                    title="Buscar dados da empresa pelo CNPJ na Receita Federal"
+                  >
+                    {cnpjLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="text-xs">Buscando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Search className="h-4 w-4" />
+                        <span className="text-xs">Puxar Dados</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+                {cnpjErro ? (
+                  <p className="text-xs text-red-600 font-medium mt-1">{cnpjErro}</p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    Digite o CNPJ e clique em <strong>Puxar Dados</strong> para preencher nome, endereço e cidade automaticamente.
+                  </p>
+                )}
+              </div>
+
               <div className="space-y-1.5">
                 <label className="text-sm font-medium" htmlFor="nome">
-                  Nome da Empresa <span className="text-red-500">*</span>
+                  Nome da Empresa / Razão Social <span className="text-red-500">*</span>
                 </label>
                 <Input
                   id="nome"
                   required
                   value={empresaData.nome}
                   onChange={(e) => setEmpresaData({ ...empresaData, nome: e.target.value })}
-                  placeholder="Sua Empresa"
+                  placeholder="Nome Fantasia ou Razão Social"
+                  className="h-10"
                 />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium" htmlFor="cnpj">
-                  CNPJ <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  id="cnpj"
-                  required
-                  value={empresaData.cnpj}
-                  onChange={(e) => setEmpresaData({ ...empresaData, cnpj: e.target.value })}
-                  placeholder="00.000.000/0000-00"
-                />
-              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium" htmlFor="cep">
-                    CEP
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium" htmlFor="cep">
+                      CEP
+                    </label>
+                    {cepLoading && <Loader2 className="h-3 w-3 animate-spin text-emerald-600" />}
+                  </div>
                   <Input
                     id="cep"
                     value={empresaData.cep}
-                    onChange={(e) => setEmpresaData({ ...empresaData, cep: e.target.value })}
+                    onChange={(e) => {
+                      const f = formatCep(e.target.value);
+                      setEmpresaData((prev) => ({ ...prev, cep: f }));
+                      if (f.replace(/\D/g, "").length === 8) {
+                        buscarCep(f);
+                      }
+                    }}
+                    onBlur={() => buscarCep()}
                     placeholder="00000-000"
+                    maxLength={9}
+                    className="font-mono h-10"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -698,6 +883,7 @@ function PublicCatalogo() {
                     value={empresaData.endereco}
                     onChange={(e) => setEmpresaData({ ...empresaData, endereco: e.target.value })}
                     placeholder="Rua Exemplo"
+                    className="h-10"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -708,7 +894,8 @@ function PublicCatalogo() {
                     id="numero"
                     value={empresaData.numero}
                     onChange={(e) => setEmpresaData({ ...empresaData, numero: e.target.value })}
-                    placeholder="123"
+                    placeholder="123 ou SN"
+                    className="h-10"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -720,6 +907,7 @@ function PublicCatalogo() {
                     value={empresaData.bairro}
                     onChange={(e) => setEmpresaData({ ...empresaData, bairro: e.target.value })}
                     placeholder="Centro"
+                    className="h-10"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -731,6 +919,7 @@ function PublicCatalogo() {
                     value={empresaData.cidade}
                     onChange={(e) => setEmpresaData({ ...empresaData, cidade: e.target.value })}
                     placeholder="Sua Cidade"
+                    className="h-10"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -740,12 +929,14 @@ function PublicCatalogo() {
                   <Input
                     id="uf"
                     value={empresaData.uf}
-                    onChange={(e) => setEmpresaData({ ...empresaData, uf: e.target.value })}
+                    onChange={(e) => setEmpresaData({ ...empresaData, uf: e.target.value.toUpperCase() })}
                     placeholder="SP"
                     maxLength={2}
+                    className="h-10 uppercase font-mono"
                   />
                 </div>
               </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium" htmlFor="telefone">
@@ -755,8 +946,10 @@ function PublicCatalogo() {
                     id="telefone"
                     required
                     value={empresaData.telefone}
-                    onChange={(e) => setEmpresaData({ ...empresaData, telefone: e.target.value })}
+                    onChange={(e) => setEmpresaData({ ...empresaData, telefone: formatTelefone(e.target.value) })}
                     placeholder="(00) 00000-0000"
+                    maxLength={15}
+                    className="h-10"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -769,6 +962,7 @@ function PublicCatalogo() {
                     value={empresaData.email}
                     onChange={(e) => setEmpresaData({ ...empresaData, email: e.target.value })}
                     placeholder="contato@empresa.com.br"
+                    className="h-10"
                   />
                 </div>
               </div>
