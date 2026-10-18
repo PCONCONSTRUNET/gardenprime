@@ -61,6 +61,16 @@ export function CartaoCreditoModal({
 }: CartaoCreditoModalProps) {
   const total = cart.reduce((acc, item) => acc + item.qtd * Number(item.produto.valor), 0);
 
+  // ─── Taxas Asaas (Cobranças Online - Cartão de Crédito) ───────────────────
+  // À vista (1x): 1,99% + R$0,49  |  2–6x: 2,49% + R$0,49  |  7–12x: 2,99% + R$0,49
+  const calcularTaxaAsaas = (valorBase: number, nParcelas: number) => {
+    const percentual = nParcelas === 1 ? 1.99 : nParcelas <= 6 ? 2.49 : 2.99;
+    const taxa = parseFloat((valorBase * (percentual / 100) + 0.49).toFixed(2));
+    const totalComTaxa = parseFloat((valorBase + taxa).toFixed(2));
+    const valorParcela = parseFloat((totalComTaxa / nParcelas).toFixed(2));
+    return { percentual, taxa, totalComTaxa, valorParcela };
+  };
+
   // Form states
   const [numeroCartao, setNumeroCartao] = useState("");
   const [nomeTitular, setNomeTitular] = useState("");
@@ -76,6 +86,7 @@ export function CartaoCreditoModal({
     numeroVenda: string | number;
     asaasPaymentId: string;
     total: number;
+    totalComTaxa: number;
     parcelas: number;
   } | null>(null);
 
@@ -142,8 +153,9 @@ export function CartaoCreditoModal({
 
     try {
       const nParcelas = parseInt(parcelas) || 1;
+      const { totalComTaxa, taxa, valorParcela, percentual } = calcularTaxaAsaas(total, nParcelas);
 
-      // 1. Processar com Asaas
+      // 1. Processar com Asaas (cobra valor COM taxa — repassada ao cliente)
       const respAsaas = await pagarComCartaoCreditoAsaas({
         cliente: {
           nome: empresaData.nome,
@@ -157,7 +169,7 @@ export function CartaoCreditoModal({
           cidade: empresaData.cidade,
           uf: empresaData.uf,
         },
-        valor: total,
+        valor: totalComTaxa,
         parcelas: nParcelas,
         cartao: {
           holderName: nomeTitular,
@@ -224,11 +236,11 @@ export function CartaoCreditoModal({
         nextNumero = Number(maxVenda.numero) + 1;
       }
 
-      // 4. Salvar Venda no ERP
+      // 4. Salvar Venda no ERP (valor_total = com taxa Asaas, subtotal = valor líquido do pedido)
       const condPag =
         nParcelas > 1
-          ? `Cartão de Crédito (${nParcelas}x de R$ ${(total / nParcelas).toFixed(2).replace(".", ",")})`
-          : "Cartão de Crédito à Vista";
+          ? `Cartão de Crédito (${nParcelas}x de R$ ${valorParcela.toFixed(2).replace(".", ",")} | taxa ${percentual.toFixed(2)}% + R$0,49)`
+          : `Cartão de Crédito à Vista (taxa ${percentual.toFixed(2)}% + R$0,49)`;
 
       const { data: vendaData, error: vendaError } = await supabase
         .from("vendas")
@@ -238,7 +250,7 @@ export function CartaoCreditoModal({
             status: "Pago",
             status_aprovacao: "Aprovado",
             subtotal: total,
-            valor_total: total,
+            valor_total: totalComTaxa,
             numero: nextNumero,
             cliente_id: finalClienteId,
             vendedor_id: partner?.id || null,
@@ -273,14 +285,14 @@ export function CartaoCreditoModal({
         }
       }
 
-      // 7. Criar Conta a Receber baixada
+      // 7. Criar Conta a Receber baixada (valor cobrado = com taxa)
       const dataHoje = new Date().toISOString().split("T")[0];
       await supabase.from("contas_receber").insert([
         {
           venda_id: vendaData.id,
           cliente_id: finalClienteId,
-          descricao: `Venda #${vendaData.numero_venda || nextNumero} (Cartão Asaas)`,
-          valor: total,
+          descricao: `Venda #${vendaData.numero_venda || nextNumero} (Cartão Asaas - taxa ${percentual.toFixed(2)}% + R$0,49)`,
+          valor: totalComTaxa,
           vencimento: dataHoje,
           data_pagamento: dataHoje,
           status: "Recebido",
@@ -294,6 +306,7 @@ export function CartaoCreditoModal({
         numeroVenda: numeroFinal,
         asaasPaymentId: respAsaas.id,
         total,
+        totalComTaxa,
         parcelas: nParcelas,
       });
 
@@ -367,15 +380,27 @@ export function CartaoCreditoModal({
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Valor Pago:</span>
-                <span className="font-bold text-success text-base">
+                <span className="text-muted-foreground">Valor do Pedido:</span>
+                <span className="font-medium text-slate-700">
                   R$ {sucesso.total.toFixed(2).replace(".", ",")}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-xs text-amber-700">
+                <span>Taxa Asaas:</span>
+                <span>+ R$ {(sucesso.totalComTaxa - sucesso.total).toFixed(2).replace(".", ",")}</span>
+              </div>
+              <div className="flex justify-between items-center pt-1 border-t">
+                <span className="font-semibold text-slate-700">Total Cobrado:</span>
+                <span className="font-bold text-success text-base">
+                  R$ {sucesso.totalComTaxa.toFixed(2).replace(".", ",")}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Condição:</span>
                 <span className="font-medium text-slate-700">
-                  {sucesso.parcelas > 1 ? `${sucesso.parcelas}x de R$ ${(sucesso.total / sucesso.parcelas).toFixed(2).replace(".", ",")}` : "1x (à vista)"}
+                  {sucesso.parcelas > 1
+                    ? `${sucesso.parcelas}x de R$ ${(sucesso.totalComTaxa / sucesso.parcelas).toFixed(2).replace(".", ",")}`
+                    : "1x (à vista)"}
                 </span>
               </div>
               <div className="flex justify-between items-center text-xs text-muted-foreground pt-1 border-t">
@@ -520,30 +545,97 @@ export function CartaoCreditoModal({
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="parcelas_cartao" className="text-xs">Parcelas</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="parcelas_cartao" className="text-xs font-semibold">Parcelas</Label>
                   <Select value={parcelas} onValueChange={setParcelas}>
                     <SelectTrigger id="parcelas_cartao" className="h-10">
                       <SelectValue placeholder="Selecione as parcelas" />
                     </SelectTrigger>
                     <SelectContent>
                       {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => {
-                        const valorParcela = total / n;
+                        const { percentual, totalComTaxa: tc, valorParcela: vp } = calcularTaxaAsaas(total, n);
                         return (
                           <SelectItem key={n} value={String(n)}>
-                            {n}x de R$ {valorParcela.toFixed(2).replace(".", ",")}{" "}
-                            {n === 1 ? "(à vista)" : "sem juros"}
+                            {n}x de R$ {vp.toFixed(2).replace(".", ",")}
+                            {n === 1 ? " (à vista)" : ""} — total R$ {tc.toFixed(2).replace(".", ",")} ({percentual.toFixed(2).replace(".", ",")}% taxa)
                           </SelectItem>
                         );
                       })}
                     </SelectContent>
                   </Select>
+
+                  {/* Painel de taxas Asaas por faixa */}
+                  {(() => {
+                    const nAtual = parseInt(parcelas) || 1;
+                    const { totalComTaxa, taxa, valorParcela, percentual } = calcularTaxaAsaas(total, nAtual);
+                    return (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2 text-[11px]">
+                        <p className="font-bold text-amber-900 text-xs">Taxas Asaas — Cobranças Online</p>
+                        {[
+                          { faixa: "1x (à vista)", pct: 1.99, ativo: nAtual === 1 },
+                          { faixa: "2 a 6x", pct: 2.49, ativo: nAtual >= 2 && nAtual <= 6 },
+                          { faixa: "7 a 12x", pct: 2.99, ativo: nAtual >= 7 },
+                        ].map(({ faixa, pct, ativo }) => (
+                          <div
+                            key={faixa}
+                            className={`flex justify-between px-2 py-1 rounded-lg ${ativo ? "bg-amber-200 font-bold text-amber-900" : "text-amber-700"}`}
+                          >
+                            <span>{faixa}</span>
+                            <span>{pct.toFixed(2).replace(".", ",")}% + R$0,49</span>
+                          </div>
+                        ))}
+                        <div className="border-t border-amber-200 pt-2 space-y-0.5">
+                          <div className="flex justify-between text-amber-700">
+                            <span>Pedido:</span>
+                            <span>R$ {total.toFixed(2).replace(".", ",")}</span>
+                          </div>
+                          <div className="flex justify-between text-amber-700">
+                            <span>Taxa ({percentual.toFixed(2).replace(".", ",")}% + R$0,49):</span>
+                            <span>+ R$ {taxa.toFixed(2).replace(".", ",")}</span>
+                          </div>
+                          <div className="flex justify-between font-bold text-amber-900 text-xs pt-0.5 border-t border-amber-200">
+                            <span>Total cobrado{nAtual > 1 ? ` (${nAtual}x de R$ ${valorParcela.toFixed(2).replace(".", ",")})` : " à vista"}:</span>
+                            <span>R$ {totalComTaxa.toFixed(2).replace(".", ",")}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 text-[11px] text-muted-foreground pt-1">
-                <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
-                <span>Cobrança processada com segurança pelo gateway <strong>Asaas</strong>.</span>
+              {/* ── Compra Segura / Trust Bar ────────────────────────── */}
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 space-y-2">
+                {/* Linha 1: Compra Segura + cadeado */}
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0" />
+                  <div>
+                    <p className="text-[12px] font-bold text-emerald-800">Compra 100% Segura</p>
+                    <p className="text-[10px] text-emerald-700 leading-snug">
+                      Seus dados são criptografados e nunca armazenados no nosso servidor.
+                    </p>
+                  </div>
+                </div>
+                {/* Linha 2: Badges de segurança + logo Asaas */}
+                <div className="flex items-center justify-between pt-1 border-t border-emerald-200/70">
+                  <div className="flex items-center gap-2 text-[10px] text-emerald-700 font-medium">
+                    <span className="flex items-center gap-1 bg-white border border-emerald-200 rounded px-1.5 py-0.5">
+                      <Lock className="h-3 w-3 text-emerald-600" /> SSL 256-bit
+                    </span>
+                    <span className="flex items-center gap-1 bg-white border border-emerald-200 rounded px-1.5 py-0.5">
+                      🔒 PCI DSS
+                    </span>
+                  </div>
+                  {/* Logo Asaas */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[9px] text-slate-400 uppercase tracking-wider">Gateway</span>
+                    <img
+                      src="/asaas-logo.png"
+                      alt="Asaas"
+                      className="h-4 object-contain opacity-80"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -556,23 +648,36 @@ export function CartaoCreditoModal({
               >
                 Voltar
               </Button>
-              <Button
-                type="submit"
-                disabled={loading}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold flex-1 h-11"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processando com Asaas...
-                  </>
-                ) : (
-                  <>
-                    <Lock className="mr-2 h-4 w-4" />
-                    Pagar R$ {total.toFixed(2).replace(".", ",")}
-                  </>
-                )}
-              </Button>
+              {(() => {
+                const nAtual = parseInt(parcelas) || 1;
+                const { totalComTaxa, valorParcela } = calcularTaxaAsaas(total, nAtual);
+                return (
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold flex-1 h-11"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processando com Asaas...
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center leading-tight">
+                        <span className="flex items-center gap-1">
+                          <Lock className="h-4 w-4" />
+                          Pagar R$ {totalComTaxa.toFixed(2).replace(".", ",")}
+                        </span>
+                        {nAtual > 1 && (
+                          <span className="text-blue-200 text-[10px] font-normal">
+                            {nAtual}x de R$ {valorParcela.toFixed(2).replace(".", ",")}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </Button>
+                );
+              })()}
             </div>
           </form>
         )}
