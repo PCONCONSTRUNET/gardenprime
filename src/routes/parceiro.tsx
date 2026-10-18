@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, redirect, Link, useRouterState } from "@tanstack/react-router";
 import { supabaseParceiro as supabase } from "@/lib/supabase";
 import { GardenPrimeLogo } from "@/components/garden-prime-logo";
-import { Home, Calculator, LogOut, Package, Menu, X, Wallet, ClipboardList, Grid, ShoppingCart, Plus, MoreHorizontal, Settings, Users } from "lucide-react";
+import { Home, Calculator, LogOut, Package, Menu, X, Wallet, ClipboardList, Grid, ShoppingCart, Plus, MoreHorizontal, Settings, Users, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 
@@ -71,10 +71,11 @@ export const Route = createFileRoute("/parceiro")({
 
 const navItems = [
   { to: "/parceiro/dashboard", icon: Home, label: "Início" },
+  { to: "/parceiro/catalogo", icon: BookOpen, label: "Catálogo Digital" },
   { to: "/parceiro/pdv", icon: Calculator, label: "Nova Venda" },
   { to: "/parceiro/vendas", icon: ClipboardList, label: "Vendas" },
+  { to: "/parceiro/carrinhos", icon: ShoppingCart, label: "Meus Carrinhos" },
   { to: "/parceiro/pagamentos", icon: Wallet, label: "Pagamentos" },
-  { to: "/parceiro/catalogo", icon: ShoppingCart, label: "Meus Carrinhos" },
   { to: "/parceiro/clientes", icon: Users, label: "Clientes" },
   { to: "/parceiro/configuracoes", icon: Settings, label: "Configurações" },
 ];
@@ -204,7 +205,16 @@ function ParceiroLayout() {
         )}
 
         {/* Page content */}
-        <main className={cn("flex-1 max-w-2xl w-full mx-auto lg:max-w-4xl", pathname !== "/parceiro/pdv" && "p-4 lg:px-8 lg:py-8")}>
+        <main
+          className={cn(
+            "flex-1 w-full mx-auto",
+            pathname === "/parceiro/pdv"
+              ? ""
+              : pathname.startsWith("/parceiro/catalogo")
+              ? "max-w-7xl p-4 lg:px-8 lg:py-8"
+              : "max-w-2xl lg:max-w-4xl p-4 lg:px-8 lg:py-8"
+          )}
+        >
           <Outlet />
         </main>
 
@@ -216,8 +226,8 @@ function ParceiroLayout() {
           </Link>
           
           <Link to="/parceiro/catalogo" className="flex flex-col items-center gap-1 opacity-70 hover:opacity-100 [&.active]:opacity-100 transition-opacity">
-            <ShoppingCart className="w-6 h-6" />
-            <span className="text-[10px] font-medium">Carrinho</span>
+            <BookOpen className="w-6 h-6" />
+            <span className="text-[10px] font-medium">Catálogo</span>
           </Link>
           
           {/* Floating Action Button */}

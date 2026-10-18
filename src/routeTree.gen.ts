@@ -22,6 +22,7 @@ import { Route as ParceiroDashboardRouteImport } from './routes/parceiro.dashboa
 import { Route as ParceiroConfiguracoesRouteImport } from './routes/parceiro.configuracoes'
 import { Route as ParceiroClientesRouteImport } from './routes/parceiro.clientes'
 import { Route as ParceiroCatalogoRouteImport } from './routes/parceiro.catalogo'
+import { Route as ParceiroCarrinhosRouteImport } from './routes/parceiro.carrinhos'
 import { Route as ParceiroCadastroRouteImport } from './routes/parceiro.cadastro'
 import { Route as OrcamentoIdRouteImport } from './routes/orcamento.$id'
 import { Route as DeclaracaoIdRouteImport } from './routes/declaracao.$id'
@@ -116,6 +117,11 @@ const ParceiroClientesRoute = ParceiroClientesRouteImport.update({
 const ParceiroCatalogoRoute = ParceiroCatalogoRouteImport.update({
   id: '/catalogo',
   path: '/catalogo',
+  getParentRoute: () => ParceiroRoute,
+} as any)
+const ParceiroCarrinhosRoute = ParceiroCarrinhosRouteImport.update({
+  id: '/carrinhos',
+  path: '/carrinhos',
   getParentRoute: () => ParceiroRoute,
 } as any)
 const ParceiroCadastroRoute = ParceiroCadastroRouteImport.update({
@@ -304,6 +310,7 @@ export interface FileRoutesByFullPath {
   '/declaracao/$id': typeof DeclaracaoIdRoute
   '/orcamento/$id': typeof OrcamentoIdRoute
   '/parceiro/cadastro': typeof ParceiroCadastroRoute
+  '/parceiro/carrinhos': typeof ParceiroCarrinhosRoute
   '/parceiro/catalogo': typeof ParceiroCatalogoRoute
   '/parceiro/clientes': typeof ParceiroClientesRoute
   '/parceiro/configuracoes': typeof ParceiroConfiguracoesRoute
@@ -348,6 +355,7 @@ export interface FileRoutesByTo {
   '/declaracao/$id': typeof DeclaracaoIdRoute
   '/orcamento/$id': typeof OrcamentoIdRoute
   '/parceiro/cadastro': typeof ParceiroCadastroRoute
+  '/parceiro/carrinhos': typeof ParceiroCarrinhosRoute
   '/parceiro/catalogo': typeof ParceiroCatalogoRoute
   '/parceiro/clientes': typeof ParceiroClientesRoute
   '/parceiro/configuracoes': typeof ParceiroConfiguracoesRoute
@@ -394,6 +402,7 @@ export interface FileRoutesById {
   '/declaracao/$id': typeof DeclaracaoIdRoute
   '/orcamento/$id': typeof OrcamentoIdRoute
   '/parceiro/cadastro': typeof ParceiroCadastroRoute
+  '/parceiro/carrinhos': typeof ParceiroCarrinhosRoute
   '/parceiro/catalogo': typeof ParceiroCatalogoRoute
   '/parceiro/clientes': typeof ParceiroClientesRoute
   '/parceiro/configuracoes': typeof ParceiroConfiguracoesRoute
@@ -441,6 +450,7 @@ export interface FileRouteTypes {
     | '/declaracao/$id'
     | '/orcamento/$id'
     | '/parceiro/cadastro'
+    | '/parceiro/carrinhos'
     | '/parceiro/catalogo'
     | '/parceiro/clientes'
     | '/parceiro/configuracoes'
@@ -485,6 +495,7 @@ export interface FileRouteTypes {
     | '/declaracao/$id'
     | '/orcamento/$id'
     | '/parceiro/cadastro'
+    | '/parceiro/carrinhos'
     | '/parceiro/catalogo'
     | '/parceiro/clientes'
     | '/parceiro/configuracoes'
@@ -530,6 +541,7 @@ export interface FileRouteTypes {
     | '/declaracao/$id'
     | '/orcamento/$id'
     | '/parceiro/cadastro'
+    | '/parceiro/carrinhos'
     | '/parceiro/catalogo'
     | '/parceiro/clientes'
     | '/parceiro/configuracoes'
@@ -641,6 +653,13 @@ declare module '@tanstack/react-router' {
       path: '/catalogo'
       fullPath: '/parceiro/catalogo'
       preLoaderRoute: typeof ParceiroCatalogoRouteImport
+      parentRoute: typeof ParceiroRoute
+    }
+    '/parceiro/carrinhos': {
+      id: '/parceiro/carrinhos'
+      path: '/carrinhos'
+      fullPath: '/parceiro/carrinhos'
+      preLoaderRoute: typeof ParceiroCarrinhosRouteImport
       parentRoute: typeof ParceiroRoute
     }
     '/parceiro/cadastro': {
@@ -922,6 +941,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 interface ParceiroRouteChildren {
   ParceiroCadastroRoute: typeof ParceiroCadastroRoute
+  ParceiroCarrinhosRoute: typeof ParceiroCarrinhosRoute
   ParceiroCatalogoRoute: typeof ParceiroCatalogoRoute
   ParceiroClientesRoute: typeof ParceiroClientesRoute
   ParceiroConfiguracoesRoute: typeof ParceiroConfiguracoesRoute
@@ -934,6 +954,7 @@ interface ParceiroRouteChildren {
 
 const ParceiroRouteChildren: ParceiroRouteChildren = {
   ParceiroCadastroRoute: ParceiroCadastroRoute,
+  ParceiroCarrinhosRoute: ParceiroCarrinhosRoute,
   ParceiroCatalogoRoute: ParceiroCatalogoRoute,
   ParceiroClientesRoute: ParceiroClientesRoute,
   ParceiroConfiguracoesRoute: ParceiroConfiguracoesRoute,

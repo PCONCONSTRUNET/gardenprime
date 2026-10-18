@@ -40,6 +40,13 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { WhatsAppIcon, shareOrderWhatsApp, openOrderPdf, downloadOrderPdf } from "@/lib/order-pdf";
+import {
+  sortCategorias,
+  getCategoryPriority,
+  getPrazoBoleto,
+  getDescricaoBoleto,
+  getRotuloFaixaBoleto,
+} from "@/lib/utils";
 
 export const Route = createFileRoute("/parceiro/pdv")({
   head: () => ({ meta: [{ title: "Nova Venda — GARDEN PRIME" }] }),
@@ -82,7 +89,7 @@ function ParceiroPDV() {
       cidade: "",
       uf: "",
       pagamento: "Dinheiro / Pix",
-      condicaoBoleto: "",
+      condicaoBoleto: "28, 35, 42 dias",
       frete: "Retirada",
       observacoes: "",
     };
@@ -237,11 +244,7 @@ function ParceiroPDV() {
 
   const dynamicCategories = Array.from(new Set(produtos.map((p) => p.categoria)))
     .filter(Boolean)
-    .sort((a, b) => {
-      if ((a as string).toLowerCase() === "jardinagem") return -1;
-      if ((b as string).toLowerCase() === "jardinagem") return 1;
-      return 0;
-    }) as string[];
+    .sort(sortCategorias) as string[];
   const categorias = dynamicCategories;
 
   const toggleCategory = (cat: string) => {
@@ -358,18 +361,31 @@ function ParceiroPDV() {
           const ufParam = params.get("uf");
           const telParam = params.get("tel");
 
-          if (eParam || cnjParam) {
+          const pagParam = params.get("pag");
+          const prazoParam = params.get("prazo");
+
+          if (eParam || cnjParam || pagParam) {
             setClientForm((prev: any) => ({
               ...prev,
-              nome: eParam || "",
-              documento: cnjParam || "",
-              cep: cepParam || "",
-              endereco: endParam || "",
-              numero: numParam || "",
-              bairro: bairroParam || "",
-              cidade: cidParam || "",
-              uf: ufParam || "",
-              telefone: telParam || "",
+              ...(eParam || cnjParam
+                ? {
+                    nome: eParam || "",
+                    documento: cnjParam || "",
+                    cep: cepParam || "",
+                    endereco: endParam || "",
+                    numero: numParam || "",
+                    bairro: bairroParam || "",
+                    cidade: cidParam || "",
+                    uf: ufParam || "",
+                    telefone: telParam || "",
+                  }
+                : {}),
+              ...(pagParam
+                ? {
+                    pagamento: pagParam,
+                    condicaoBoleto: pagParam === "Boleto a Prazo" ? (prazoParam || "28, 35, 42 dias") : prev.condicaoBoleto,
+                  }
+                : {}),
             }));
           }
 
@@ -620,7 +636,7 @@ function ParceiroPDV() {
           desconto_percentual: descontoPercentual,
           condicao_pagamento:
             clientForm.pagamento === "Boleto a Prazo"
-              ? clientForm.condicaoBoleto || "Boleto a Prazo"
+              ? getDescricaoBoleto(subtotal)
               : clientForm.pagamento,
         }])
         .select()
@@ -642,7 +658,7 @@ function ParceiroPDV() {
 
       // 4. Limpa o carrinho e redireciona para Meus Carrinhos
       esvaziarCarrinho();
-      navigate({ to: "/parceiro/catalogo" });
+      navigate({ to: "/parceiro/carrinhos" });
     } catch (err: any) {
       alert("Erro ao salvar rascunho: " + err.message);
     } finally {
@@ -738,7 +754,7 @@ function ParceiroPDV() {
             desconto_percentual: descontoPercentual,
             condicao_pagamento:
               clientForm.pagamento === "Boleto a Prazo"
-                ? clientForm.condicaoBoleto || "Boleto a Prazo"
+                ? getDescricaoBoleto(subtotal)
                 : clientForm.pagamento,
           },
         ])
@@ -825,7 +841,7 @@ function ParceiroPDV() {
         },
         condicao_pagamento:
           clientForm.pagamento === "Boleto a Prazo"
-            ? clientForm.condicaoBoleto || "Boleto a Prazo"
+            ? getDescricaoBoleto(subtotal)
             : clientForm.pagamento,
         vendedor_nome: vendedorInfo?.nome,
       };
@@ -878,6 +894,14 @@ function ParceiroPDV() {
     if (selCat === "floreiras" && prodCat.includes("floreira")) matchesCategory = true;
 
     return matchesSearch && matchesCategory;
+  }).sort((a, b) => {
+    const pCatA = getCategoryPriority(a.categoria);
+    const pCatB = getCategoryPriority(b.categoria);
+    if (pCatA !== pCatB) return pCatA - pCatB;
+    if ((a.categoria || "") !== (b.categoria || "")) {
+      return (a.categoria || "").localeCompare(b.categoria || "", "pt-BR");
+    }
+    return (a.nome || "").localeCompare(b.nome || "", "pt-BR");
   });
 
   return (
@@ -1234,7 +1258,7 @@ function ParceiroPDV() {
                         },
                         condicao_pagamento:
                           clientForm.pagamento === "Boleto a Prazo"
-                            ? clientForm.condicaoBoleto || "Boleto a Prazo"
+                            ? getDescricaoBoleto(subtotal)
                             : clientForm.pagamento,
                         vendedor_nome: vendedorInfo?.nome,
                       };
@@ -1446,23 +1470,47 @@ function ParceiroPDV() {
                     className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
                     value={clientForm.pagamento}
                     onChange={(e) => {
-                      setClientForm({ ...clientForm, pagamento: e.target.value });
+                      const novoPagamento = e.target.value;
+                      setClientForm({
+                        ...clientForm,
+                        pagamento: novoPagamento,
+                        condicaoBoleto:
+                          novoPagamento === "Boleto a Prazo"
+                            ? getPrazoBoleto(subtotal)
+                            : clientForm.condicaoBoleto,
+                      });
                     }}
                   >
                     <option>Dinheiro / Pix</option>
                     <option>Cartão de Crédito</option>
                     <option>Cartão de Débito</option>
-                    <option>Boleto a Prazo</option>
+                    <option value="Boleto a Prazo">
+                      Boleto a Prazo ({getPrazoBoleto(subtotal)})
+                    </option>
                   </select>
                   {clientForm.pagamento === "Boleto a Prazo" && (
-                    <Input
-                      placeholder="Ex: 30/60/90 Dias"
-                      value={clientForm.condicaoBoleto}
-                      onChange={(e) =>
-                        setClientForm({ ...clientForm, condicaoBoleto: e.target.value })
-                      }
-                      className="mt-1"
-                    />
+                    <div className="space-y-2 mt-2 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-slate-700">Prazo do Boleto:</span>
+                        <span className="font-black text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-md">
+                          {getPrazoBoleto(subtotal)}
+                        </span>
+                      </div>
+                      <Input
+                        value={getRotuloFaixaBoleto(subtotal)}
+                        readOnly
+                        disabled
+                        className="h-10 bg-white font-bold text-slate-800 text-xs cursor-not-allowed select-none border-slate-200"
+                      />
+                      <div className="text-[11px] text-slate-500 space-y-0.5 pt-1 border-t border-slate-200/60">
+                        <p className={subtotal <= 1000 ? "font-bold text-emerald-700" : ""}>
+                          • Até R$ 1.000,00: <strong>28 dias</strong>
+                        </p>
+                        <p className={subtotal > 1000 ? "font-bold text-emerald-700" : ""}>
+                          • Acima de R$ 1.000,00: <strong>28, 35, 42 dias</strong>
+                        </p>
+                      </div>
+                    </div>
                   )}
                   <div className="mt-2">
                     <label className="text-sm font-medium">Aplicar Desconto (%)</label>

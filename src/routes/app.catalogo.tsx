@@ -21,7 +21,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Check, ChevronsUpDown, Search, Heart, ShoppingCart, FileText } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, sortCategorias, getCategoryPriority } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ColorDock } from "@/components/color-dock";
@@ -128,6 +128,14 @@ function Catalogo() {
       (p.codigo && p.codigo.toLowerCase().includes(busca.toLowerCase()));
     const matchCategoria = categoria === "Todos" || p.categoria === categoria;
     return matchBusca && matchCategoria;
+  }).sort((a, b) => {
+    const pCatA = getCategoryPriority(a.categoria);
+    const pCatB = getCategoryPriority(b.categoria);
+    if (pCatA !== pCatB) return pCatA - pCatB;
+    if ((a.categoria || "") !== (b.categoria || "")) {
+      return (a.categoria || "").localeCompare(b.categoria || "", "pt-BR");
+    }
+    return (a.nome || "").localeCompare(b.nome || "", "pt-BR");
   });
 
   const gerarPDF = async () => {
@@ -223,11 +231,7 @@ function Catalogo() {
     yPos += 12;
 
     const categorias = Array.from(new Set(filtrados.map((p) => p.categoria || "Outros")))
-      .sort((a, b) => {
-        if (a.toLowerCase() === "jardinagem") return -1;
-        if (b.toLowerCase() === "jardinagem") return 1;
-        return 0;
-      });
+      .sort(sortCategorias);
 
     for (const cat of categorias) {
       const prodsCat = filtrados.filter((p) => (p.categoria || "Outros") === cat);
@@ -331,11 +335,7 @@ function Catalogo() {
     "Todos",
     ...Array.from(new Set(produtos.map((p) => p.categoria)))
       .filter(Boolean)
-      .sort((a, b) => {
-        if ((a as string).toLowerCase() === "jardinagem") return -1;
-        if ((b as string).toLowerCase() === "jardinagem") return 1;
-        return 0;
-      }),
+      .sort(sortCategorias),
   ] as string[];
 
   // Cores fixas para a vitrine para não precisar gravar background no banco
@@ -453,11 +453,7 @@ function Catalogo() {
           </p>
         ) : (
           Array.from(new Set(filtrados.map((p) => p.categoria || "Outros")))
-            .sort((a, b) => {
-              if (a.toLowerCase() === "jardinagem") return -1;
-              if (b.toLowerCase() === "jardinagem") return 1;
-              return 0;
-            })
+            .sort(sortCategorias)
             .map((cat) => {
             const produtosDaCategoria = filtrados.filter((p) => (p.categoria || "Outros") === cat);
             return (

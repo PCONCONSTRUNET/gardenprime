@@ -26,7 +26,14 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { cn } from "@/lib/utils";
+import {
+  cn,
+  sortCategorias,
+  getCategoryPriority,
+  getPrazoBoleto,
+  getDescricaoBoleto,
+  getRotuloFaixaBoleto,
+} from "@/lib/utils";
 
 export const Route = createFileRoute("/catalogo")({
   head: () => ({ meta: [{ title: "Catálogo — Garden Prime" }] }),
@@ -64,6 +71,8 @@ function PublicCatalogo() {
     cidade: "",
     uf: "",
     telefone: "",
+    pagamento: "Boleto a Prazo",
+    condicaoBoleto: "28, 35, 42 dias",
   });
 
   const addToCart = (produto: any) => {
@@ -185,11 +194,7 @@ function PublicCatalogo() {
 
   const categorias = Array.from(new Set(produtos.map((p) => p.categoria)))
     .filter(Boolean)
-    .sort((a, b) => {
-      if ((a as string).toLowerCase() === "jardinagem") return -1;
-      if ((b as string).toLowerCase() === "jardinagem") return 1;
-      return 0;
-    }) as string[];
+    .sort(sortCategorias) as string[];
 
   const filtrados = produtos.filter((p) => {
     const matchBusca =
@@ -197,6 +202,14 @@ function PublicCatalogo() {
       (p.codigo && p.codigo.toLowerCase().includes(busca.toLowerCase()));
     const matchCategoria = categoriaAtiva === "Todas" || p.categoria === categoriaAtiva;
     return matchBusca && matchCategoria;
+  }).sort((a, b) => {
+    const pCatA = getCategoryPriority(a.categoria);
+    const pCatB = getCategoryPriority(b.categoria);
+    if (pCatA !== pCatB) return pCatA - pCatB;
+    if ((a.categoria || "") !== (b.categoria || "")) {
+      return (a.categoria || "").localeCompare(b.categoria || "", "pt-BR");
+    }
+    return (a.nome || "").localeCompare(b.nome || "", "pt-BR");
   });
 
   const getGradient = (index: number) => {
@@ -225,6 +238,10 @@ function PublicCatalogo() {
       return;
     }
 
+    const total = cart.reduce((acc, item) => acc + item.qtd * Number(item.produto.valor), 0);
+    const prazoBoleto = getPrazoBoleto(total);
+    const descBoleto = getDescricaoBoleto(total);
+
     let mensagem = `Olá! Gostaria de fazer o pedido dos seguintes itens do catálogo:\n\n`;
 
     mensagem += `*DADOS DA EMPRESA:*\n`;
@@ -236,6 +253,10 @@ function PublicCatalogo() {
     if (empresaData.bairro) mensagem += `Bairro: ${empresaData.bairro}\n`;
     if (empresaData.cidade) mensagem += `Cidade/UF: ${empresaData.cidade}/${empresaData.uf}\n`;
     if (empresaData.telefone) mensagem += `Telefone: ${empresaData.telefone}\n`;
+    mensagem += `*FORMA DE PAGAMENTO:* ${empresaData.pagamento === "Boleto a Prazo" ? descBoleto : empresaData.pagamento}\n`;
+    if (empresaData.pagamento === "Boleto a Prazo") {
+      mensagem += `*PRAZO DO BOLETO:* ${prazoBoleto}\n`;
+    }
     mensagem += `\n`;
 
     cart.forEach((item) => {
@@ -248,12 +269,11 @@ function PublicCatalogo() {
       mensagem += `\n`;
     });
 
-    const total = cart.reduce((acc, item) => acc + item.qtd * Number(item.produto.valor), 0);
     mensagem += `*VALOR TOTAL: R$ ${total.toFixed(2).replace(".", ",")}*\n\n`;
     mensagem += `Qual o procedimento para finalização e pagamento?`;
 
     let telefoneDestino = "5519997141112"; // Telefone padrão do dono
-    const companyParams = `&e=${encodeURIComponent(empresaData.nome)}&cnpj=${encodeURIComponent(empresaData.cnpj)}&cep=${encodeURIComponent(empresaData.cep)}&end=${encodeURIComponent(empresaData.endereco)}&num=${encodeURIComponent(empresaData.numero)}&bairro=${encodeURIComponent(empresaData.bairro)}&cid=${encodeURIComponent(empresaData.cidade)}&uf=${encodeURIComponent(empresaData.uf)}&tel=${encodeURIComponent(empresaData.telefone)}`;
+    const companyParams = `&e=${encodeURIComponent(empresaData.nome)}&cnpj=${encodeURIComponent(empresaData.cnpj)}&cep=${encodeURIComponent(empresaData.cep)}&end=${encodeURIComponent(empresaData.endereco)}&num=${encodeURIComponent(empresaData.numero)}&bairro=${encodeURIComponent(empresaData.bairro)}&cid=${encodeURIComponent(empresaData.cidade)}&uf=${encodeURIComponent(empresaData.uf)}&tel=${encodeURIComponent(empresaData.telefone)}&pag=${encodeURIComponent(empresaData.pagamento)}&prazo=${encodeURIComponent(prazoBoleto)}`;
 
     if (partner && partner.telefone) {
       const numLimpo = partner.telefone.replace(/\D/g, "");
@@ -384,11 +404,7 @@ function PublicCatalogo() {
             </p>
           ) : (
             Array.from(new Set(filtrados.map((p) => p.categoria || "Outros")))
-              .sort((a, b) => {
-                if (a.toLowerCase() === "jardinagem") return -1;
-                if (b.toLowerCase() === "jardinagem") return 1;
-                return 0;
-              })
+              .sort(sortCategorias)
               .map((cat) => {
               const produtosDaCategoria = filtrados.filter(
                 (p) => (p.categoria || "Outros") === cat,
@@ -737,6 +753,49 @@ function PublicCatalogo() {
                   onChange={(e) => setEmpresaData({ ...empresaData, telefone: e.target.value })}
                   placeholder="(00) 00000-0000"
                 />
+              </div>
+
+              <div className="space-y-2 border-t pt-3 mt-1">
+                {(() => {
+                  const totalModal = cart.reduce(
+                    (acc, item) => acc + item.qtd * Number(item.produto.valor),
+                    0
+                  );
+                  const prazoAtual = getPrazoBoleto(totalModal);
+                  return (
+                    <>
+                      <label className="text-sm font-medium">Forma de Pagamento</label>
+                      <select
+                        className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                        value={empresaData.pagamento}
+                        onChange={(e) => setEmpresaData({ ...empresaData, pagamento: e.target.value })}
+                      >
+                        <option value="Boleto a Prazo">Boleto a Prazo ({prazoAtual})</option>
+                        <option value="Dinheiro / Pix">Dinheiro / Pix</option>
+                        <option value="Cartão de Crédito">Cartão de Crédito</option>
+                        <option value="Cartão de Débito">Cartão de Débito</option>
+                      </select>
+                      {empresaData.pagamento === "Boleto a Prazo" && (
+                        <div className="p-3 bg-emerald-50/80 border border-emerald-200/80 rounded-xl space-y-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-semibold text-slate-700">Prazo do Boleto:</span>
+                            <span className="font-black text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-md">
+                              {prazoAtual}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-600 space-y-0.5 pt-1 border-t border-emerald-200/60">
+                            <p className={totalModal <= 1000 ? "font-bold text-emerald-800" : ""}>
+                              • Pedidos até R$ 1.000: <strong>28 dias</strong>
+                            </p>
+                            <p className={totalModal > 1000 ? "font-bold text-emerald-800" : ""}>
+                              • Pedidos acima de R$ 1.000: <strong>28, 35, 42 dias</strong>
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
             <DialogFooter>

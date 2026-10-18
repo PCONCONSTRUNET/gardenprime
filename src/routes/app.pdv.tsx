@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { getPrazoBoleto, getDescricaoBoleto, getRotuloFaixaBoleto } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/pdv")({
   head: () => ({ meta: [{ title: "PDV — GARDEN PRIME ERP" }] }),
@@ -381,7 +382,10 @@ function PDV() {
             valor_total: totalPagamento,
             cliente_id: clienteSelecionado?.id === "avulso" ? null : clienteSelecionado?.id || null,
             metodo_pagamento: metodoPagamento,
-            condicao_pagamento: condicaoPagamento,
+            condicao_pagamento:
+              metodoPagamento === "Boleto"
+                ? getDescricaoBoleto(totalPagamento)
+                : condicaoPagamento,
             desconto_valor: descontoValor,
             numero: nextNumero,
           },
@@ -706,7 +710,10 @@ function PDV() {
                   <span className="text-xs">Pix</span>
                 </Button>
                 <Button
-                  onClick={() => setMetodoPagamento("Boleto")}
+                  onClick={() => {
+                    setMetodoPagamento("Boleto");
+                    setCondicaoPagamento(getDescricaoBoleto(totalPagamento));
+                  }}
                   variant="outline"
                   className={`h-16 flex-col gap-1 ${metodoPagamento === "Boleto" ? "ring-2 ring-primary" : ""}`}
                 >
@@ -715,16 +722,31 @@ function PDV() {
                     alt="Boleto"
                     className="h-5 w-5 object-contain"
                   />
-                  <span className="text-xs">Boleto</span>
+                  <span className="text-xs">Boleto ({getPrazoBoleto(totalPagamento)})</span>
                 </Button>
               </div>
               {metodoPagamento === "Boleto" && (
-                <div className="mt-3">
+                <div className="mt-3 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-slate-700">Prazo do Boleto:</span>
+                    <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
+                      {getPrazoBoleto(totalPagamento)}
+                    </span>
+                  </div>
                   <Input
-                    placeholder="Prazos (Ex: 30/60/90 Dias)"
-                    value={condicaoPagamento}
-                    onChange={(e) => setCondicaoPagamento(e.target.value)}
+                    value={getRotuloFaixaBoleto(totalPagamento)}
+                    readOnly
+                    disabled
+                    className="mt-1.5 h-9 bg-white font-bold text-slate-800 text-xs cursor-not-allowed select-none"
                   />
+                  <div className="text-[11px] text-muted-foreground space-y-0.5 mt-1.5 pt-1 border-t border-slate-200/60">
+                    <p className={totalPagamento <= 1000 ? "font-bold text-emerald-700" : ""}>
+                      • Até R$ 1.000,00: <strong>28 dias</strong>
+                    </p>
+                    <p className={totalPagamento > 1000 ? "font-bold text-emerald-700" : ""}>
+                      • Acima de R$ 1.000,00: <strong>28, 35, 42 dias</strong>
+                    </p>
+                  </div>
                 </div>
               )}
               {(metodoPagamento === "Dinheiro" || metodoPagamento === "Pix") && (

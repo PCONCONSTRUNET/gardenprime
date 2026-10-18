@@ -661,6 +661,18 @@ function NovoDAV() {
                 onChange={(e) => setCondicoes({ ...condicoes, pagamento: e.target.value })}
                 placeholder="Ex: Pix, Dinheiro, Cartão"
               />
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {["Dinheiro / Pix", "Boleto (28, 35, 42 dias)", "Cartão de Crédito"].map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setCondicoes({ ...condicoes, pagamento: c })}
+                    className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 border border-slate-200 transition-colors"
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Tipo de Frete</Label>
