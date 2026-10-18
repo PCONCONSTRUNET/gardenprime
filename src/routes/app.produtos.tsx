@@ -21,6 +21,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Power,
 } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
@@ -44,6 +45,7 @@ function Produtos() {
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
   const [categoriaFilter, setCategoriaFilter] = useState("Todas");
+  const [statusFilter, setStatusFilter] = useState("Ativo");
 
   // Sorting state
   type SortColumn = "codigo" | "nome" | "categoria" | "estoque" | "valor" | "status" | "created_at";
@@ -93,7 +95,33 @@ function Produtos() {
     }
   };
 
-  const ativos = products.filter((p) => p.status === "Ativo").length;
+  const handleToggleStatus = async (product: any) => {
+    const isCurrentlyInativo = product.status === "Inativo";
+    const novoStatus = isCurrentlyInativo ? "Ativo" : "Inativo";
+    const acao = isCurrentlyInativo ? "reativar" : "inativar";
+    if (
+      !(await confirm({
+        title: isCurrentlyInativo ? "Reativar Produto" : "Inativar Produto",
+        description: `Deseja realmente ${acao} o produto "${product.nome}"?`,
+      }))
+    )
+      return;
+
+    try {
+      const { error } = await supabase
+        .from("produtos")
+        .update({ status: novoStatus })
+        .eq("id", product.id);
+      if (error) throw error;
+      setProducts((prev) =>
+        prev.map((item) => (item.id === product.id ? { ...item, status: novoStatus } : item))
+      );
+    } catch (err: any) {
+      alert("Erro ao alterar status: " + (err.message || "Erro desconhecido."));
+    }
+  };
+
+  const ativos = products.filter((p) => (p.status || "Ativo") === "Ativo").length;
   const criticos = products.filter((p) => p.status === "Crítico").length;
   const inativos = products.filter((p) => p.status === "Inativo").length;
 
@@ -117,7 +145,20 @@ function Produtos() {
           (p.codigo && String(p.codigo).toLowerCase().includes(searchStr));
 
       const matchCat = categoriaFilter === "Todas" || p.categoria === categoriaFilter;
-      return matchBusca && matchCat;
+
+      const pStatus = p.status || "Ativo";
+      const matchStatus =
+        statusFilter === "Todos"
+          ? true
+          : statusFilter === "Ativo"
+          ? pStatus === "Ativo"
+          : statusFilter === "Inativo"
+          ? pStatus === "Inativo"
+          : statusFilter === "Crítico"
+          ? pStatus === "Crítico"
+          : true;
+
+      return matchBusca && matchCat && matchStatus;
     });
 
     result.sort((a, b) => {
@@ -171,7 +212,7 @@ function Produtos() {
     });
 
     return result;
-  }, [products, busca, categoriaFilter, sortColumn, sortDirection]);
+  }, [products, busca, categoriaFilter, statusFilter, sortColumn, sortDirection]);
 
   const SortIcon = ({ column }: { column: SortColumn }) => {
     if (sortColumn !== column)
@@ -206,14 +247,28 @@ function Produtos() {
 
       <div className="grid gap-4 sm:grid-cols-4 mb-6">
         {[
-          { l: "Total de itens", v: products.length, c: "text-primary" },
-          { l: "Ativos", v: ativos, c: "text-success" },
-          { l: "Estoque crítico", v: criticos, c: "text-warning" },
-          { l: "Inativos", v: inativos, c: "text-muted-foreground" },
+          { id: "Todos", l: "Total de itens", v: products.length, c: "text-primary" },
+          { id: "Ativo", l: "Ativos", v: ativos, c: "text-success" },
+          { id: "Crítico", l: "Estoque crítico", v: criticos, c: "text-warning" },
+          { id: "Inativo", l: "Inativos", v: inativos, c: "text-muted-foreground" },
         ].map((s) => (
-          <Card key={s.l} className="shadow-card">
+          <Card
+            key={s.l}
+            className={`shadow-card cursor-pointer transition-all hover:border-primary/50 select-none ${
+              statusFilter === s.id ? "ring-2 ring-primary bg-primary/5 shadow-md" : ""
+            }`}
+            onClick={() => setStatusFilter(s.id)}
+            title={`Filtrar por ${s.l}`}
+          >
             <CardContent className="p-5">
-              <p className="text-sm text-muted-foreground">{s.l}</p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">{s.l}</p>
+                {statusFilter === s.id && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-primary border-primary">
+                    Filtrado
+                  </Badge>
+                )}
+              </div>
               <p className={`mt-1 font-display text-2xl font-bold ${s.c}`}>{s.v}</p>
             </CardContent>
           </Card>
@@ -246,9 +301,17 @@ function Produtos() {
                 ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm">
-            Status: Ativos
-          </Button>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[180px] h-9">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Ativo">Status: Ativos</SelectItem>
+              <SelectItem value="Inativo">Status: Inativos</SelectItem>
+              <SelectItem value="Crítico">Status: Críticos</SelectItem>
+              <SelectItem value="Todos">Todos os status</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div className="overflow-x-auto">
           <Table>
@@ -303,7 +366,7 @@ function Produtos() {
               ) : filteredProducts.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    Nenhum produto encontrado na busca.
+                    Nenhum produto encontrado com os filtros selecionados.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -340,22 +403,43 @@ function Produtos() {
                     </TableCell>
                     <TableCell>
                       {p.status === "Ativo" ? (
-                        <Badge className="bg-success/15 text-success hover:bg-success/20 border-0">
+                        <Badge
+                          className="bg-success/15 text-success hover:bg-success/25 border-0 cursor-pointer"
+                          title="Clique para inativar produto"
+                          onClick={() => handleToggleStatus(p)}
+                        >
                           Ativo
                         </Badge>
                       ) : p.status === "Crítico" ? (
-                        <Badge className="bg-warning/15 text-warning hover:bg-warning/20 border-0">
+                        <Badge
+                          className="bg-warning/15 text-warning hover:bg-warning/25 border-0 cursor-pointer"
+                          title="Clique para alternar status"
+                          onClick={() => handleToggleStatus(p)}
+                        >
                           Crítico
                         </Badge>
                       ) : (
-                        <Badge className="bg-muted text-muted-foreground hover:bg-muted/80 border-0">
+                        <Badge
+                          className="bg-muted text-muted-foreground hover:bg-muted/80 border-0 cursor-pointer"
+                          title="Clique para reativar produto"
+                          onClick={() => handleToggleStatus(p)}
+                        >
                           Inativo
                         </Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-right">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className={`h-8 w-8 ${p.status === "Inativo" ? "text-success hover:text-success hover:bg-success/10" : "text-muted-foreground hover:text-warning"}`}
+                        title={p.status === "Inativo" ? "Reativar produto" : "Inativar produto"}
+                        onClick={() => handleToggleStatus(p)}
+                      >
+                        <Power className="h-4 w-4" />
+                      </Button>
                       <Button size="icon" variant="ghost" className="h-8 w-8" asChild>
-                        <Link to="/app/produto-novo" search={{ id: p.id }}>
+                        <Link to="/app/produto-novo" search={{ id: p.id }} title="Editar produto">
                           <Pencil className="h-4 w-4" />
                         </Link>
                       </Button>
@@ -363,6 +447,7 @@ function Produtos() {
                         size="icon"
                         variant="ghost"
                         className="h-8 w-8 text-destructive"
+                        title="Excluir produto"
                         onClick={() => handleDelete(p.id)}
                       >
                         <Trash2 className="h-4 w-4" />
