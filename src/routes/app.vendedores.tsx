@@ -35,6 +35,8 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import {
@@ -95,6 +97,46 @@ function VendedoresAdmin() {
   const handleConfirmAction = () => {
     confirmModal.onConfirm();
     setConfirmModal({ ...confirmModal, isOpen: false });
+  };
+
+  const [vendedorSearch, setVendedorSearch] = useState("");
+  const [vendedorStatusTab, setVendedorStatusTab] = useState<string>("todos");
+
+  const toggleStatusVendedor = async (vendedor: any) => {
+    const isAtivo = vendedor.status === "Ativo" || !vendedor.status;
+    const novoStatus = isAtivo ? "Inativo" : "Ativo";
+
+    setConfirmModal({
+      isOpen: true,
+      title: isAtivo ? "Desativar Parceiro Vendedor" : "Ativar Parceiro Vendedor",
+      desc: isAtivo
+        ? `Tem certeza que deseja desativar o acesso de "${vendedor.nome}"? Ele será desconectado e não conseguirá fazer login no portal até ser reativado.`
+        : `Deseja ativar o acesso de "${vendedor.nome}"? O vendedor voltará a ter acesso imediato ao portal com seu login.`,
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from("vendedores")
+            .update({ status: novoStatus })
+            .eq("id", vendedor.id);
+
+          if (error) throw error;
+
+          setVendedores((prev) =>
+            prev.map((v) => (v.id === vendedor.id ? { ...v, status: novoStatus } : v))
+          );
+          if (selectedVendedor?.id === vendedor.id) {
+            setSelectedVendedor((prev: any) => ({ ...prev, status: novoStatus }));
+          }
+
+          setSuccessAlertModal({
+            isOpen: true,
+            message: `Vendedor "${vendedor.nome}" ${isAtivo ? "desativado" : "ativado"} com sucesso!`,
+          });
+        } catch (err: any) {
+          alert("Erro ao alterar status do vendedor: " + err.message);
+        }
+      },
+    });
   };
 
   const openSaleDetails = async (venda: any) => {
@@ -352,10 +394,15 @@ function VendedoresAdmin() {
     }
 
     try {
+      const novoStatus =
+        commissionTarget.status === "Aguardando Aprovação"
+          ? "Ativo"
+          : (commissionTarget.status || "Ativo");
+
       const { error } = await supabase
         .from("vendedores")
         .update({
-          status: "Ativo",
+          status: novoStatus,
           tipo_comissao: commissionType,
           valor_comissao: v,
           acrescimo_catalogo: acrescimoCatalogo,
@@ -495,6 +542,33 @@ function VendedoresAdmin() {
     .filter((v) => v.status_pagamento_comissao === "Paga")
     .reduce((acc, v) => acc + (Number(v.valor_comissao) || 0), 0);
 
+  // Contadores e filtros de vendedores parceiros
+  const totalVendedores = vendedores.length;
+  const totalAtivos = vendedores.filter((v) => v.status === "Ativo" || !v.status).length;
+  const totalInativos = vendedores.filter(
+    (v) => v.status === "Inativo" || v.status === "Desativado",
+  ).length;
+  const totalPendentes = vendedores.filter((v) => v.status === "Aguardando Aprovação").length;
+
+  const filteredVendedores = vendedores.filter((v) => {
+    // Filtro por aba selecionada
+    if (vendedorStatusTab === "ativos" && v.status !== "Ativo" && v.status) return false;
+    if (vendedorStatusTab === "inativos" && v.status !== "Inativo" && v.status !== "Desativado")
+      return false;
+    if (vendedorStatusTab === "pendentes" && v.status !== "Aguardando Aprovação") return false;
+
+    // Filtro por busca de texto
+    if (vendedorSearch.trim()) {
+      const q = vendedorSearch.toLowerCase();
+      const matchNome = (v.nome || "").toLowerCase().includes(q);
+      const matchEmail = (v.email || "").toLowerCase().includes(q);
+      const matchTel = (v.telefone || "").toLowerCase().includes(q);
+      if (!matchNome && !matchEmail && !matchTel) return false;
+    }
+
+    return true;
+  });
+
   return (
     <>
       <PageHeader
@@ -546,53 +620,129 @@ function VendedoresAdmin() {
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
-        <Card className="shadow-card">
-          <div className="border-b p-4">
-            <h2 className="font-semibold text-lg">Parceiros Cadastrados</h2>
-            <p className="text-sm text-muted-foreground">Visualize o relatório de cada vendedor.</p>
+        <Card className="shadow-card flex flex-col">
+          <div className="border-b p-4 space-y-3">
+            <div>
+              <h2 className="font-semibold text-lg text-slate-800">Parceiros Vendedores</h2>
+              <p className="text-sm text-muted-foreground">
+                Ative ou desative o acesso, configure comissões e veja relatórios.
+              </p>
+            </div>
+
+            {/* Abas para filtrar por status */}
+            <Tabs value={vendedorStatusTab} onValueChange={setVendedorStatusTab} className="w-full">
+              <TabsList className="grid grid-cols-3 sm:inline-flex h-9 bg-slate-100 p-1 w-full sm:w-auto">
+                <TabsTrigger value="todos" className="text-xs px-2.5 py-1">
+                  Todos <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{totalVendedores}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="ativos" className="text-xs px-2.5 py-1">
+                  Ativos <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-800">{totalAtivos}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="inativos" className="text-xs px-2.5 py-1">
+                  Desativados <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 bg-slate-200 text-slate-700">{totalInativos}</Badge>
+                </TabsTrigger>
+                {totalPendentes > 0 && (
+                  <TabsTrigger value="pendentes" className="text-xs px-2.5 py-1">
+                    Pendentes <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 bg-amber-100 text-amber-800">{totalPendentes}</Badge>
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            </Tabs>
+
+            {/* Campo de Busca */}
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome, e-mail ou telefone..."
+                value={vendedorSearch}
+                onChange={(e) => setVendedorSearch(e.target.value)}
+                className="pl-9 h-9 text-xs"
+              />
+            </div>
           </div>
+
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nome</TableHead>
+                <TableHead>Vendedor</TableHead>
+                <TableHead>Status / Acesso</TableHead>
                 <TableHead>Comissão</TableHead>
-                <TableHead>Ação</TableHead>
+                <TableHead className="text-right">Ação</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {vendedores.filter((v) => v.status !== "Inativo").length === 0 ? (
+              {filteredVendedores.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center py-4 text-muted-foreground">
-                    Nenhum vendedor encontrado.
+                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground text-sm">
+                    Nenhum parceiro encontrado nesta aba.
                   </TableCell>
                 </TableRow>
               ) : (
-                vendedores
-                  .filter((v) => v.status !== "Inativo")
-                  .map((v) => (
-                    <TableRow key={v.id}>
+                filteredVendedores.map((v) => {
+                  const isAtivo = v.status === "Ativo" || !v.status;
+                  const isPendente = v.status === "Aguardando Aprovação";
+
+                  return (
+                    <TableRow key={v.id} className={cn(!isAtivo && !isPendente && "bg-slate-50/70")}>
                       <TableCell
-                        className="cursor-pointer hover:bg-slate-50 transition-colors"
+                        className="cursor-pointer hover:bg-slate-100/50 transition-colors"
                         onClick={() => openVendedorDetails(v)}
                       >
-                        <p className="font-medium text-brand hover:underline">{v.nome}</p>
-                        {v.status === "Aguardando Aprovação" && (
-                          <Badge
-                            variant="outline"
-                            className="text-amber-600 bg-amber-50 text-[10px] mt-1"
-                          >
-                            Pendente
-                          </Badge>
+                        <p
+                          className={cn(
+                            "font-medium hover:underline",
+                            isAtivo
+                              ? "text-brand"
+                              : "text-slate-600 line-through decoration-slate-400 decoration-1",
+                          )}
+                        >
+                          {v.nome}
+                        </p>
+                        {v.email && (
+                          <p className="text-xs text-muted-foreground truncate max-w-[170px]">
+                            {v.email}
+                          </p>
                         )}
                       </TableCell>
                       <TableCell>
+                        {isPendente ? (
+                          <Badge
+                            variant="outline"
+                            className="text-amber-700 bg-amber-50 border-amber-200 text-[10px] font-medium"
+                          >
+                            Pendente
+                          </Badge>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={isAtivo}
+                              onCheckedChange={() => toggleStatusVendedor(v)}
+                              title={
+                                isAtivo
+                                  ? "Clique para Desativar este vendedor"
+                                  : "Clique para Ativar este vendedor"
+                              }
+                            />
+                            <span
+                              className={cn(
+                                "text-xs font-semibold cursor-pointer select-none",
+                                isAtivo ? "text-emerald-700" : "text-slate-500",
+                              )}
+                              onClick={() => toggleStatusVendedor(v)}
+                            >
+                              {isAtivo ? "Ativo" : "Desativado"}
+                            </span>
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs font-medium">
                         {v.tipo_comissao === "porcentagem"
                           ? `${v.valor_comissao}%`
                           : `R$ ${v.valor_comissao}`}
                       </TableCell>
-                      <TableCell>
-                        {v.status === "Aguardando Aprovação" ? (
-                          <div className="flex items-center gap-2">
+                      <TableCell className="text-right">
+                        {isPendente ? (
+                          <div className="flex items-center justify-end gap-1.5">
                             <Button
                               size="sm"
                               onClick={() => openCommissionModal(v)}
@@ -611,7 +761,7 @@ function VendedoresAdmin() {
                             </Button>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center justify-end gap-1.5">
                             <Button
                               size="sm"
                               variant="outline"
@@ -642,7 +792,8 @@ function VendedoresAdmin() {
                         )}
                       </TableCell>
                     </TableRow>
-                  ))
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -746,6 +897,76 @@ function VendedoresAdmin() {
                       : `R$ ${selectedVendedor.valor_comissao}`}
                   </SheetDescription>
                 </SheetHeader>
+
+                {/* Status e Acesso do Vendedor no Sheet */}
+                <div
+                  className={cn(
+                    "p-3.5 rounded-xl border flex items-center justify-between mt-3",
+                    selectedVendedor.status === "Inativo" || selectedVendedor.status === "Desativado"
+                      ? "bg-slate-100/90 border-slate-300"
+                      : selectedVendedor.status === "Aguardando Aprovação"
+                      ? "bg-amber-50 border-amber-200"
+                      : "bg-emerald-50/80 border-emerald-200",
+                  )}
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          "w-2 h-2 rounded-full",
+                          selectedVendedor.status === "Inativo" || selectedVendedor.status === "Desativado"
+                            ? "bg-slate-400"
+                            : selectedVendedor.status === "Aguardando Aprovação"
+                            ? "bg-amber-500"
+                            : "bg-emerald-500 animate-pulse",
+                        )}
+                      />
+                      <span
+                        className={cn(
+                          "text-xs font-bold uppercase tracking-wider",
+                          selectedVendedor.status === "Inativo" || selectedVendedor.status === "Desativado"
+                            ? "text-slate-600"
+                            : selectedVendedor.status === "Aguardando Aprovação"
+                            ? "text-amber-800"
+                            : "text-emerald-800",
+                        )}
+                      >
+                        {selectedVendedor.status === "Inativo" || selectedVendedor.status === "Desativado"
+                          ? "Acesso Desativado"
+                          : selectedVendedor.status === "Aguardando Aprovação"
+                          ? "Aguardando Aprovação"
+                          : "Acesso Ativo"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {selectedVendedor.status === "Inativo" || selectedVendedor.status === "Desativado"
+                        ? "O vendedor está impedido de fazer login no portal."
+                        : selectedVendedor.status === "Aguardando Aprovação"
+                        ? "Aguardando definição da comissão para liberar o acesso."
+                        : "O vendedor possui acesso liberado ao portal de parceiros."}
+                    </p>
+                  </div>
+                  {selectedVendedor.status !== "Aguardando Aprovação" && (
+                    <Button
+                      size="sm"
+                      variant={
+                        selectedVendedor.status === "Inativo" || selectedVendedor.status === "Desativado"
+                          ? "default"
+                          : "outline"
+                      }
+                      className={
+                        selectedVendedor.status === "Inativo" || selectedVendedor.status === "Desativado"
+                          ? "h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                          : "h-8 text-xs border-slate-300 text-slate-700 hover:bg-slate-100 font-medium"
+                      }
+                      onClick={() => toggleStatusVendedor(selectedVendedor)}
+                    >
+                      {selectedVendedor.status === "Inativo" || selectedVendedor.status === "Desativado"
+                        ? "Ativar Parceiro"
+                        : "Desativar Acesso"}
+                    </Button>
+                  )}
+                </div>
 
                 <div className="grid grid-cols-3 gap-2 mt-4">
                   <div className="bg-slate-50 p-3 rounded-lg border text-center">

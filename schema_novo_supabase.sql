@@ -709,11 +709,17 @@ DECLARE
 BEGIN
   -- 1. Pega o user_id (id de login) atrelado ao vendedor
   SELECT user_id INTO v_user_id FROM public.vendedores WHERE id = p_vendedor_id;
-  
-  -- 2. Deleta o vendedor da tabela pública (isso remove ele da lista)
+
+  -- 2. Desvincula as vendas do vendedor (anula o vendedor_id, preserva o histórico)
+  UPDATE public.vendas SET vendedor_id = NULL WHERE vendedor_id = p_vendedor_id;
+
+  -- 3. Deleta tabela de preços personalizados (já tem CASCADE, mas por garantia)
+  DELETE FROM public.parceiro_precos WHERE vendedor_id = p_vendedor_id;
+
+  -- 4. Deleta o vendedor da tabela pública
   DELETE FROM public.vendedores WHERE id = p_vendedor_id;
-  
-  -- 3. Deleta o usuário da tabela de autenticação (libera o email para novo cadastro)
+
+  -- 5. Deleta o usuário da tabela de autenticação (libera o email para novo cadastro)
   IF v_user_id IS NOT NULL THEN
     DELETE FROM auth.users WHERE id = v_user_id;
   END IF;

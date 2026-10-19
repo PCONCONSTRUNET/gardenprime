@@ -274,6 +274,27 @@ function ParceiroDashboard() {
     );
   }
 
+  if (vendedorId && (status === "Inativo" || status === "Desativado")) {
+    return (
+      <div className="flex justify-center py-10 px-4">
+        <Card className="w-full max-w-md border-0 shadow-lg ring-1 ring-slate-900/5">
+          <CardContent className="p-8 text-center space-y-4">
+            <div className="w-20 h-20 bg-slate-100 text-slate-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <XCircle className="w-10 h-10" />
+            </div>
+            <h2 className="text-2xl font-bold font-display text-slate-800">Cadastro Desativado</h2>
+            <p className="text-sm text-slate-600">
+              Olá, <strong>{nome}</strong>. Seu acesso ao portal de parceiros está desativado no momento.
+            </p>
+            <p className="text-sm text-muted-foreground pt-4 border-t">
+              Entre em contato com a administração da Garden Prime para reativar seu cadastro.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (vendedorId && status === "Rejeitado") {
     return (
       <div className="flex justify-center py-10 px-4">

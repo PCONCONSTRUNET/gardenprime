@@ -44,6 +44,13 @@ export const Route = createFileRoute("/parceiro")({
         .eq("user_id", session.user.id)
         .maybeSingle();
 
+      // Bloqueia o acesso imediatamente se o parceiro estiver desativado pelo administrador
+      if (vendedor && (vendedor.status === "Inativo" || vendedor.status === "Desativado")) {
+        await supabase.auth.signOut();
+        sessionStorage.setItem("parceiro_blocked_inactive", "1");
+        throw redirect({ to: "/parceiro/login" });
+      }
+
       if (!vendedor) {
         // Se o vendedor não existe na tabela, pode ser que o admin deletou ele (vendedores e auth.users).
         // Validamos diretamente no servidor do Supabase se o login (auth) ainda existe e é válido.
@@ -57,8 +64,6 @@ export const Route = createFileRoute("/parceiro")({
           throw redirect({ to: "/parceiro/login" });
         }
       }
-
-      // Não bloqueia o acesso globalmente aqui para não deslogar o usuário.
     } catch (err: any) {
       // Se o erro é um redirect do TanStack Router, repassa normalmente
       if (err?.isRedirect || err?.message === "redirect") throw err;

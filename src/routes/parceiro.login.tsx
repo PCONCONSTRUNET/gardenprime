@@ -32,6 +32,9 @@ function LoginParceiro() {
     if (sessionStorage.getItem("parceiro_blocked") === "1") {
       setError("⚠️ Sua conta ainda está aguardando aprovação. Aguarde o contato do administrador.");
       sessionStorage.removeItem("parceiro_blocked");
+    } else if (sessionStorage.getItem("parceiro_blocked_inactive") === "1") {
+      setError("⚠️ Seu cadastro está desativado. Entre em contato com a administração.");
+      sessionStorage.removeItem("parceiro_blocked_inactive");
     }
   }, []);
 
@@ -41,12 +44,42 @@ function LoginParceiro() {
     setError("");
 
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (signInError) throw signInError;
+
+      // Validação do status do vendedor parceiro
+      if (authData?.user) {
+        let { data: vendedor } = await supabase
+          .from("vendedores")
+          .select("id, status, nome")
+          .eq("user_id", authData.user.id)
+          .maybeSingle();
+
+        if (!vendedor) {
+          const { data: vByEmail } = await supabase
+            .from("vendedores")
+            .select("id, status, nome")
+            .ilike("email", email.trim())
+            .maybeSingle();
+          vendedor = vByEmail;
+        }
+
+        if (vendedor && (vendedor.status === "Inativo" || vendedor.status === "Desativado")) {
+          await supabase.auth.signOut();
+          setError("⚠️ Seu cadastro está desativado pelo administrador. Acesso não permitido.");
+          return;
+        }
+
+        if (vendedor && vendedor.status === "Aguardando Aprovação") {
+          await supabase.auth.signOut();
+          setError("⚠️ Sua conta ainda está aguardando aprovação. Aguarde o contato do administrador.");
+          return;
+        }
+      }
 
       // Sucesso! Redireciona para onde o usuário tentou ir (ou dashboard)
       const redirectUrl = sessionStorage.getItem("parceiro_redirect");
