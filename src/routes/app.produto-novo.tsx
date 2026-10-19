@@ -14,6 +14,10 @@ import {
   X,
   Plus,
   Scale,
+  Pencil,
+  Trash2,
+  Settings2,
+  Check,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
@@ -135,6 +139,65 @@ function NovoProduto() {
   const [isNovaCategoria, setIsNovaCategoria] = useState(false);
   const [novaCategoria, setNovaCategoria] = useState("");
   const [corInput, setCorInput] = useState("");
+
+  // Category management modal state
+  const [isCatModalOpen, setIsCatModalOpen] = useState(false);
+  const [editingCat, setEditingCat] = useState<string | null>(null);
+  const [editingCatValue, setEditingCatValue] = useState("");
+  const [catActionLoading, setCatActionLoading] = useState(false);
+
+  const handleRenameCategoria = async (oldName: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === oldName) {
+      setEditingCat(null);
+      return;
+    }
+    setCatActionLoading(true);
+    try {
+      // Update all products that use the old category name
+      const { error } = await supabase
+        .from("produtos")
+        .update({ categoria: trimmed })
+        .eq("categoria", oldName);
+      if (error) throw error;
+      setCategoriasDB((prev) => prev.map((c) => (c === oldName ? trimmed : c)));
+      if (produto.categoria === oldName) setProduto((p) => ({ ...p, categoria: trimmed }));
+      setEditingCat(null);
+    } catch (err: any) {
+      alert("Erro ao renomear categoria: " + (err.message || "Erro desconhecido."));
+    } finally {
+      setCatActionLoading(false);
+    }
+  };
+
+  const handleDeleteCategoria = async (catName: string) => {
+    const count = await supabase
+      .from("produtos")
+      .select("id", { count: "exact", head: true })
+      .eq("categoria", catName);
+    const qtd = count.count || 0;
+    const msg =
+      qtd > 0
+        ? `A categoria "${catName}" está sendo usada por ${qtd} produto(s). Ao excluir, esses produtos ficarão sem categoria. Deseja continuar?`
+        : `Excluir a categoria "${catName}"?`;
+    if (!window.confirm(msg)) return;
+    setCatActionLoading(true);
+    try {
+      if (qtd > 0) {
+        const { error } = await supabase
+          .from("produtos")
+          .update({ categoria: null })
+          .eq("categoria", catName);
+        if (error) throw error;
+      }
+      setCategoriasDB((prev) => prev.filter((c) => c !== catName));
+      if (produto.categoria === catName) setProduto((p) => ({ ...p, categoria: "" }));
+    } catch (err: any) {
+      alert("Erro ao excluir categoria: " + (err.message || "Erro desconhecido."));
+    } finally {
+      setCatActionLoading(false);
+    }
+  };
 
   const fetchCategorias = async () => {
     try {
@@ -880,7 +943,107 @@ function NovoProduto() {
             </div>
 
             <div className="space-y-2">
-              <Label>Categoria</Label>
+              <div className="flex items-center justify-between">
+                <Label>Categoria</Label>
+                <Dialog open={isCatModalOpen} onOpenChange={setIsCatModalOpen}>
+                  <DialogTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
+                    >
+                      <Settings2 className="h-3 w-3" />
+                      Gerenciar
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Gerenciar Categorias</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
+                      {categoriasDB.length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-6">Nenhuma categoria cadastrada.</p>
+                      )}
+                      {categoriasDB.map((cat) => (
+                        <div
+                          key={cat}
+                          className="flex items-center gap-2 rounded-md border px-3 py-2 group hover:bg-muted/40 transition-colors"
+                        >
+                          {editingCat === cat ? (
+                            <>
+                              <Input
+                                autoFocus
+                                className="h-7 text-sm flex-1"
+                                value={editingCatValue}
+                                onChange={(e) => setEditingCatValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") handleRenameCategoria(cat, editingCatValue);
+                                  if (e.key === "Escape") setEditingCat(null);
+                                }}
+                              />
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-success hover:text-success hover:bg-success/10 flex-shrink-0"
+                                disabled={catActionLoading}
+                                onClick={() => handleRenameCategoria(cat, editingCatValue)}
+                                title="Confirmar renomeação"
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 flex-shrink-0"
+                                onClick={() => setEditingCat(null)}
+                                title="Cancelar"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <span className="flex-1 text-sm truncate">{cat}</span>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                                onClick={() => {
+                                  setEditingCat(cat);
+                                  setEditingCatValue(cat);
+                                }}
+                                title="Renomear categoria"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
+                                disabled={catActionLoading}
+                                onClick={() => handleDeleteCategoria(cat)}
+                                title="Excluir categoria"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button type="button" variant="outline">Fechar</Button>
+                      </DialogClose>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
               {!isNovaCategoria ? (
                 <select
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
