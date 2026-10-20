@@ -16,6 +16,7 @@ import {
   ChevronsUpDown,
   Save,
   Plus,
+  Minus,
   Check,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -191,8 +192,92 @@ function VendasParceiro() {
     setRemovedIds((prev) => [...prev, itemId]);
   };
 
+  const handleChangeExistingQty = (itemId: string, delta: number) => {
+    setEditItens((prev) =>
+      prev.map((i) => {
+        if (i.id !== itemId) return i;
+        const currentQ = typeof i.quantidade === "number" ? i.quantidade : (parseInt(String(i.quantidade)) || 1);
+        const novaQtd = Math.max(1, currentQ + delta);
+        const uVal = typeof i.valor_unitario === "number" ? i.valor_unitario : (parseFloat(String(i.valor_unitario)) || 0);
+        return { ...i, quantidade: novaQtd, subtotal: novaQtd * uVal };
+      })
+    );
+  };
+
+  const handleSetExistingQty = (itemId: string, val: string) => {
+    setEditItens((prev) =>
+      prev.map((i) => {
+        if (i.id !== itemId) return i;
+        if (val === "") {
+          return { ...i, quantidade: "", subtotal: 0 };
+        }
+        const novaQtd = parseInt(val);
+        if (isNaN(novaQtd) || novaQtd < 0) return i;
+        const uVal = typeof i.valor_unitario === "number" ? i.valor_unitario : (parseFloat(String(i.valor_unitario)) || 0);
+        return { ...i, quantidade: novaQtd, subtotal: novaQtd * uVal };
+      })
+    );
+  };
+
+  const handleSetExistingUnitPrice = (itemId: string, val: string | number) => {
+    setEditItens((prev) =>
+      prev.map((i) => {
+        if (i.id !== itemId) return i;
+        if (val === "") {
+          return { ...i, valor_unitario: "", subtotal: 0 };
+        }
+        const newU = typeof val === "number" ? val : parseFloat(val);
+        if (isNaN(newU) || newU < 0) return i;
+        const qVal = typeof i.quantidade === "number" ? i.quantidade : (parseInt(String(i.quantidade)) || 0);
+        return { ...i, valor_unitario: newU, subtotal: qVal * newU };
+      })
+    );
+  };
+
   const handleRemoveNewItem = (idx: number) => {
     setNewItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleChangeNewItemQty = (idx: number, delta: number) => {
+    setNewItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== idx) return item;
+        const currentQ = typeof item.quantidade === "number" ? item.quantidade : (parseInt(String(item.quantidade)) || 1);
+        const novaQtd = Math.max(1, currentQ + delta);
+        const uVal = typeof item.valor_unitario === "number" ? item.valor_unitario : (parseFloat(String(item.valor_unitario)) || 0);
+        return { ...item, quantidade: novaQtd, subtotal: novaQtd * uVal };
+      })
+    );
+  };
+
+  const handleSetNewItemQty = (idx: number, val: string) => {
+    setNewItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== idx) return item;
+        if (val === "") {
+          return { ...item, quantidade: "", subtotal: 0 };
+        }
+        const novaQtd = parseInt(val);
+        if (isNaN(novaQtd) || novaQtd < 0) return item;
+        const uVal = typeof item.valor_unitario === "number" ? item.valor_unitario : (parseFloat(String(item.valor_unitario)) || 0);
+        return { ...item, quantidade: novaQtd, subtotal: novaQtd * uVal };
+      })
+    );
+  };
+
+  const handleSetNewItemUnitPrice = (idx: number, val: string | number) => {
+    setNewItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== idx) return item;
+        if (val === "") {
+          return { ...item, valor_unitario: "", subtotal: 0 };
+        }
+        const newU = typeof val === "number" ? val : parseFloat(val);
+        if (isNaN(newU) || newU < 0) return i;
+        const qVal = typeof item.quantidade === "number" ? item.quantidade : (parseInt(String(item.quantidade)) || 0);
+        return { ...item, valor_unitario: newU, subtotal: qVal * newU };
+      })
+    );
   };
 
   const handleSelectProduto = (prodId: string) => {
@@ -243,7 +328,7 @@ function VendasParceiro() {
             if (prod) {
               await supabase
                 .from("produtos")
-                .update({ estoque: prod.estoque + removed.quantidade })
+                .update({ estoque: prod.estoque + Number(removed.quantidade || 0) })
                 .eq("id", removed.produto_id);
             }
           }
@@ -251,8 +336,53 @@ function VendasParceiro() {
         await supabase.from("vendas_itens").delete().eq("id", itemId);
       }
 
-      // 2. Inserir novos itens
+      // 2. Atualizar itens existentes alterados (quantidade e/ou valor unitário)
+      for (const item of editItens) {
+        const qNum = typeof item.quantidade === "number" ? item.quantidade : (parseInt(String(item.quantidade)) || 1);
+        const uNum = typeof item.valor_unitario === "number" ? item.valor_unitario : (parseFloat(String(item.valor_unitario)) || 0);
+        const subtotal = qNum * uNum;
+
+        const original = vendaItens.find((i) => i.id === item.id);
+        if (original && isVendaComEstoque) {
+          const diff = qNum - Number(original.quantidade || 0);
+          if (diff !== 0) {
+            const { data: prod } = await supabase
+              .from("produtos")
+              .select("estoque")
+              .eq("id", item.produto_id)
+              .single();
+            if (prod) {
+              const novoEstoque = prod.estoque - diff;
+              if (diff > 0 && novoEstoque < 0) {
+                alert(`Estoque insuficiente para ${item.produto?.nome || "produto"}. Disponível: ${prod.estoque}`);
+                setSavingItems(false);
+                return;
+              }
+              await supabase
+                .from("produtos")
+                .update({ estoque: novoEstoque })
+                .eq("id", item.produto_id);
+            }
+          }
+        }
+
+        const { error: updErr } = await supabase
+          .from("vendas_itens")
+          .update({
+            quantidade: qNum,
+            valor_unitario: uNum,
+            subtotal: subtotal,
+          })
+          .eq("id", item.id);
+        if (updErr) throw updErr;
+      }
+
+      // 3. Inserir novos itens
       for (const item of newItems) {
+        const qNum = typeof item.quantidade === "number" ? item.quantidade : (parseInt(String(item.quantidade)) || 1);
+        const uNum = typeof item.valor_unitario === "number" ? item.valor_unitario : (parseFloat(String(item.valor_unitario)) || 0);
+        const subtotal = qNum * uNum;
+
         if (isVendaComEstoque) {
           const { data: prod } = await supabase
             .from("produtos")
@@ -260,7 +390,7 @@ function VendasParceiro() {
             .eq("id", item.produto_id)
             .single();
           if (prod) {
-            const novoEstoque = prod.estoque - item.quantidade;
+            const novoEstoque = prod.estoque - qNum;
             if (novoEstoque < 0) {
               alert(`Estoque insuficiente para ${item.nome}. Disponível: ${prod.estoque}`);
               setSavingItems(false);
@@ -272,43 +402,47 @@ function VendasParceiro() {
               .eq("id", item.produto_id);
           }
         }
-        await supabase.from("vendas_itens").insert({
+        const { error: insErr } = await supabase.from("vendas_itens").insert({
           venda_id: vendaId,
           produto_id: item.produto_id,
-          quantidade: item.quantidade,
-          valor_unitario: item.valor_unitario,
-          subtotal: item.subtotal,
+          quantidade: qNum,
+          valor_unitario: uNum,
+          subtotal: subtotal,
         });
+        if (insErr) throw insErr;
       }
 
-      // 3. Recalcular total
+      // 4. Recalcular total da venda
       const { data: allItens } = await supabase
         .from("vendas_itens")
         .select("subtotal")
         .eq("venda_id", vendaId);
 
       const novoTotal = (allItens || []).reduce(
-        (acc: number, i: any) => acc + Number(i.subtotal),
+        (acc: number, i: any) => acc + Number(i.subtotal || 0),
         0
       );
 
-      await supabase.from("vendas").update({ valor_total: novoTotal }).eq("id", vendaId);
+      await supabase
+        .from("vendas")
+        .update({ valor_total: novoTotal, subtotal: novoTotal })
+        .eq("id", vendaId);
 
       await supabase
         .from("contas_receber")
         .update({ valor: novoTotal })
         .eq("venda_id", vendaId);
 
-      // 4. Recarregar itens
+      // 5. Recarregar itens
       const { data: updatedItens } = await supabase
         .from("vendas_itens")
         .select("*, produto:produtos(nome, codigo, emoji, imagem, valor, estoque)")
         .eq("venda_id", vendaId);
 
       setVendaItens(updatedItens || []);
-      setSelectedVenda((prev: any) => ({ ...prev, valor_total: novoTotal }));
+      setSelectedVenda((prev: any) => ({ ...prev, valor_total: novoTotal, subtotal: novoTotal }));
       setVendas((prev) =>
-        prev.map((v) => (v.id === vendaId ? { ...v, valor_total: novoTotal } : v))
+        prev.map((v) => (v.id === vendaId ? { ...v, valor_total: novoTotal, subtotal: novoTotal } : v))
       );
 
       setIsEditingItems(false);
@@ -316,6 +450,7 @@ function VendasParceiro() {
       setRemovedIds([]);
       setNewItems([]);
     } catch (err: any) {
+      console.error("Erro ao salvar itens:", err);
       alert("Erro ao salvar itens: " + err.message);
     } finally {
       setSavingItems(false);
@@ -411,8 +546,8 @@ function VendasParceiro() {
 
   // Preview total while editing
   const editTotal = [
-    ...editItens.map((i) => Number(i.subtotal)),
-    ...newItems.map((i) => i.subtotal),
+    ...editItens.map((i) => Number(i.subtotal) || 0),
+    ...newItems.map((i) => Number(i.subtotal) || 0),
   ].reduce((a, b) => a + b, 0);
 
   return (
@@ -695,63 +830,206 @@ function VendasParceiro() {
                 {/* ── Modo edição ── */}
                 {isEditingItems ? (
                   <div className="space-y-3">
-                    <div className="max-h-[200px] overflow-y-auto divide-y border rounded-xl">
+                    <div className="max-h-[300px] overflow-y-auto space-y-2 p-1">
                       {editItens.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between p-3 bg-slate-50/50">
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                            <div className="text-xl">{item.produto?.emoji || "📦"}</div>
-                            <div className="min-w-0">
-                              <p className="font-semibold text-sm text-slate-800 truncate">
-                                {item.produto?.nome || "Produto Excluído"}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {item.quantidade}x R$ {Number(item.valor_unitario).toFixed(2).replace(".", ",")}
-                              </p>
+                        <div key={item.id} className="p-3 bg-white border border-slate-200/90 rounded-2xl shadow-xs space-y-2.5 transition-all">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              <div className="w-8 h-8 rounded-xl bg-slate-50 border flex items-center justify-center text-lg shrink-0 overflow-hidden">
+                                {item.produto?.imagem ? (
+                                  <img src={item.produto.imagem} alt={item.produto?.nome} className="w-full h-full object-cover" />
+                                ) : (
+                                  item.produto?.emoji || "📦"
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-bold text-xs sm:text-sm text-slate-800 truncate">
+                                  {item.produto?.nome || "Produto Excluído"}
+                                </p>
+                                {item.produto?.codigo && (
+                                  <p className="text-[10px] text-slate-400 font-medium">Cód: {item.produto.codigo}</p>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <p className="font-bold text-brand text-sm">
-                              R$ {Number(item.subtotal).toFixed(2).replace(".", ",")}
-                            </p>
                             <button
+                              type="button"
                               onClick={() => handleRemoveExistingItem(item.id)}
-                              className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                              className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Remover item"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
-                        </div>
-                      ))}
-                      {newItems.map((item, idx) => (
-                        <div key={`new-${idx}`} className="flex items-center justify-between p-3 bg-emerald-50/50">
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                            <div className="text-xl">{item.emoji || "📦"}</div>
-                            <div className="min-w-0">
-                              <p className="font-semibold text-sm text-slate-800 truncate">
-                                {item.nome}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {item.quantidade}x R$ {Number(item.valor_unitario).toFixed(2).replace(".", ",")}
+
+                          <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                            <div className="flex items-center gap-2">
+                              {/* Stepper e Input Qtd */}
+                              <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleChangeExistingQty(item.id, -1)}
+                                  className="w-6 h-6 flex items-center justify-center bg-white rounded-md shadow-xs hover:bg-slate-50 active:scale-95 text-slate-700"
+                                  title="Diminuir"
+                                >
+                                  <Minus className="w-3 h-3" />
+                                </button>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={item.quantidade === "" ? "" : item.quantidade}
+                                  onChange={(e) => handleSetExistingQty(item.id, e.target.value)}
+                                  onBlur={() => {
+                                    if (item.quantidade === "" || parseInt(String(item.quantidade)) <= 0) {
+                                      handleSetExistingQty(item.id, "1");
+                                    }
+                                  }}
+                                  className="w-12 text-center text-xs font-black text-slate-800 bg-transparent border-0 outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  title="Quantidade"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleChangeExistingQty(item.id, 1)}
+                                  className="w-6 h-6 flex items-center justify-center bg-white rounded-md shadow-xs hover:bg-slate-50 active:scale-95 text-slate-700"
+                                  title="Aumentar"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                </button>
+                              </div>
+
+                              {/* Input Valor Unitário */}
+                              <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 focus-within:border-emerald-600 focus-within:bg-white rounded-lg px-2 py-0.5 transition-all">
+                                <span className="text-[11px] font-bold text-slate-500 select-none">R$</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={item.valor_unitario === "" ? "" : item.valor_unitario}
+                                  onChange={(e) => handleSetExistingUnitPrice(item.id, e.target.value)}
+                                  onBlur={() => {
+                                    if (item.valor_unitario === "" || isNaN(Number(item.valor_unitario))) {
+                                      handleSetExistingUnitPrice(item.id, "0");
+                                    }
+                                  }}
+                                  className="w-16 text-xs font-bold text-slate-800 bg-transparent outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  title="Editar valor unitário"
+                                  placeholder="0,00"
+                                />
+                                <span className="text-[10px] font-semibold text-slate-400 select-none">un</span>
+                              </div>
+                            </div>
+
+                            {/* Subtotal */}
+                            <div className="text-right">
+                              <p className="font-black text-brand text-sm sm:text-base">
+                                R${" "}
+                                {Number(item.subtotal || 0)
+                                  .toFixed(2)
+                                  .replace(".", ",")}
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <Badge variant="outline" className="text-[10px] border-emerald-400 text-emerald-700">novo</Badge>
-                            <p className="font-bold text-brand text-sm">
-                              R$ {Number(item.subtotal).toFixed(2).replace(".", ",")}
-                            </p>
+                        </div>
+                      ))}
+
+                      {newItems.map((item, idx) => (
+                        <div key={`new-${idx}`} className="p-3 bg-emerald-50/50 border border-emerald-200/80 rounded-2xl shadow-xs space-y-2.5 transition-all">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              <div className="w-8 h-8 rounded-xl bg-white border border-emerald-100 flex items-center justify-center text-lg shrink-0 overflow-hidden">
+                                {item.emoji || "📦"}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5">
+                                  <Badge variant="outline" className="text-[9px] border-emerald-400 text-emerald-700 px-1 py-0 h-4">novo</Badge>
+                                  <p className="font-bold text-xs sm:text-sm text-slate-800 truncate">
+                                    {item.nome}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
                             <button
+                              type="button"
                               onClick={() => handleRemoveNewItem(idx)}
-                              className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                              className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Remover item"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 pt-1 border-t border-emerald-100">
+                            <div className="flex items-center gap-2">
+                              {/* Stepper e Input Qtd */}
+                              <div className="flex items-center gap-1 bg-white rounded-lg p-0.5 border border-emerald-200">
+                                <button
+                                  type="button"
+                                  onClick={() => handleChangeNewItemQty(idx, -1)}
+                                  className="w-6 h-6 flex items-center justify-center bg-slate-50 rounded-md shadow-xs hover:bg-slate-100 active:scale-95 text-slate-700"
+                                  title="Diminuir"
+                                >
+                                  <Minus className="w-3 h-3" />
+                                </button>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={item.quantidade === "" ? "" : item.quantidade}
+                                  onChange={(e) => handleSetNewItemQty(idx, e.target.value)}
+                                  onBlur={() => {
+                                    if (item.quantidade === "" || parseInt(String(item.quantidade)) <= 0) {
+                                      handleSetNewItemQty(idx, "1");
+                                    }
+                                  }}
+                                  className="w-12 text-center text-xs font-black text-slate-800 bg-transparent border-0 outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  title="Quantidade"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleChangeNewItemQty(idx, 1)}
+                                  className="w-6 h-6 flex items-center justify-center bg-slate-50 rounded-md shadow-xs hover:bg-slate-100 active:scale-95 text-slate-700"
+                                  title="Aumentar"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                </button>
+                              </div>
+
+                              {/* Input Valor Unitário */}
+                              <div className="flex items-center gap-1 bg-white border border-emerald-200 focus-within:border-emerald-600 rounded-lg px-2 py-0.5 transition-all">
+                                <span className="text-[11px] font-bold text-slate-500 select-none">R$</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={item.valor_unitario === "" ? "" : item.valor_unitario}
+                                  onChange={(e) => handleSetNewItemUnitPrice(idx, e.target.value)}
+                                  onBlur={() => {
+                                    if (item.valor_unitario === "" || isNaN(Number(item.valor_unitario))) {
+                                      handleSetNewItemUnitPrice(idx, "0");
+                                    }
+                                  }}
+                                  className="w-16 text-xs font-bold text-slate-800 bg-transparent outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  title="Editar valor unitário"
+                                  placeholder="0,00"
+                                />
+                                <span className="text-[10px] font-semibold text-slate-400 select-none">un</span>
+                              </div>
+                            </div>
+
+                            {/* Subtotal */}
+                            <div className="text-right">
+                              <p className="font-black text-brand text-sm sm:text-base">
+                                R${" "}
+                                {Number(item.subtotal || 0)
+                                  .toFixed(2)
+                                  .replace(".", ",")}
+                              </p>
+                            </div>
                           </div>
                         </div>
                       ))}
+
                       {editItens.length === 0 && newItems.length === 0 && (
-                        <div className="p-4 text-center text-sm text-muted-foreground">
-                          Nenhum item. Adicione abaixo.
+                        <div className="p-6 text-center text-sm text-muted-foreground bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                          Nenhum item restante. Adicione produtos abaixo.
                         </div>
                       )}
                     </div>

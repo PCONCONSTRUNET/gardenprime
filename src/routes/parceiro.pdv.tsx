@@ -435,6 +435,53 @@ function ParceiroPDV() {
               window.history.replaceState({}, "", "/parceiro/pdv");
             }
           }
+
+          const draftId = params.get("draft_id");
+          if (draftId) {
+            const { data: vendaDraft } = await supabase
+              .from("vendas")
+              .select("*, clientes(*)")
+              .eq("id", draftId)
+              .single();
+
+            if (vendaDraft) {
+              if (vendaDraft.clientes) {
+                setClientForm((prev: any) => ({
+                  ...prev,
+                  nome: vendaDraft.clientes.nome || "",
+                  documento: vendaDraft.clientes.cpf_cnpj || "",
+                  telefone: vendaDraft.clientes.telefone || "",
+                  cep: vendaDraft.clientes.cep || "",
+                  endereco: vendaDraft.clientes.endereco || "",
+                  numero: vendaDraft.clientes.numero || "",
+                  bairro: vendaDraft.clientes.bairro || "",
+                  cidade: vendaDraft.clientes.cidade || "",
+                  uf: vendaDraft.clientes.uf || "",
+                  pagamento: vendaDraft.condicao_pagamento || "À Vista",
+                }));
+              }
+              const { data: draftItens } = await supabase
+                .from("vendas_itens")
+                .select("*, produtos(*)")
+                .eq("venda_id", draftId);
+
+              if (draftItens && draftItens.length > 0) {
+                setCart(
+                  draftItens.map((di: any) => ({
+                    id: di.produto_id,
+                    p: di.produtos?.nome || "Produto",
+                    c: di.produtos?.codigo,
+                    q: di.quantidade,
+                    u: Number(di.valor_unitario),
+                    t: Number(di.subtotal || di.quantidade * di.valor_unitario),
+                    emoji: di.produtos?.emoji,
+                    imagem: di.produtos?.imagem,
+                  }))
+                );
+              }
+              window.history.replaceState({}, "", "/parceiro/pdv");
+            }
+          }
         }
       } catch (err: any) {
         console.error("Erro na inicialização do PDV:", err);
@@ -473,10 +520,11 @@ function ParceiroPDV() {
     setCart((prev) => {
       const updated = prev.map((i) => {
         if (i.id === id) {
-          const currentQ = typeof i.q === "number" ? i.q : 0;
+          const currentQ = typeof i.q === "number" ? i.q : (parseInt(String(i.q)) || 0);
           const newQ = currentQ + delta;
           if (newQ <= 0) return null;
-          return { ...i, q: newQ, t: newQ * i.u };
+          const uVal = typeof i.u === "number" ? i.u : (parseFloat(String(i.u)) || 0);
+          return { ...i, q: newQ, t: newQ * uVal };
         }
         return i;
       });
@@ -493,19 +541,25 @@ function ParceiroPDV() {
           }
           const newQ = parseInt(val);
           if (isNaN(newQ) || newQ < 0) return i;
-          return { ...i, q: newQ, t: newQ * i.u };
+          const uVal = typeof i.u === "number" ? i.u : (parseFloat(String(i.u)) || 0);
+          return { ...i, q: newQ, t: newQ * uVal };
         }
         return i;
       }),
     );
   };
 
-  const setUnitPrice = (id: string, newU: number) => {
+  const setUnitPrice = (id: string, val: string | number) => {
     setCart((prev) =>
       prev.map((i) => {
         if (i.id === id) {
-          if (newU < 0) return i;
-          return { ...i, u: newU, t: i.q * newU };
+          if (val === "") {
+            return { ...i, u: "", t: 0 };
+          }
+          const newU = typeof val === "number" ? val : parseFloat(val);
+          if (isNaN(newU) || newU < 0) return i;
+          const qVal = typeof i.q === "number" ? i.q : (parseInt(String(i.q)) || 0);
+          return { ...i, u: newU, t: qVal * newU };
         }
         return i;
       }),
@@ -516,7 +570,7 @@ function ParceiroPDV() {
     setCart((prev) => prev.filter((i) => i.id !== id));
   };
 
-  const rawSubtotal = cart.reduce((s, i) => s + i.t, 0);
+  const rawSubtotal = cart.reduce((s, i) => s + (Number(i.t) || 0), 0);
   const subtotal =
     descontoPercentual > 0 ? rawSubtotal * (1 - descontoPercentual / 100) : rawSubtotal;
   const descontoAplicado = rawSubtotal - subtotal;
@@ -645,13 +699,17 @@ function ParceiroPDV() {
       if (vendaError) throw vendaError;
 
       // 3. Insere os itens
-      const itensToInsert = cart.map((i) => ({
-        venda_id: vendaData.id,
-        produto_id: i.id,
-        quantidade: i.q,
-        valor_unitario: i.u,
-        subtotal: i.t,
-      }));
+      const itensToInsert = cart.map((i) => {
+        const qNum = typeof i.q === "number" ? i.q : (parseInt(String(i.q)) || 1);
+        const uNum = typeof i.u === "number" ? i.u : (parseFloat(String(i.u)) || 0);
+        return {
+          venda_id: vendaData.id,
+          produto_id: i.id,
+          quantidade: qNum,
+          valor_unitario: uNum,
+          subtotal: qNum * uNum,
+        };
+      });
 
       const { error: itensError } = await supabase.from("vendas_itens").insert(itensToInsert);
       if (itensError) throw itensError;
@@ -764,13 +822,17 @@ function ParceiroPDV() {
       if (vendaError) throw vendaError;
 
       // Insere os itens
-      const itensToInsert = cart.map((i) => ({
-        venda_id: vendaData.id,
-        produto_id: i.id,
-        quantidade: i.q,
-        valor_unitario: i.u,
-        subtotal: i.t,
-      }));
+      const itensToInsert = cart.map((i) => {
+        const qNum = typeof i.q === "number" ? i.q : (parseInt(String(i.q)) || 1);
+        const uNum = typeof i.u === "number" ? i.u : (parseFloat(String(i.u)) || 0);
+        return {
+          venda_id: vendaData.id,
+          produto_id: i.id,
+          quantidade: qNum,
+          valor_unitario: uNum,
+          subtotal: qNum * uNum,
+        };
+      });
 
       const { error: itensError } = await supabase.from("vendas_itens").insert(itensToInsert);
       if (itensError) throw itensError;
@@ -846,13 +908,17 @@ function ParceiroPDV() {
         vendedor_nome: vendedorInfo?.nome,
       };
 
-      const itemsList = cart.map((i) => ({
-        produto_nome: i.p,
-        codigo: i.c,
-        quantidade: i.q,
-        valor_unitario: i.u,
-        subtotal: i.t,
-      }));
+      const itemsList = cart.map((i) => {
+        const qNum = typeof i.q === "number" ? i.q : (parseInt(String(i.q)) || 1);
+        const uNum = typeof i.u === "number" ? i.u : (parseFloat(String(i.u)) || 0);
+        return {
+          produto_nome: i.p,
+          codigo: i.c,
+          quantidade: qNum,
+          valor_unitario: uNum,
+          subtotal: qNum * uNum,
+        };
+      });
 
       await shareOrderWhatsApp(orderObj, itemsList);
     } finally {
@@ -1161,15 +1227,66 @@ function ParceiroPDV() {
                         <div className="flex-1 flex flex-col justify-between py-0.5">
                           <div>
                             <p className="text-xs font-bold text-slate-800 leading-tight line-clamp-2">{i.p}</p>
-                            <p className="text-[10px] text-slate-500 mt-1">R$ {i.u.toFixed(2).replace(".", ",")} un</p>
-                          </div>
-                          <div className="flex items-center justify-between mt-2">
-                            <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
-                              <button onClick={() => updateQuantity(i.id, -1)} className="w-6 h-6 flex items-center justify-center bg-white rounded-md shadow-sm"><Minus className="w-3 h-3" /></button>
-                              <span className="text-xs font-bold w-4 text-center">{i.q}</span>
-                              <button onClick={() => updateQuantity(i.id, 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded-md shadow-sm"><Plus className="w-3 h-3" /></button>
+                            <div className="flex items-center gap-1.5 mt-1.5">
+                              <div className="flex items-center gap-1 bg-slate-50 hover:bg-slate-100/80 focus-within:bg-white border border-slate-200 focus-within:border-emerald-600 focus-within:ring-2 focus-within:ring-emerald-500/20 rounded-lg px-2 py-0.5 transition-all">
+                                <span className="text-[11px] font-bold text-slate-500 select-none">R$</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={i.u === "" ? "" : i.u}
+                                  onChange={(e) => setUnitPrice(i.id, e.target.value)}
+                                  onBlur={() => {
+                                    if (i.u === "" || isNaN(Number(i.u))) {
+                                      setUnitPrice(i.id, 0);
+                                    }
+                                  }}
+                                  className="w-16 text-xs font-bold text-slate-800 bg-transparent outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  title="Clique para editar o preço unitário"
+                                  placeholder="0,00"
+                                />
+                                <span className="text-[10px] font-semibold text-slate-400 select-none">un</span>
+                              </div>
                             </div>
-                            <p className="text-sm font-black text-slate-900">R$ {i.t.toFixed(2).replace(".", ",")}</p>
+                          </div>
+                          <div className="flex items-center justify-between mt-2.5">
+                            <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-0.5">
+                              <button
+                                type="button"
+                                onClick={() => updateQuantity(i.id, -1)}
+                                className="w-7 h-7 flex items-center justify-center bg-white rounded-lg shadow-xs hover:bg-slate-50 active:scale-95 text-slate-700 transition-all"
+                                title="Diminuir quantidade"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <input
+                                type="number"
+                                min="1"
+                                value={i.q === "" ? "" : i.q}
+                                onChange={(e) => setQuantity(i.id, e.target.value)}
+                                onBlur={() => {
+                                  if (i.q === "" || parseInt(String(i.q)) <= 0) {
+                                    setQuantity(i.id, "1");
+                                  }
+                                }}
+                                className="w-12 text-center text-xs font-black text-slate-800 bg-transparent border-0 outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                title="Digitar quantidade"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => updateQuantity(i.id, 1)}
+                                className="w-7 h-7 flex items-center justify-center bg-white rounded-lg shadow-xs hover:bg-slate-50 active:scale-95 text-slate-700 transition-all"
+                                title="Aumentar quantidade"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <p className="text-sm font-black text-slate-900">
+                              R${" "}
+                              {Number(i.t || 0)
+                                .toFixed(2)
+                                .replace(".", ",")}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -1262,13 +1379,17 @@ function ParceiroPDV() {
                             : clientForm.pagamento,
                         vendedor_nome: vendedorInfo?.nome,
                       };
-                      const itemsList = cart.map((i) => ({
-                        produto_nome: i.p,
-                        codigo: i.c,
-                        quantidade: i.q,
-                        valor_unitario: i.u,
-                        subtotal: i.t,
-                      }));
+                      const itemsList = cart.map((i) => {
+                        const qNum = typeof i.q === "number" ? i.q : (parseInt(String(i.q)) || 1);
+                        const uNum = typeof i.u === "number" ? i.u : (parseFloat(String(i.u)) || 0);
+                        return {
+                          produto_nome: i.p,
+                          codigo: i.c,
+                          quantidade: qNum,
+                          valor_unitario: uNum,
+                          subtotal: qNum * uNum,
+                        };
+                      });
                       if (orderObj && orderObj.id) {
                         openOrderPdf(orderObj.id);
                       }
