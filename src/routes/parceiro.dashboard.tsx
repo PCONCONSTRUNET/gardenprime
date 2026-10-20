@@ -801,7 +801,7 @@ function ParceiroDashboard() {
       </div>
 
       <Dialog open={isSaleDetailsOpen} onOpenChange={setIsSaleDetailsOpen}>
-        <DialogContent className="sm:max-w-[440px]">
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-[480px] max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
             <DialogTitle>
               {isOrderDav(selectedSaleForDetails || {}) ? "Ficha do Orçamento" : "Ficha do Pedido"}
@@ -828,17 +828,17 @@ function ParceiroDashboard() {
 
                 {/* ── Status & Responsável pela Entrega ── */}
                 {!isOrderDav(selectedSaleForDetails || {}) && selectedSaleForDetails?.status !== "Cancelado" && (
-                  <div className="mt-3 bg-slate-50 border border-slate-200/90 rounded-2xl p-3.5 space-y-3 text-left">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                  <div className="mt-3 bg-slate-50 border border-slate-200/90 rounded-2xl p-3 sm:p-3.5 space-y-3 text-left">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
                           <Truck className="w-4 h-4" />
                         </div>
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider truncate">
                             Status & Entrega
                           </h4>
-                          <p className="text-[11px] text-muted-foreground">
+                          <p className="text-[11px] text-muted-foreground truncate">
                             Controle de frete e entregador
                           </p>
                         </div>
@@ -846,7 +846,7 @@ function ParceiroDashboard() {
                       <Badge
                         variant="outline"
                         className={cn(
-                          "text-[10px] font-bold px-2 py-0.5",
+                          "text-[10px] font-bold px-2 py-0.5 shrink-0",
                           deliveryStatus === "Entregue"
                             ? "bg-emerald-100 text-emerald-800 border-emerald-300"
                             : deliveryStatus === "Em Transporte" || deliveryStatus === "Em rota" || deliveryStatus === "EM_ROTA"
@@ -868,47 +868,47 @@ function ParceiroDashboard() {
                         type="button"
                         onClick={() => setDeliveryStatus("Aguardando Entrega")}
                         className={cn(
-                          "py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1",
+                          "py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 min-w-0",
                           deliveryStatus === "Aguardando Entrega" || (!deliveryStatus && selectedSaleForDetails?.status !== "Entregue" && selectedSaleForDetails?.status !== "Em Transporte")
                             ? "bg-amber-500 text-white border-amber-600 shadow-sm"
                             : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
                         )}
                       >
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>Aguardando</span>
+                        <Clock className="w-3.5 h-3.5 shrink-0" />
+                        <span className="text-[11px] truncate w-full text-center">Aguardando</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setDeliveryStatus("Em Transporte")}
                         className={cn(
-                          "py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1",
+                          "py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 min-w-0",
                           deliveryStatus === "Em Transporte" || deliveryStatus === "Em rota" || deliveryStatus === "EM_ROTA"
                             ? "bg-blue-600 text-white border-blue-700 shadow-sm"
                             : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
                         )}
                       >
-                        <Truck className="w-3.5 h-3.5" />
-                        <span>Transportando</span>
+                        <Truck className="w-3.5 h-3.5 shrink-0" />
+                        <span className="text-[11px] truncate w-full text-center">Transportando</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setDeliveryStatus("Entregue")}
                         className={cn(
-                          "py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1",
+                          "py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 min-w-0",
                           deliveryStatus === "Entregue"
                             ? "bg-emerald-600 text-white border-emerald-700 shadow-sm"
                             : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
                         )}
                       >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Entregue</span>
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                        <span className="text-[11px] truncate w-full text-center">Entregue</span>
                       </button>
                     </div>
 
                     {/* Responsável pela Entrega */}
                     <div className="space-y-1">
                       <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
-                        <UserCheck className="w-3.5 h-3.5 text-slate-500" />
+                        <UserCheck className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                         Responsável pela Entrega / Motorista
                       </label>
                       <div className="flex gap-2">
@@ -916,14 +916,14 @@ function ParceiroDashboard() {
                           value={deliveryPerson}
                           onChange={(e) => setDeliveryPerson(e.target.value)}
                           placeholder="Ex: Carlos Silva, Transportadora XYZ..."
-                          className="h-9 text-xs bg-white border-slate-200 rounded-xl"
+                          className="h-9 text-xs bg-white border-slate-200 rounded-xl flex-1 min-w-0"
                         />
                         <Button
                           type="button"
                           size="sm"
                           disabled={updatingDelivery}
                           onClick={() => handleSaveDelivery()}
-                          className="h-9 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shrink-0"
+                          className="h-9 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shrink-0"
                         >
                           {updatingDelivery ? (
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
