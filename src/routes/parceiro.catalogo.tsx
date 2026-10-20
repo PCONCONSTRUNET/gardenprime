@@ -788,6 +788,13 @@ function ParceiroCatalogoPage() {
                       {prod.nome}
                     </h3>
 
+                    {/* Descrição Complementar */}
+                    {prod.descricao_complementar && (
+                      <p className="text-[10px] text-slate-500 mt-1 leading-snug line-clamp-2">
+                        {prod.descricao_complementar}
+                      </p>
+                    )}
+
                     {/* Especificações Compactas (Dimensão / Litros) */}
                     {(prod.dimensao || prod.volume || prod.comprimento) && (
                       <div className="flex flex-wrap items-center gap-1.5 mt-2">
@@ -1001,14 +1008,14 @@ function ParceiroCatalogoPage() {
                   </div>
                 )}
 
-                {/* Descrição se houver */}
-                {selectedProduto.descricao && (
+                {/* Descrição Complementar se houver */}
+                {selectedProduto.descricao_complementar && (
                   <div className="space-y-1">
                     <span className="text-xs font-bold uppercase text-slate-400 tracking-wider block">
                       Descrição do Produto
                     </span>
                     <p className="text-sm text-slate-600 leading-relaxed">
-                      {selectedProduto.descricao}
+                      {selectedProduto.descricao_complementar}
                     </p>
                   </div>
                 )}

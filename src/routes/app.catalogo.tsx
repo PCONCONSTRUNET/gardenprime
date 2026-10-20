@@ -498,6 +498,9 @@ function Catalogo() {
 
                         {/* Especificações Sura */}
                         <div className="py-1 text-xs text-muted-foreground space-y-1 border-b pb-3 mb-3 flex-1">
+                          {p.descricao_complementar && (
+                            <p className="text-slate-600 leading-snug">{p.descricao_complementar}</p>
+                          )}
                           {p.numero && (
                             <p>
                               <span className="font-semibold text-foreground">Número:</span>{" "}
