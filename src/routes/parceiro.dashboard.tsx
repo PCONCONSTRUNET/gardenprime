@@ -761,7 +761,7 @@ function ParceiroDashboard() {
                   </div>
 
                   {/* Ações rápidas no card */}
-                  <div className="border-t border-slate-100 pt-2 flex items-center gap-2">
+                  <div className="border-t border-slate-100 pt-2 grid grid-cols-2 gap-2 w-full">
                     <button
                       type="button"
                       disabled={isSharing}
@@ -769,15 +769,15 @@ function ParceiroDashboard() {
                         e.stopPropagation();
                         handleShare(v);
                       }}
-                      className="flex-1 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors border border-emerald-200/60"
+                      className="w-full min-w-0 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors border border-emerald-200/60"
                       title="Enviar arquivo PDF e resumo no WhatsApp"
                     >
                       {isSharing ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-700" />
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-700 shrink-0" />
                       ) : (
                         <WhatsAppIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                       )}
-                      <span>WhatsApp</span>
+                      <span className="truncate">WhatsApp</span>
                     </button>
 
                     <button
@@ -786,11 +786,11 @@ function ParceiroDashboard() {
                         e.stopPropagation();
                         openOrderPdf(v.id);
                       }}
-                      className="flex-1 h-8 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-200"
+                      className="w-full min-w-0 h-8 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-200"
                       title="Visualizar e Imprimir PDF"
                     >
                       <FileText className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                      <span>Ver PDF</span>
+                      <span className="truncate">Ver PDF</span>
                     </button>
                   </div>
                 </div>

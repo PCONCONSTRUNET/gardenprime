@@ -778,7 +778,7 @@ function VendasParceiro() {
           <p className="text-sm text-muted-foreground">Tente buscar por outro cliente ou data.</p>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
           {filteredVendas.map((v) => {
             const isDav = isOrderDav(v);
             const num = getOrderNumber(v);
@@ -787,7 +787,7 @@ function VendasParceiro() {
             return (
               <div
                 key={v.id}
-                className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-3 cursor-pointer hover:border-brand/30 transition-all hover:shadow-md active:scale-[0.99]"
+                className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-3 cursor-pointer hover:border-brand/30 transition-all hover:shadow-md active:scale-[0.99] overflow-hidden"
                 onClick={() => openDetails(v)}
               >
                 <div className="flex justify-between items-start">
@@ -875,7 +875,7 @@ function VendasParceiro() {
                 </div>
 
                 {/* Botões de Ação Rápida no Card */}
-                <div className="border-t border-slate-100 pt-2.5 flex items-center gap-2">
+                <div className="border-t border-slate-100 pt-2.5 grid grid-cols-3 gap-1.5 w-full">
                   <button
                     type="button"
                     disabled={isSharing}
@@ -883,7 +883,7 @@ function VendasParceiro() {
                       e.stopPropagation();
                       handleShare(v);
                     }}
-                    className="flex-1 h-9 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors active:scale-95 border border-emerald-200/60 shadow-xs px-1"
+                    className="w-full min-w-0 h-9 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs flex items-center justify-center gap-1 transition-colors active:scale-95 border border-emerald-200/60 shadow-xs px-1"
                     title="Enviar arquivo PDF e resumo no WhatsApp"
                   >
                     {isSharing ? (
@@ -891,7 +891,7 @@ function VendasParceiro() {
                     ) : (
                       <WhatsAppIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                     )}
-                    <span className="truncate">WhatsApp</span>
+                    <span className="truncate text-[11px] sm:text-xs">WhatsApp</span>
                   </button>
 
                   <button
@@ -900,11 +900,11 @@ function VendasParceiro() {
                       e.stopPropagation();
                       openOrderPdf(v.id);
                     }}
-                    className="flex-1 h-9 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors active:scale-95 border border-slate-200 px-1"
+                    className="w-full min-w-0 h-9 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs flex items-center justify-center gap-1 transition-colors active:scale-95 border border-slate-200 px-1"
                     title="Visualizar e Imprimir PDF"
                   >
                     <FileText className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                    <span className="truncate">Ver PDF</span>
+                    <span className="truncate text-[11px] sm:text-xs">Ver PDF</span>
                   </button>
 
                   <button
@@ -921,11 +921,11 @@ function VendasParceiro() {
                         console.error("Erro ao clonar:", err);
                       }
                     }}
-                    className="flex-1 h-9 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors active:scale-95 border border-blue-200/60 shadow-xs px-1"
+                    className="w-full min-w-0 h-9 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs flex items-center justify-center gap-1 transition-colors active:scale-95 border border-blue-200/60 shadow-xs px-1"
                     title="Clonar Pedido (Refazer a mesma venda)"
                   >
                     <Copy className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                    <span className="truncate">Clonar</span>
+                    <span className="truncate text-[11px] sm:text-xs">Clonar</span>
                   </button>
                 </div>
               </div>
