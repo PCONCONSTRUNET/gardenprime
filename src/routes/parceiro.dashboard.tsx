@@ -4,6 +4,8 @@ import { supabaseParceiro as supabase } from "@/lib/supabase";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +26,8 @@ import {
   Trash2,
   Ban,
   Printer,
+  Truck,
+  UserCheck,
 } from "lucide-react";
 import {
   WhatsAppIcon,
@@ -54,6 +58,11 @@ function ParceiroDashboard() {
   const [isSaleDetailsOpen, setIsSaleDetailsOpen] = useState(false);
   const [loadingSaleDetails, setLoadingSaleDetails] = useState(false);
 
+  // Estados de Entrega / Frete
+  const [deliveryStatus, setDeliveryStatus] = useState<string>("Aguardando Entrega");
+  const [deliveryPerson, setDeliveryPerson] = useState<string>("");
+  const [updatingDelivery, setUpdatingDelivery] = useState<boolean>(false);
+
   const [isEditingClient, setIsEditingClient] = useState(false);
   const [editClientData, setEditClientData] = useState({ nome: "", cpf_cnpj: "", telefone: "" });
   const [savingClient, setSavingClient] = useState(false);
@@ -70,6 +79,8 @@ function ParceiroDashboard() {
 
   const openSaleDetails = async (venda: any) => {
     setSelectedSaleForDetails(venda);
+    setDeliveryStatus(venda.status || "Aguardando Entrega");
+    setDeliveryPerson(venda.rotas?.motorista || "");
     setIsSaleDetailsOpen(true);
     setLoadingSaleDetails(true);
     setSaleItems([]);
@@ -87,6 +98,76 @@ function ParceiroDashboard() {
       console.error(e);
     } finally {
       setLoadingSaleDetails(false);
+    }
+  };
+
+  const handleSaveDelivery = async (newStatus?: string) => {
+    if (!selectedSaleForDetails) return;
+    const targetStatus = newStatus || deliveryStatus || selectedSaleForDetails.status || "Aguardando Entrega";
+    setUpdatingDelivery(true);
+    try {
+      let currentRotaId = selectedSaleForDetails.rota_id;
+      const cleanPerson = deliveryPerson.trim();
+
+      if (cleanPerson) {
+        if (currentRotaId) {
+          await supabase
+            .from("rotas")
+            .update({ motorista: cleanPerson })
+            .eq("id", currentRotaId);
+        } else {
+          const { data: novaRota, error: erroRota } = await supabase
+            .from("rotas")
+            .insert([{ motorista: cleanPerson, veiculo: "Transporte / Entrega" }])
+            .select()
+            .single();
+          if (erroRota) throw erroRota;
+          if (novaRota) {
+            currentRotaId = novaRota.id;
+          }
+        }
+      }
+
+      const { error: errVenda } = await supabase
+        .from("vendas")
+        .update({
+          status: targetStatus,
+          rota_id: currentRotaId || selectedSaleForDetails.rota_id,
+        })
+        .eq("id", selectedSaleForDetails.id);
+
+      if (errVenda) throw errVenda;
+
+      const updatedRotas = cleanPerson
+        ? { id: currentRotaId, motorista: cleanPerson, veiculo: "Transporte / Entrega" }
+        : selectedSaleForDetails.rotas;
+
+      setSelectedSaleForDetails((prev: any) => ({
+        ...prev,
+        status: targetStatus,
+        rota_id: currentRotaId || prev?.rota_id,
+        rotas: updatedRotas,
+      }));
+
+      setVendas((prev) =>
+        prev.map((v) =>
+          v.id === selectedSaleForDetails.id
+            ? {
+                ...v,
+                status: targetStatus,
+                rota_id: currentRotaId || v.rota_id,
+                rotas: updatedRotas,
+              }
+            : v
+        )
+      );
+
+      setDeliveryStatus(targetStatus);
+    } catch (err: any) {
+      console.error("Erro ao atualizar entrega:", err);
+      alert("Erro ao atualizar status de entrega: " + (err.message || "Tente novamente."));
+    } finally {
+      setUpdatingDelivery(false);
     }
   };
 
@@ -160,7 +241,7 @@ function ParceiroDashboard() {
           // Busca as vendas dele ignorando os Orçamentos (DAV)
           const { data: vendasData } = await supabase
             .from("vendas")
-            .select("*, cliente:clientes(*)")
+            .select("*, cliente:clientes(*), rotas(id, motorista, veiculo)")
             .eq("vendedor_id", vData.id)
             .neq("tipo", "DAV")
             .order("created_at", { ascending: false });
@@ -646,7 +727,31 @@ function ParceiroDashboard() {
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
+                        {/* Badge de Entrega */}
+                        {!isDav && v.status !== "Cancelado" && (
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded",
+                              v.status === "Entregue"
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : v.status === "Em Transporte" || v.status === "Em rota" || v.status === "EM_ROTA"
+                                ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                : "bg-amber-50 text-amber-700 border border-amber-200"
+                            )}
+                          >
+                            {v.status === "Entregue"
+                              ? "✅ Entregue"
+                              : v.status === "Em Transporte" || v.status === "Em rota" || v.status === "EM_ROTA"
+                              ? "🚚 Em rota"
+                              : "⏳ Aguardando"}
+                          </span>
+                        )}
                       </div>
+                      {v.rotas?.motorista && (
+                        <span className="text-[10px] text-slate-500 font-semibold flex items-center gap-1">
+                          🚚 {v.rotas.motorista}
+                        </span>
+                      )}
                       {v.status_aprovacao === "Aprovada" && v.valor_comissao > 0 && (
                         <p className="text-[10px] text-muted-foreground mt-0.5">
                           + R$ {Number(v.valor_comissao).toFixed(2)} comissão
@@ -718,6 +823,116 @@ function ParceiroDashboard() {
                     {selectedSaleForDetails.cliente.telefone && (
                       <p className="mt-1">📞 {selectedSaleForDetails.cliente.telefone}</p>
                     )}
+                  </div>
+                )}
+
+                {/* ── Status & Responsável pela Entrega ── */}
+                {!isOrderDav(selectedSaleForDetails || {}) && selectedSaleForDetails?.status !== "Cancelado" && (
+                  <div className="mt-3 bg-slate-50 border border-slate-200/90 rounded-2xl p-3.5 space-y-3 text-left">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                          <Truck className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                            Status & Entrega
+                          </h4>
+                          <p className="text-[11px] text-muted-foreground">
+                            Controle de frete e entregador
+                          </p>
+                        </div>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[10px] font-bold px-2 py-0.5",
+                          deliveryStatus === "Entregue"
+                            ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                            : deliveryStatus === "Em Transporte" || deliveryStatus === "Em rota" || deliveryStatus === "EM_ROTA"
+                            ? "bg-blue-100 text-blue-800 border-blue-300"
+                            : "bg-amber-100 text-amber-800 border-amber-300"
+                        )}
+                      >
+                        {deliveryStatus === "Entregue"
+                          ? "✅ Entregue"
+                          : deliveryStatus === "Em Transporte" || deliveryStatus === "Em rota" || deliveryStatus === "EM_ROTA"
+                          ? "🚚 Em Transporte"
+                          : "⏳ Aguardando"}
+                      </Badge>
+                    </div>
+
+                    {/* Botões de Seleção do Status */}
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setDeliveryStatus("Aguardando Entrega")}
+                        className={cn(
+                          "py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1",
+                          deliveryStatus === "Aguardando Entrega" || (!deliveryStatus && selectedSaleForDetails?.status !== "Entregue" && selectedSaleForDetails?.status !== "Em Transporte")
+                            ? "bg-amber-500 text-white border-amber-600 shadow-sm"
+                            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
+                        )}
+                      >
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>Aguardando</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeliveryStatus("Em Transporte")}
+                        className={cn(
+                          "py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1",
+                          deliveryStatus === "Em Transporte" || deliveryStatus === "Em rota" || deliveryStatus === "EM_ROTA"
+                            ? "bg-blue-600 text-white border-blue-700 shadow-sm"
+                            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
+                        )}
+                      >
+                        <Truck className="w-3.5 h-3.5" />
+                        <span>Transportando</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeliveryStatus("Entregue")}
+                        className={cn(
+                          "py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1",
+                          deliveryStatus === "Entregue"
+                            ? "bg-emerald-600 text-white border-emerald-700 shadow-sm"
+                            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
+                        )}
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Entregue</span>
+                      </button>
+                    </div>
+
+                    {/* Responsável pela Entrega */}
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                        <UserCheck className="w-3.5 h-3.5 text-slate-500" />
+                        Responsável pela Entrega / Motorista
+                      </label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={deliveryPerson}
+                          onChange={(e) => setDeliveryPerson(e.target.value)}
+                          placeholder="Ex: Carlos Silva, Transportadora XYZ..."
+                          className="h-9 text-xs bg-white border-slate-200 rounded-xl"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={updatingDelivery}
+                          onClick={() => handleSaveDelivery()}
+                          className="h-9 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shrink-0"
+                        >
+                          {updatingDelivery ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            "Salvar"
+                          )}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

@@ -18,6 +18,10 @@ import {
   Plus,
   Minus,
   Check,
+  Truck,
+  CheckCircle2,
+  Clock,
+  UserCheck,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -65,6 +69,12 @@ function VendasParceiro() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [loadingItens, setLoadingItens] = useState(false);
 
+  // Delivery state
+  const [activeTab, setActiveTab] = useState<"todos" | "aguardando" | "transporte" | "entregue" | "cancelado">("todos");
+  const [deliveryStatus, setDeliveryStatus] = useState("");
+  const [deliveryPerson, setDeliveryPerson] = useState("");
+  const [updatingDelivery, setUpdatingDelivery] = useState(false);
+
   // Item editing states
   const [isEditingItems, setIsEditingItems] = useState(false);
   const [editItens, setEditItens] = useState<any[]>([]);
@@ -107,6 +117,8 @@ function VendasParceiro() {
 
   const openDetails = async (venda: any) => {
     setSelectedVenda(venda);
+    setDeliveryStatus(venda.status || "Aguardando Entrega");
+    setDeliveryPerson(venda.rotas?.motorista || "");
     setIsDetailsOpen(true);
     setIsEditingItems(false);
     setLoadingItens(true);
@@ -121,6 +133,77 @@ function VendasParceiro() {
       console.error(e);
     } finally {
       setLoadingItens(false);
+    }
+  };
+
+  const handleSaveDelivery = async (newStatus?: string) => {
+    if (!selectedVenda) return;
+    const targetStatus = newStatus || deliveryStatus || selectedVenda.status || "Aguardando Entrega";
+    setUpdatingDelivery(true);
+    try {
+      let currentRotaId = selectedVenda.rota_id;
+      const cleanPerson = deliveryPerson.trim();
+
+      if (cleanPerson) {
+        if (currentRotaId) {
+          await supabase
+            .from("rotas")
+            .update({ motorista: cleanPerson })
+            .eq("id", currentRotaId);
+        } else {
+          const { data: novaRota, error: erroRota } = await supabase
+            .from("rotas")
+            .insert([{ motorista: cleanPerson, veiculo: "Transporte / Entrega" }])
+            .select()
+            .single();
+          if (erroRota) throw erroRota;
+          if (novaRota) {
+            currentRotaId = novaRota.id;
+          }
+        }
+      }
+
+      const { error: errVenda } = await supabase
+        .from("vendas")
+        .update({
+          status: targetStatus,
+          rota_id: currentRotaId || selectedVenda.rota_id,
+        })
+        .eq("id", selectedVenda.id);
+
+      if (errVenda) throw errVenda;
+
+      const updatedRotas = cleanPerson
+        ? { id: currentRotaId, motorista: cleanPerson, veiculo: "Transporte / Entrega" }
+        : selectedVenda.rotas;
+
+      setSelectedVenda((prev: any) => ({
+        ...prev,
+        status: targetStatus,
+        rota_id: currentRotaId || prev?.rota_id,
+        rotas: updatedRotas,
+      }));
+
+      setVendas((prev) =>
+        prev.map((v) =>
+          v.id === selectedVenda.id
+            ? {
+                ...v,
+                status: targetStatus,
+                rota_id: currentRotaId || v.rota_id,
+                rotas: updatedRotas,
+              }
+            : v
+        )
+      );
+
+      setDeliveryStatus(targetStatus);
+      alert("Status de entrega atualizado com sucesso!");
+    } catch (err: any) {
+      console.error("Erro ao salvar entrega:", err);
+      alert("Erro ao atualizar entrega: " + err.message);
+    } finally {
+      setUpdatingDelivery(false);
     }
   };
 
@@ -152,7 +235,7 @@ function VendasParceiro() {
         if (vendedor) {
           const { data, error } = await supabase
             .from("vendas")
-            .select("*, clientes(*)")
+            .select("*, clientes(*), rotas(id, motorista, veiculo)")
             .eq("vendedor_id", vendedor.id)
             .order("created_at", { ascending: false });
 
@@ -462,15 +545,23 @@ function VendasParceiro() {
   const getStatusColor = (status: string) => {
     switch (status?.toLowerCase()) {
       case "aprovado":
+      case "aprovada":
       case "aceito":
       case "pago":
-      case "entregue":
       case "faturado":
         return "bg-emerald-100 text-emerald-800 border-emerald-200";
+      case "entregue":
+        return "bg-emerald-100 text-emerald-800 border-emerald-300";
+      case "em transporte":
+      case "em rota":
+        return "bg-blue-100 text-blue-800 border-blue-200";
+      case "aguardando entrega":
       case "pendente":
         return "bg-amber-100 text-amber-800 border-amber-200";
       case "rejeitado":
+      case "rejeitada":
       case "cancelado":
+      case "cancelada":
         return "bg-rose-100 text-rose-800 border-rose-200";
       default:
         return "bg-slate-100 text-slate-800 border-slate-200";
@@ -531,17 +622,29 @@ function VendasParceiro() {
   const filteredVendas = vendas.filter((v) => {
     let matchesSearch = true;
     let matchesDate = true;
+    let matchesTab = true;
 
     if (searchTerm) {
       const nome = (v.clientes?.nome || "").toLowerCase();
-      matchesSearch = nome.includes(searchTerm.toLowerCase());
+      const num = String(v.numero_venda || v.numero || "").toLowerCase();
+      matchesSearch = nome.includes(searchTerm.toLowerCase()) || num.includes(searchTerm.toLowerCase());
     }
 
     if (selectedDate) {
       matchesDate = v.created_at.startsWith(selectedDate);
     }
 
-    return matchesSearch && matchesDate;
+    if (activeTab === "aguardando") {
+      matchesTab = v.status === "Aguardando Entrega" || v.status === "Pendente" || v.status === "Faturado";
+    } else if (activeTab === "transporte") {
+      matchesTab = v.status === "Em Transporte" || v.status === "Em rota" || v.status === "EM_ROTA";
+    } else if (activeTab === "entregue") {
+      matchesTab = v.status === "Entregue";
+    } else if (activeTab === "cancelado") {
+      matchesTab = v.status === "Cancelado" || v.status_aprovacao === "Cancelado" || v.status_aprovacao === "Rejeitada";
+    }
+
+    return matchesSearch && matchesDate && matchesTab;
   });
 
   // Preview total while editing
@@ -587,6 +690,73 @@ function VendasParceiro() {
             className="h-11 bg-white border-slate-200 rounded-xl w-full sm:w-[160px]"
           />
         </div>
+      </div>
+
+      {/* ── Abas de Filtro de Pedidos / Entrega ── */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        <button
+          type="button"
+          onClick={() => setActiveTab("todos")}
+          className={cn(
+            "px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5",
+            activeTab === "todos"
+              ? "bg-slate-900 text-white shadow-sm"
+              : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+          )}
+        >
+          Todos ({vendas.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("aguardando")}
+          className={cn(
+            "px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5",
+            activeTab === "aguardando"
+              ? "bg-amber-600 text-white shadow-sm"
+              : "bg-white border border-amber-200/80 text-amber-700 hover:bg-amber-50"
+          )}
+        >
+          <Clock className="w-3.5 h-3.5" />
+          Aguardando Entrega ({vendas.filter(v => v.status === "Aguardando Entrega" || v.status === "Pendente" || v.status === "Faturado").length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("transporte")}
+          className={cn(
+            "px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5",
+            activeTab === "transporte"
+              ? "bg-blue-600 text-white shadow-sm"
+              : "bg-white border border-blue-200/80 text-blue-700 hover:bg-blue-50"
+          )}
+        >
+          <Truck className="w-3.5 h-3.5" />
+          Em Transporte ({vendas.filter(v => v.status === "Em Transporte" || v.status === "Em rota" || v.status === "EM_ROTA").length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("entregue")}
+          className={cn(
+            "px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5",
+            activeTab === "entregue"
+              ? "bg-emerald-600 text-white shadow-sm"
+              : "bg-white border border-emerald-200/80 text-emerald-700 hover:bg-emerald-50"
+          )}
+        >
+          <CheckCircle2 className="w-3.5 h-3.5" />
+          Pedidos Entregues ({vendas.filter(v => v.status === "Entregue").length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("cancelado")}
+          className={cn(
+            "px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5",
+            activeTab === "cancelado"
+              ? "bg-rose-600 text-white shadow-sm"
+              : "bg-white border border-rose-200/80 text-rose-700 hover:bg-rose-50"
+          )}
+        >
+          Cancelados ({vendas.filter(v => v.status === "Cancelado" || v.status_aprovacao === "Cancelado" || v.status_aprovacao === "Rejeitada").length})
+        </button>
       </div>
 
       {loading ? (
@@ -682,18 +852,23 @@ function VendasParceiro() {
                     </p>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    {v.status_aprovacao && (
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded border ${getStatusColor(v.status_aprovacao)}`}
-                      >
-                        Aprovação: {v.status_aprovacao}
+                    {v.status === "Entregue" ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-emerald-100 text-emerald-800 border-emerald-300 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> Pedido Entregue
+                      </span>
+                    ) : v.status === "Em Transporte" || v.status === "Em rota" ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-blue-100 text-blue-800 border-blue-300 flex items-center gap-1">
+                        <Truck className="w-3 h-3" /> Em Transporte
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-amber-100 text-amber-800 border-amber-300 flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> {v.status || "Aguardando"}
                       </span>
                     )}
-                    {v.status && v.status !== v.status_aprovacao && (
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded border ${getStatusColor(v.status)}`}
-                      >
-                        {isDav ? "Orçamento" : "Pedido"}: {v.status}
+
+                    {v.rotas?.motorista && (
+                      <span className="text-[10px] text-slate-500 font-semibold flex items-center gap-1">
+                        🚚 {v.rotas.motorista}
                       </span>
                     )}
                   </div>
@@ -778,6 +953,114 @@ function VendasParceiro() {
                     </p>
                   </div>
                 )}
+
+                {/* ── Status & Responsável pela Entrega ── */}
+                <div className="mt-3 bg-slate-50 border border-slate-200/90 rounded-2xl p-3.5 space-y-3 text-left">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                        <Truck className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                          Status & Entrega
+                        </h4>
+                        <p className="text-[11px] text-muted-foreground">
+                          Controle de frete e entregador
+                        </p>
+                      </div>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[10px] font-bold px-2 py-0.5",
+                        deliveryStatus === "Entregue"
+                          ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                          : deliveryStatus === "Em Transporte" || deliveryStatus === "Em rota"
+                          ? "bg-blue-100 text-blue-800 border-blue-300"
+                          : "bg-amber-100 text-amber-800 border-amber-300"
+                      )}
+                    >
+                      {deliveryStatus === "Entregue"
+                        ? "✅ Entregue"
+                        : deliveryStatus === "Em Transporte" || deliveryStatus === "Em rota"
+                        ? "🚚 Em Transporte"
+                        : "⏳ Aguardando"}
+                    </Badge>
+                  </div>
+
+                  {/* Botões de Seleção do Status */}
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setDeliveryStatus("Aguardando Entrega")}
+                      className={cn(
+                        "py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1",
+                        deliveryStatus === "Aguardando Entrega" || (!deliveryStatus && selectedVenda?.status !== "Entregue" && selectedVenda?.status !== "Em Transporte")
+                          ? "bg-amber-500 text-white border-amber-600 shadow-sm"
+                          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
+                      )}
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Aguardando</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeliveryStatus("Em Transporte")}
+                      className={cn(
+                        "py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1",
+                        deliveryStatus === "Em Transporte" || deliveryStatus === "Em rota"
+                          ? "bg-blue-600 text-white border-blue-700 shadow-sm"
+                          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
+                      )}
+                    >
+                      <Truck className="w-3.5 h-3.5" />
+                      <span>Transportando</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeliveryStatus("Entregue")}
+                      className={cn(
+                        "py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1",
+                        deliveryStatus === "Entregue"
+                          ? "bg-emerald-600 text-white border-emerald-700 shadow-sm"
+                          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
+                      )}
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Entregue</span>
+                    </button>
+                  </div>
+
+                  {/* Responsável pela Entrega */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                      <UserCheck className="w-3.5 h-3.5 text-slate-500" />
+                      Responsável pela Entrega / Motorista
+                    </label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={deliveryPerson}
+                        onChange={(e) => setDeliveryPerson(e.target.value)}
+                        placeholder="Ex: Carlos Silva, Transportadora XYZ..."
+                        className="h-9 text-xs bg-white border-slate-200 rounded-xl"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={updatingDelivery}
+                        onClick={() => handleSaveDelivery()}
+                        className="h-9 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shrink-0"
+                      >
+                        {updatingDelivery ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          "Salvar"
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </DialogDescription>
           </DialogHeader>
