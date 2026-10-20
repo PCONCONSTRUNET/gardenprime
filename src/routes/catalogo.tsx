@@ -570,6 +570,11 @@ function PublicCatalogo() {
                           </p>
 
                           <div className="py-3 text-xs text-slate-500 space-y-1.5 border-b mb-4 flex-1">
+                            {p.descricao_complementar && (
+                              <p className="text-slate-600 leading-snug">
+                                {p.descricao_complementar}
+                              </p>
+                            )}
                             {p.numero && (
                               <p>
                                 <span className="font-medium text-slate-700">Número:</span>{" "}
