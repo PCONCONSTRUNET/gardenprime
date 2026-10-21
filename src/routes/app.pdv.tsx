@@ -114,6 +114,9 @@ function PDV() {
         created_at: d.created_at,
         cliente_id: d.cliente_id,
         cliente: { nome: d.cliente_nome },
+        condicao_pagamento: d.condicao_pagamento,
+        frete_tipo: d.frete_tipo,
+        prazo_entrega: d.prazo_entrega,
         isNovoDav: true,
       }));
       combined = [...combined, ...mappedDavs];
@@ -133,9 +136,37 @@ function PDV() {
       if (data) {
         setProdutos(data);
 
-        // Novo formato do Carrinho via Catálogo
+        // Formato do Carrinho e Cliente via Catálogo
         const params = new URLSearchParams(window.location.search);
         const cartMagic = params.get("c");
+        const pagParam = params.get("pag");
+        const prazoParam = params.get("prazo");
+        const eParam = params.get("e");
+        const cnjParam = params.get("cnpj");
+        const telParam = params.get("tel");
+
+        if (eParam || cnjParam) {
+          setClienteSelecionado({
+            id: "avulso",
+            nome: eParam || "Cliente",
+          });
+        }
+
+        if (pagParam) {
+          const isBoleto = pagParam.toLowerCase().includes("boleto");
+          const formaPag = isBoleto
+            ? (prazoParam ? `Boleto (${prazoParam})` : (pagParam === "Boleto a Prazo" ? "Boleto (28, 35, 42 dias)" : pagParam))
+            : pagParam;
+          setCondicaoPagamento(formaPag);
+          if (isBoleto) {
+            setMetodoPagamento("Boleto");
+          } else if (pagParam.toLowerCase().includes("cartão") || pagParam.toLowerCase().includes("cartao")) {
+            setMetodoPagamento("Cartão");
+          } else if (pagParam.toLowerCase().includes("pix")) {
+            setMetodoPagamento("Pix");
+          }
+        }
+
         if (cartMagic) {
           const parsedCart: any[] = [];
           const items = cartMagic.split(",");
@@ -201,6 +232,18 @@ function PDV() {
               nome: orcamento.cliente.nome,
             });
           }
+          if (orcamento.condicao_pagamento) {
+            setCondicaoPagamento(orcamento.condicao_pagamento);
+            if (orcamento.condicao_pagamento.toLowerCase().includes("boleto")) {
+              setMetodoPagamento("Boleto");
+            } else if (orcamento.condicao_pagamento.toLowerCase().includes("cartão") || orcamento.condicao_pagamento.toLowerCase().includes("cartao")) {
+              setMetodoPagamento("Cartão");
+            } else if (orcamento.condicao_pagamento.toLowerCase().includes("pix")) {
+              setMetodoPagamento("Pix");
+            } else {
+              setMetodoPagamento("Dinheiro");
+            }
+          }
           setIsOrcamentoModalOpen(false);
         } else {
           alert("Nenhum item encontrado.");
@@ -238,6 +281,19 @@ function PDV() {
               id: orcamento.cliente_id || "avulso",
               nome: orcamento.cliente.nome,
             });
+          }
+          const cond = orcamento.condicao_pagamento || orcamento.metodo_pagamento;
+          if (cond) {
+            setCondicaoPagamento(cond);
+            if (cond.toLowerCase().includes("boleto")) {
+              setMetodoPagamento("Boleto");
+            } else if (cond.toLowerCase().includes("cartão") || cond.toLowerCase().includes("cartao")) {
+              setMetodoPagamento("Cartão");
+            } else if (cond.toLowerCase().includes("pix")) {
+              setMetodoPagamento("Pix");
+            } else {
+              setMetodoPagamento("Dinheiro");
+            }
           }
           setIsOrcamentoModalOpen(false);
         } else {

@@ -290,6 +290,8 @@ function NovoDAV() {
       const cidParam = params.get("cid");
       const ufParam = params.get("uf");
       const telParam = params.get("tel");
+      const pagParam = params.get("pag");
+      const prazoParam = params.get("prazo");
 
       if (eParam || cnjParam) {
         setCliente((prev) => ({
@@ -303,6 +305,17 @@ function NovoDAV() {
           cidade: cidParam || "",
           uf: ufParam || "",
           telefone: telParam || "",
+        }));
+      }
+
+      if (pagParam) {
+        let formaPagamento = pagParam;
+        if (pagParam === "Boleto a Prazo") {
+          formaPagamento = prazoParam ? `Boleto (${prazoParam})` : "Boleto (28, 35, 42 dias)";
+        }
+        setCondicoes((prev) => ({
+          ...prev,
+          pagamento: formaPagamento,
         }));
       }
 

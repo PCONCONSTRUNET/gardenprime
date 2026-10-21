@@ -53,6 +53,8 @@ export interface OrderData {
   frete_valor?: number;
   condicao_pagamento?: string;
   metodo_pagamento?: string;
+  frete_tipo?: string;
+  prazo_entrega?: string;
   observacoes?: string;
   validade?: string;
   cliente_id?: string;
@@ -219,7 +221,7 @@ export async function enrichOrderAndItems(
       if (v) {
         order.numero_venda = order.numero_venda ?? v.numero_venda ?? v.numero;
         order.tipo = order.tipo ?? v.tipo;
-        order.condicao_pagamento = order.condicao_pagamento ?? v.metodo_pagamento ?? v.condicao_pagamento;
+        order.condicao_pagamento = order.condicao_pagamento ?? v.condicao_pagamento ?? v.metodo_pagamento;
         order.total = order.total ?? v.valor_total;
         order.subtotal = order.subtotal ?? v.subtotal ?? v.valor_total;
         order.created_at = order.created_at || v.created_at;
@@ -256,6 +258,8 @@ export async function enrichOrderAndItems(
           order.numero = order.numero ?? d.numero;
           order.tipo = order.tipo ?? "DAV";
           order.condicao_pagamento = order.condicao_pagamento ?? d.condicao_pagamento;
+          order.frete_tipo = order.frete_tipo ?? d.frete_tipo;
+          order.prazo_entrega = order.prazo_entrega ?? d.prazo_entrega;
           order.total = order.total ?? d.total;
           order.subtotal = order.subtotal ?? d.subtotal;
           order.created_at = order.created_at || d.created_at;
@@ -626,7 +630,9 @@ export async function generateOrderPdfDoc(
   doc.text("CONDIÇÕES COMERCIAIS", pageWidth - margin - boxW + 4, y + 7);
   doc.setFont("helvetica", "normal");
   doc.text(`Pagamento: ${order.condicao_pagamento || "Não informado"}`, pageWidth - margin - boxW + 4, y + 11);
-  doc.text(`Frete: Retirada | Prazo: Imediato`, pageWidth - margin - boxW + 4, y + 15);
+  const freteInfo = order.frete_tipo || (order as any).frete || "Retirada";
+  const prazoInfo = order.prazo_entrega || (order as any).prazo || "Imediato";
+  doc.text(`Frete: ${freteInfo} | Prazo: ${prazoInfo}`, pageWidth - margin - boxW + 4, y + 15);
 
   y += 28;
 

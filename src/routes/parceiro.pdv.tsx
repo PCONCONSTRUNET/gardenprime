@@ -382,8 +382,8 @@ function ParceiroPDV() {
                 : {}),
               ...(pagParam
                 ? {
-                    pagamento: pagParam,
-                    condicaoBoleto: pagParam === "Boleto a Prazo" ? (prazoParam || "28, 35, 42 dias") : prev.condicaoBoleto,
+                    pagamento: pagParam.toLowerCase().includes("boleto") ? "Boleto a Prazo" : pagParam,
+                    condicaoBoleto: pagParam.toLowerCase().includes("boleto") ? (prazoParam || "28, 35, 42 dias") : prev.condicaoBoleto,
                   }
                 : {}),
             }));

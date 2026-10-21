@@ -94,7 +94,7 @@ function ImprimirDAV() {
             cidade: cli?.cidade || null,
             uf: cli?.uf || null,
             email: cli?.email || null,
-            condicao_pagamento: v.metodo_pagamento,
+            condicao_pagamento: v.condicao_pagamento || v.metodo_pagamento,
             subtotal: v.subtotal || v.valor_total,
             desconto_valor: v.desconto_valor || 0,
             desconto_percentual: v.desconto_percentual || 0,

@@ -396,7 +396,8 @@ function PublicCatalogo() {
     mensagem += `Qual o procedimento para finalização e pagamento?`;
 
     let telefoneDestino = "5519997141112"; // Telefone padrão do dono
-    const companyParams = `&e=${encodeURIComponent(empresaData.nome)}&cnpj=${encodeURIComponent(empresaData.cnpj)}&cep=${encodeURIComponent(empresaData.cep)}&end=${encodeURIComponent(empresaData.endereco)}&num=${encodeURIComponent(empresaData.numero)}&bairro=${encodeURIComponent(empresaData.bairro)}&cid=${encodeURIComponent(empresaData.cidade)}&uf=${encodeURIComponent(empresaData.uf)}&tel=${encodeURIComponent(empresaData.telefone)}&pag=${encodeURIComponent(empresaData.pagamento)}&prazo=${encodeURIComponent(prazoBoleto)}`;
+    const pagParamValue = empresaData.pagamento === "Boleto a Prazo" ? descBoleto : empresaData.pagamento;
+    const companyParams = `&e=${encodeURIComponent(empresaData.nome)}&cnpj=${encodeURIComponent(empresaData.cnpj)}&cep=${encodeURIComponent(empresaData.cep)}&end=${encodeURIComponent(empresaData.endereco)}&num=${encodeURIComponent(empresaData.numero)}&bairro=${encodeURIComponent(empresaData.bairro)}&cid=${encodeURIComponent(empresaData.cidade)}&uf=${encodeURIComponent(empresaData.uf)}&tel=${encodeURIComponent(empresaData.telefone)}&pag=${encodeURIComponent(pagParamValue)}&prazo=${encodeURIComponent(prazoBoleto)}`;
 
     if (partner && partner.telefone) {
       const numLimpo = partner.telefone.replace(/\D/g, "");
