@@ -695,6 +695,8 @@ export async function generateOrderPdfDoc(
 
   autoTable(doc, {
     startY: y,
+    margin: { left: margin, right: margin },
+    tableWidth: pageWidth - margin * 2,
     head: [["Código", "", "Produto", "Qtd", "Vlr. Unit.", "Vlr. Total"]],
     body: tableBody,
     theme: "plain",
@@ -709,14 +711,15 @@ export async function generateOrderPdfDoc(
       fontSize: 7,
       cellPadding: 3,
       valign: "middle",
+      overflow: "linebreak",
     },
     columnStyles: {
       0: { halign: "center", cellWidth: 15 },
-      1: { cellWidth: 15 }, // Imagem
-      2: { halign: "left" }, // Produto
-      3: { halign: "center", cellWidth: 15 }, // Qtd
-      4: { halign: "center", cellWidth: 20 }, // Unit
-      5: { halign: "right", cellWidth: 25, fontStyle: "bold" }, // Total
+      1: { cellWidth: 14 }, // Imagem
+      2: { halign: "left" }, // Produto (flex - ocupa o restante)
+      3: { halign: "center", cellWidth: 12 }, // Qtd
+      4: { halign: "right", cellWidth: 22 }, // Unit
+      5: { halign: "right", cellWidth: 27, fontStyle: "bold" }, // Total
     },
     alternateRowStyles: {
       fillColor: [248, 250, 252],
@@ -733,8 +736,8 @@ export async function generateOrderPdfDoc(
         }
       }
     },
-    willDrawCell: (data) => {
-       // if we want to change text color dynamically we can do it here
+    willDrawCell: (_data) => {
+      // hook disponível para customizações futuras
     },
   });
 
