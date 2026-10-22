@@ -29,12 +29,16 @@ import {
   PackagePlus,
   ChevronsUpDown,
   Save,
+  CreditCard,
+  Calendar,
+  User,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useConfirm } from "@/contexts/ConfirmContext";
 import { downloadOrderPdf, openOrderPdf, shareOrderWhatsApp } from "@/lib/order-pdf";
 import { AsaasCobrancaModal } from "@/components/asaas-cobranca-modal";
+import { toast } from "sonner";
 import {
   Sheet,
   SheetContent,
@@ -92,6 +96,23 @@ function Vendas() {
   const [newUnitario, setNewUnitario] = useState(0);
   const [savingItems, setSavingItems] = useState(false);
 
+  // Payment editing
+  const [isEditingPayment, setIsEditingPayment] = useState(false);
+  const [editMetodoPagamento, setEditMetodoPagamento] = useState("");
+  const [editCondicaoPagamento, setEditCondicaoPagamento] = useState("");
+  const [savingPayment, setSavingPayment] = useState(false);
+
+  // Date editing
+  const [isEditingDate, setIsEditingDate] = useState(false);
+  const [editDateValue, setEditDateValue] = useState("");
+  const [savingDate, setSavingDate] = useState(false);
+
+  // Client editing
+  const [isEditingCliente, setIsEditingCliente] = useState(false);
+  const [clientesList, setClientesList] = useState<any[]>([]);
+  const [openClientePop, setOpenClientePop] = useState(false);
+  const [savingCliente, setSavingCliente] = useState(false);
+
   // ASAAS Modal
   const [openAsaas, setOpenAsaas] = useState(false);
   const [asaasCliente, setAsaasCliente] = useState<any>(null);
@@ -108,7 +129,7 @@ function Vendas() {
       setVendas(data || []);
     } catch (err: any) {
       console.error(err);
-      alert("Erro ao buscar vendas.");
+      toast.error("Erro ao buscar vendas.");
     } finally {
       setLoading(false);
     }
@@ -129,6 +150,15 @@ function Vendas() {
     if (data) setProdutos(data);
   };
 
+  const fetchClientes = async () => {
+    if (clientesList.length > 0) return;
+    const { data } = await supabase
+      .from("clientes")
+      .select("id, nome, cpf_cnpj")
+      .order("nome");
+    if (data) setClientesList(data);
+  };
+
   const filteredVendas = vendas.filter((v) => {
     if (!searchTerm) return true;
     const lower = searchTerm.toLowerCase();
@@ -143,6 +173,11 @@ function Vendas() {
     setOpenSheet(true);
     setIsEditingTotal(false);
     setIsEditingItems(false);
+    setIsEditingPayment(false);
+    setIsEditingDate(false);
+    setIsEditingCliente(false);
+    setEditMetodoPagamento(venda.metodo_pagamento || "");
+    setEditCondicaoPagamento(venda.condicao_pagamento || "");
     setLoadingItens(true);
     try {
       const { data, error } = await supabase
@@ -157,11 +192,134 @@ function Vendas() {
     }
   };
 
+  // ─── Order detail editing handlers ──────────────────────────────────────────
+
+  const handleSavePayment = async () => {
+    if (!selectedVenda) return;
+    setSavingPayment(true);
+    try {
+      const { error } = await supabase
+        .from("vendas")
+        .update({
+          metodo_pagamento: editMetodoPagamento || null,
+          condicao_pagamento: editCondicaoPagamento || null,
+        })
+        .eq("id", selectedVenda.id);
+
+      if (error) throw error;
+
+      setSelectedVenda((prev: any) => ({
+        ...prev,
+        metodo_pagamento: editMetodoPagamento,
+        condicao_pagamento: editCondicaoPagamento,
+      }));
+
+      setVendas((prev) =>
+        prev.map((v) =>
+          v.id === selectedVenda.id
+            ? {
+                ...v,
+                metodo_pagamento: editMetodoPagamento,
+                condicao_pagamento: editCondicaoPagamento,
+              }
+            : v
+        )
+      );
+
+      setIsEditingPayment(false);
+      toast.success("Forma de pagamento atualizada com sucesso!");
+    } catch (err: any) {
+      toast.error("Erro ao salvar pagamento: " + err.message);
+    } finally {
+      setSavingPayment(false);
+    }
+  };
+
+  const handleStartEditDate = () => {
+    if (!selectedVenda?.created_at) return;
+    const d = new Date(selectedVenda.created_at);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    setEditDateValue(`${yyyy}-${mm}-${dd}`);
+    setIsEditingDate(true);
+  };
+
+  const handleSaveDate = async () => {
+    if (!selectedVenda || !editDateValue) return;
+    setSavingDate(true);
+    try {
+      const updatedDate = new Date(`${editDateValue}T12:00:00Z`).toISOString();
+      const { error } = await supabase
+        .from("vendas")
+        .update({ created_at: updatedDate })
+        .eq("id", selectedVenda.id);
+      if (error) throw error;
+
+      setSelectedVenda((prev: any) => ({ ...prev, created_at: updatedDate }));
+      setVendas((prev) =>
+        prev.map((v) => (v.id === selectedVenda.id ? { ...v, created_at: updatedDate } : v))
+      );
+      setIsEditingDate(false);
+      toast.success("Data da operação atualizada!");
+    } catch (err: any) {
+      toast.error("Erro ao salvar data: " + err.message);
+    } finally {
+      setSavingDate(false);
+    }
+  };
+
+  const handleChangeCliente = async (novoClienteId: string) => {
+    if (!selectedVenda) return;
+    setSavingCliente(true);
+    try {
+      const { error } = await supabase
+        .from("vendas")
+        .update({ cliente_id: novoClienteId })
+        .eq("id", selectedVenda.id);
+      if (error) throw error;
+
+      const novoCliente = clientesList.find((c) => c.id === novoClienteId);
+      setSelectedVenda((prev: any) => ({
+        ...prev,
+        cliente_id: novoClienteId,
+        clientes: novoCliente || prev.clientes,
+      }));
+      setVendas((prev) =>
+        prev.map((v) =>
+          v.id === selectedVenda.id
+            ? { ...v, cliente_id: novoClienteId, clientes: novoCliente || v.clientes }
+            : v
+        )
+      );
+
+      await supabase
+        .from("contas_receber")
+        .update({ cliente_id: novoClienteId })
+        .eq("venda_id", selectedVenda.id);
+
+      setIsEditingCliente(false);
+      setOpenClientePop(false);
+      toast.success("Cliente do pedido alterado com sucesso!");
+    } catch (err: any) {
+      toast.error("Erro ao alterar cliente: " + err.message);
+    } finally {
+      setSavingCliente(false);
+    }
+  };
+
   // ─── Item editing ────────────────────────────────────────────────────────────
 
   const handleStartEditItems = async () => {
     await fetchProdutos();
-    setEditItens(vendaItens.map((i) => ({ ...i })));
+    setEditItens(
+      vendaItens.map((i) => ({
+        ...i,
+        quantidade: Number(i.quantidade) || 1,
+        valor_unitario: Number(i.valor_unitario) || 0,
+        subtotal: Number(i.subtotal) || 0,
+      }))
+    );
     setRemovedIds([]);
     setNewItems([]);
     setSelectedProdutoId("");
@@ -192,6 +350,26 @@ function Vendas() {
     );
   };
 
+  const handleSetExistingQty = (itemId: string, qty: number) => {
+    setEditItens((prev) =>
+      prev.map((i) => {
+        if (i.id !== itemId) return i;
+        const novaQtd = Math.max(1, isNaN(qty) ? 1 : qty);
+        return { ...i, quantidade: novaQtd, subtotal: novaQtd * Number(i.valor_unitario) };
+      })
+    );
+  };
+
+  const handleChangeExistingUnitario = (itemId: string, newUnitario: number) => {
+    setEditItens((prev) =>
+      prev.map((i) => {
+        if (i.id !== itemId) return i;
+        const unit = isNaN(newUnitario) || newUnitario < 0 ? 0 : newUnitario;
+        return { ...i, valor_unitario: unit, subtotal: Number(i.quantidade) * unit };
+      })
+    );
+  };
+
   const handleRemoveNewItem = (idx: number) => {
     setNewItems((prev) => prev.filter((_, i) => i !== idx));
   };
@@ -202,6 +380,26 @@ function Vendas() {
         if (i !== idx) return item;
         const novaQtd = Math.max(1, item.quantidade + delta);
         return { ...item, quantidade: novaQtd, subtotal: novaQtd * Number(item.valor_unitario) };
+      })
+    );
+  };
+
+  const handleSetNewItemQty = (idx: number, qty: number) => {
+    setNewItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== idx) return item;
+        const novaQtd = Math.max(1, isNaN(qty) ? 1 : qty);
+        return { ...item, quantidade: novaQtd, subtotal: novaQtd * Number(item.valor_unitario) };
+      })
+    );
+  };
+
+  const handleChangeNewItemUnitario = (idx: number, newUnitario: number) => {
+    setNewItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== idx) return item;
+        const unit = isNaN(newUnitario) || newUnitario < 0 ? 0 : newUnitario;
+        return { ...item, valor_unitario: unit, subtotal: Number(item.quantidade) * unit };
       })
     );
   };
@@ -217,6 +415,7 @@ function Vendas() {
     if (!selectedProdutoId || newQtd <= 0) return;
     const prod = produtos.find((p) => p.id === selectedProdutoId);
     if (!prod) return;
+    const unit = Number(newUnitario) || 0;
     setNewItems((prev) => [
       ...prev,
       {
@@ -224,8 +423,8 @@ function Vendas() {
         nome: prod.nome,
         imagem: prod.imagem,
         quantidade: newQtd,
-        valor_unitario: newUnitario,
-        subtotal: newUnitario * newQtd,
+        valor_unitario: unit,
+        subtotal: unit * newQtd,
         estoque: prod.estoque,
       },
     ]);
@@ -245,7 +444,7 @@ function Vendas() {
         // Se venda baixou estoque, devolver
         if (isVendaComEstoque) {
           const removed = vendaItens.find((i) => i.id === itemId);
-          if (removed) {
+          if (removed && removed.produto_id) {
             const { data: prod } = await supabase
               .from("produtos")
               .select("estoque")
@@ -262,12 +461,16 @@ function Vendas() {
         await supabase.from("vendas_itens").delete().eq("id", itemId);
       }
 
-      // 1b. Atualizar quantidade dos itens existentes que foram alterados
+      // 1b. Atualizar quantidade e valor_unitario dos itens existentes alterados
       for (const item of editItens) {
         const original = vendaItens.find((i) => i.id === item.id);
-        if (!original || original.quantidade === item.quantidade) continue;
+        if (!original) continue;
+        const qtdChanged = original.quantidade !== item.quantidade;
+        const unitChanged = Number(original.valor_unitario) !== Number(item.valor_unitario);
+        if (!qtdChanged && !unitChanged) continue;
+
         const diff = item.quantidade - original.quantidade; // positivo = aumentou, negativo = diminuiu
-        if (isVendaComEstoque) {
+        if (qtdChanged && isVendaComEstoque && item.produto_id) {
           const { data: prod } = await supabase
             .from("produtos")
             .select("estoque")
@@ -276,7 +479,7 @@ function Vendas() {
           if (prod) {
             const novoEstoque = prod.estoque - diff;
             if (diff > 0 && novoEstoque < 0) {
-              alert(`Estoque insuficiente para ${item.produtos?.nome || "produto"}. Disponível: ${prod.estoque}`);
+              toast.error(`Estoque insuficiente para ${item.produtos?.nome || "produto"}. Disponível: ${prod.estoque}`);
               setSavingItems(false);
               return;
             }
@@ -288,14 +491,18 @@ function Vendas() {
         }
         await supabase
           .from("vendas_itens")
-          .update({ quantidade: item.quantidade, subtotal: item.subtotal })
+          .update({
+            quantidade: item.quantidade,
+            valor_unitario: Number(item.valor_unitario),
+            subtotal: Number(item.subtotal),
+          })
           .eq("id", item.id);
       }
 
       // 2. Inserir novos itens
       for (const item of newItems) {
         // Se venda baixou estoque, decrementar
-        if (isVendaComEstoque) {
+        if (isVendaComEstoque && item.produto_id) {
           const { data: prod } = await supabase
             .from("produtos")
             .select("estoque")
@@ -304,7 +511,7 @@ function Vendas() {
           if (prod) {
             const novoEstoque = prod.estoque - item.quantidade;
             if (novoEstoque < 0) {
-              alert(`Estoque insuficiente para ${item.nome}. Disponível: ${prod.estoque}`);
+              toast.error(`Estoque insuficiente para ${item.nome}. Disponível: ${prod.estoque}`);
               setSavingItems(false);
               return;
             }
@@ -318,8 +525,8 @@ function Vendas() {
           venda_id: vendaId,
           produto_id: item.produto_id,
           quantidade: item.quantidade,
-          valor_unitario: item.valor_unitario,
-          subtotal: item.subtotal,
+          valor_unitario: Number(item.valor_unitario),
+          subtotal: Number(item.subtotal),
         });
       }
 
@@ -358,8 +565,9 @@ function Vendas() {
       setEditItens([]);
       setRemovedIds([]);
       setNewItems([]);
+      toast.success("Itens e valores do pedido atualizados com sucesso!");
     } catch (err: any) {
-      alert("Erro ao salvar itens: " + err.message);
+      toast.error("Erro ao salvar itens: " + err.message);
     } finally {
       setSavingItems(false);
     }
@@ -654,7 +862,7 @@ function Vendas() {
       </Card>
 
       <Sheet open={openSheet} onOpenChange={(o) => { setOpenSheet(o); if (!o) handleCancelEditItems(); }}>
-        <SheetContent className="w-[400px] sm:w-[560px] sm:max-w-lg overflow-y-auto">
+        <SheetContent className="w-[95vw] sm:w-[640px] sm:max-w-2xl overflow-y-auto">
           <SheetHeader>
             <SheetTitle>Detalhes da Operação</SheetTitle>
             <SheetDescription>
@@ -664,23 +872,140 @@ function Vendas() {
           </SheetHeader>
 
           <div className="mt-6 space-y-6">
-            <div className="grid grid-cols-2 gap-4 text-sm bg-muted/30 p-4 rounded-lg">
+            <div className="grid grid-cols-2 gap-4 text-sm bg-muted/30 p-4 rounded-xl border border-border/50">
+              {/* Cliente */}
               <div>
-                <span className="text-muted-foreground block text-xs uppercase tracking-wider">
+                <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">
                   Cliente
                 </span>
-                <span className="font-medium">
-                  {selectedVenda?.clientes?.nome || "Cliente Removido"}
-                </span>
+                {isEditingCliente ? (
+                  <div className="space-y-1.5">
+                    <Popover open={openClientePop} onOpenChange={setOpenClientePop}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between h-8 text-xs font-normal"
+                          onClick={() => fetchClientes()}
+                        >
+                          <span className="truncate">
+                            {selectedVenda?.clientes?.nome || "Selecionar cliente..."}
+                          </span>
+                          <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Buscar cliente..." />
+                          <CommandList>
+                            <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+                            <CommandGroup>
+                              {clientesList.map((c) => (
+                                <CommandItem
+                                  key={c.id}
+                                  value={`${c.nome} ${c.cpf_cnpj || ""}`}
+                                  onSelect={() => handleChangeCliente(c.id)}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-3.5 w-3.5",
+                                      selectedVenda?.cliente_id === c.id ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  <div className="truncate text-xs">
+                                    <p className="font-medium">{c.nome}</p>
+                                    {c.cpf_cnpj && (
+                                      <p className="text-[10px] text-muted-foreground">{c.cpf_cnpj}</p>
+                                    )}
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 text-[11px] text-muted-foreground hover:text-foreground"
+                      onClick={() => setIsEditingCliente(false)}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-medium truncate" title={selectedVenda?.clientes?.nome}>
+                      {selectedVenda?.clientes?.nome || "Cliente Avulso"}
+                    </span>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6 opacity-50 hover:opacity-100 shrink-0"
+                      title="Alterar cliente"
+                      onClick={() => {
+                        fetchClientes();
+                        setIsEditingCliente(true);
+                      }}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
               </div>
+
+              {/* Data */}
               <div>
-                <span className="text-muted-foreground block text-xs uppercase tracking-wider">
+                <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">
                   Data
                 </span>
-                <span className="font-medium">
-                  {selectedVenda ? new Date(selectedVenda.created_at).toLocaleDateString() : "-"}
-                </span>
+                {isEditingDate ? (
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      type="date"
+                      value={editDateValue}
+                      onChange={(e) => setEditDateValue(e.target.value)}
+                      className="h-8 text-xs font-medium"
+                    />
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-success shrink-0"
+                      onClick={handleSaveDate}
+                      disabled={savingDate}
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-destructive shrink-0"
+                      onClick={() => setIsEditingDate(false)}
+                      disabled={savingDate}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-medium">
+                      {selectedVenda ? new Date(selectedVenda.created_at).toLocaleDateString() : "-"}
+                    </span>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6 opacity-50 hover:opacity-100 shrink-0"
+                      title="Alterar data"
+                      onClick={handleStartEditDate}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
               </div>
+
+              {/* Status */}
               <div>
                 <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">
                   Status
@@ -689,7 +1014,7 @@ function Vendas() {
                   value={selectedVenda?.status || ""}
                   onValueChange={(val) => handleStatusChange(selectedVenda.id, val)}
                 >
-                  <SelectTrigger className="h-8">
+                  <SelectTrigger className="h-8 text-xs font-medium">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -702,19 +1027,21 @@ function Vendas() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Total */}
               <div>
                 <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">
                   Total
                 </span>
                 {isEditingTotal ? (
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-base">R$</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-sm">R$</span>
                     <input
                       type="number"
                       step="0.01"
                       value={newTotalValue}
                       onChange={(e) => setNewTotalValue(e.target.value)}
-                      className="w-24 border-b border-dashed border-slate-400 outline-none bg-transparent font-semibold"
+                      className="w-24 border-b border-dashed border-slate-400 outline-none bg-transparent font-semibold text-sm"
                     />
                     <Button
                       size="icon"
@@ -722,7 +1049,7 @@ function Vendas() {
                       className="h-6 w-6 text-success"
                       onClick={handleSaveTotal}
                     >
-                      <Check className="h-4 w-4" />
+                      <Check className="h-3.5 w-3.5" />
                     </Button>
                     <Button
                       size="icon"
@@ -730,12 +1057,12 @@ function Vendas() {
                       className="h-6 w-6 text-destructive"
                       onClick={() => setIsEditingTotal(false)}
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-base">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-bold text-base text-foreground">
                       R${" "}
                       {Number(selectedVenda?.valor_total || 0).toLocaleString("pt-BR", {
                         minimumFractionDigits: 2,
@@ -744,10 +1071,155 @@ function Vendas() {
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-6 w-6 opacity-40 hover:opacity-100"
+                      className="h-6 w-6 opacity-50 hover:opacity-100 shrink-0"
+                      title="Editar total diretamente"
                       onClick={handleEditTotal}
                     >
                       <Pencil className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Pagamento (Forma e Condição) */}
+              <div className="col-span-2 pt-3 border-t border-border/50">
+                {isEditingPayment ? (
+                  <div className="space-y-3 bg-background p-3 rounded-lg border border-border/60 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs uppercase tracking-wider text-primary flex items-center gap-1.5">
+                        <CreditCard className="h-3.5 w-3.5" /> Editar Forma de Pagamento
+                      </span>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                        onClick={() => setIsEditingPayment(false)}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-muted-foreground">
+                          Forma de Pagamento
+                        </label>
+                        <Select
+                          value={editMetodoPagamento}
+                          onValueChange={(val) => setEditMetodoPagamento(val)}
+                        >
+                          <SelectTrigger className="h-8 text-xs font-medium">
+                            <SelectValue placeholder="Selecione a forma..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                            <SelectItem value="Pix">Pix</SelectItem>
+                            <SelectItem value="Cartão de Crédito">Cartão de Crédito</SelectItem>
+                            <SelectItem value="Cartão de Débito">Cartão de Débito</SelectItem>
+                            <SelectItem value="Boleto">Boleto Bancário</SelectItem>
+                            <SelectItem value="Boleto a Prazo">Boleto a Prazo</SelectItem>
+                            <SelectItem value="Transferência">Transferência / TED</SelectItem>
+                            <SelectItem value="Cheque">Cheque</SelectItem>
+                            <SelectItem value="Outro">Outro</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-muted-foreground">
+                          Condição / Prazo
+                        </label>
+                        <Input
+                          className="h-8 text-xs font-medium"
+                          placeholder="Ex: À Vista, Boleto a Prazo..."
+                          value={editCondicaoPagamento}
+                          onChange={(e) => setEditCondicaoPagamento(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Presets rápidos */}
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-muted-foreground uppercase font-semibold">
+                        Atalhos rápidos de condição:
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {[
+                          "À Vista",
+                          "Boleto a Prazo",
+                          "Boleto (28, 35, 42 dias)",
+                          "Boleto 30 dias",
+                          "Boleto 30/60 dias",
+                          "Entrada + 30 dias",
+                          "2x sem juros",
+                          "3x sem juros",
+                        ].map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => {
+                              setEditCondicaoPagamento(preset);
+                              if (preset.toLowerCase().includes("boleto") && !editMetodoPagamento) {
+                                setEditMetodoPagamento("Boleto");
+                              }
+                            }}
+                            className="text-[10px] px-2 py-0.5 rounded-md bg-muted hover:bg-primary/10 hover:text-primary transition-colors text-muted-foreground border border-border/40"
+                          >
+                            {preset}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-1 border-t border-border/40">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        onClick={() => setIsEditingPayment(false)}
+                        disabled={savingPayment}
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs bg-gradient-brand text-primary-foreground"
+                        onClick={handleSavePayment}
+                        disabled={savingPayment}
+                      >
+                        <Check className="h-3.5 w-3.5 mr-1" />
+                        {savingPayment ? "Salvando..." : "Salvar Pagamento"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">
+                        Pagamento
+                      </span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-foreground text-sm">
+                          {selectedVenda?.metodo_pagamento || "Não informado"}
+                        </span>
+                        {selectedVenda?.condicao_pagamento && (
+                          <Badge variant="secondary" className="text-xs font-normal">
+                            {selectedVenda.condicao_pagamento}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs gap-1 hover:bg-muted text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        setEditMetodoPagamento(selectedVenda?.metodo_pagamento || "");
+                        setEditCondicaoPagamento(selectedVenda?.condicao_pagamento || "");
+                        setIsEditingPayment(true);
+                      }}
+                    >
+                      <Pencil className="h-3 w-3" /> Alterar Pagamento
                     </Button>
                   </div>
                 )}
@@ -895,57 +1367,123 @@ function Vendas() {
               {isEditingItems ? (
                 <div className="space-y-4">
                   {/* Itens existentes editáveis */}
-                  <div className="space-y-2">
+                  <div className="space-y-2.5">
                     {editItens.map((item) => (
                       <div
                         key={item.id}
-                        className="flex justify-between items-center p-3 rounded-lg border border-border/50 bg-background gap-2"
+                        className="p-3 rounded-xl border border-border/70 bg-card shadow-sm space-y-2.5 transition-all"
                       >
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md bg-accent text-base">
-                            {item.produtos?.imagem ? (
-                              <img src={item.produtos.imagem} alt={item.produtos.nome} className="h-full w-full object-cover" />
-                            ) : (
-                              <span className="opacity-50">📦</span>
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="font-semibold text-sm truncate">{item.produtos?.nome || "Produto"}</div>
-                            <div className="text-xs text-muted-foreground">
-                              R$ {Number(item.valor_unitario).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / un
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-accent text-base border">
+                              {item.produtos?.imagem ? (
+                                <img
+                                  src={item.produtos.imagem}
+                                  alt={item.produtos?.nome || "Produto"}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <span className="opacity-50">📦</span>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div
+                                className="font-semibold text-sm truncate text-foreground"
+                                title={item.produtos?.nome}
+                              >
+                                {item.produtos?.nome || "Produto"}
+                              </div>
+                              <div className="text-[11px] text-muted-foreground flex items-center gap-2 flex-wrap">
+                                {item.produtos?.codigo && (
+                                  <span>Cód: {item.produtos.codigo}</span>
+                                )}
+                                {item.produtos?.estoque !== undefined && (
+                                  <span>• Estoque: {item.produtos.estoque}</span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-6 w-6 rounded-full"
-                            onClick={() => handleChangeExistingQty(item.id, -1)}
-                            disabled={item.quantidade <= 1}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <span className="w-7 text-center text-sm font-semibold tabular-nums">{item.quantidade}</span>
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-6 w-6 rounded-full"
-                            onClick={() => handleChangeExistingQty(item.id, 1)}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                          <span className="font-medium text-sm w-20 text-right">
-                            R$ {Number(item.subtotal).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                          </span>
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-7 w-7 text-destructive hover:bg-destructive/10 shrink-0"
+                            className="h-8 w-8 text-destructive hover:bg-destructive/10 shrink-0 rounded-lg"
+                            title="Remover produto do pedido"
                             onClick={() => handleRemoveExistingItem(item.id)}
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
+                        </div>
+
+                        {/* Linha de edição de Quantidade, Preço Unitário e Subtotal */}
+                        <div className="grid grid-cols-12 gap-2 pt-2 border-t border-border/40 items-center">
+                          {/* Quantidade */}
+                          <div className="col-span-5 flex flex-col gap-1">
+                            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                              Qtd
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7 rounded-md shrink-0"
+                                onClick={() => handleChangeExistingQty(item.id, -1)}
+                                disabled={item.quantidade <= 1}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              <Input
+                                type="number"
+                                min="1"
+                                className="h-7 w-12 text-center text-xs font-semibold px-1"
+                                value={item.quantidade}
+                                onChange={(e) =>
+                                  handleSetExistingQty(item.id, parseInt(e.target.value) || 1)
+                                }
+                              />
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7 rounded-md shrink-0"
+                                onClick={() => handleChangeExistingQty(item.id, 1)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Valor Unitário */}
+                          <div className="col-span-4 flex flex-col gap-1">
+                            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                              Vlr Unit. (R$)
+                            </span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              className="h-7 text-xs font-semibold px-2"
+                              value={item.valor_unitario}
+                              onChange={(e) =>
+                                handleChangeExistingUnitario(
+                                  item.id,
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
+                            />
+                          </div>
+
+                          {/* Subtotal */}
+                          <div className="col-span-3 flex flex-col gap-1 text-right">
+                            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                              Subtotal
+                            </span>
+                            <div className="text-xs font-bold text-foreground truncate h-7 flex items-center justify-end">
+                              R${" "}
+                              {Number(item.subtotal || 0).toLocaleString("pt-BR", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -954,60 +1492,127 @@ function Vendas() {
                     {newItems.map((item, idx) => (
                       <div
                         key={`new-${idx}`}
-                        className="flex justify-between items-center p-3 rounded-lg border border-brand/30 bg-brand/5 gap-2"
+                        className="p-3 rounded-xl border border-brand/40 bg-brand/5 shadow-sm space-y-2.5 transition-all"
                       >
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md bg-accent text-base">
-                            {item.imagem ? (
-                              <img src={item.imagem} alt={item.nome} className="h-full w-full object-cover" />
-                            ) : (
-                              <span className="opacity-50">📦</span>
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="font-semibold text-sm truncate">{item.nome}</div>
-                            <div className="text-xs text-muted-foreground">
-                              R$ {Number(item.valor_unitario).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / un
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-accent text-base border">
+                              {item.imagem ? (
+                                <img
+                                  src={item.imagem}
+                                  alt={item.nome || "Produto"}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <span className="opacity-50">📦</span>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className="font-semibold text-sm truncate text-foreground"
+                                  title={item.nome}
+                                >
+                                  {item.nome}
+                                </span>
+                                <Badge
+                                  variant="outline"
+                                  className="text-[9px] px-1 py-0 border-brand/50 text-brand"
+                                >
+                                  novo
+                                </Badge>
+                              </div>
+                              <div className="text-[11px] text-muted-foreground flex items-center gap-2">
+                                {item.estoque !== undefined && <span>Estoque: {item.estoque}</span>}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Badge variant="outline" className="text-[10px] border-brand/40 text-brand mr-1">novo</Badge>
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-6 w-6 rounded-full"
-                            onClick={() => handleChangeNewItemQty(idx, -1)}
-                            disabled={item.quantidade <= 1}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <span className="w-7 text-center text-sm font-semibold tabular-nums">{item.quantidade}</span>
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-6 w-6 rounded-full"
-                            onClick={() => handleChangeNewItemQty(idx, 1)}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                          <span className="font-medium text-sm w-20 text-right">
-                            R$ {Number(item.subtotal).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                          </span>
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-7 w-7 text-destructive hover:bg-destructive/10 shrink-0"
+                            className="h-8 w-8 text-destructive hover:bg-destructive/10 shrink-0 rounded-lg"
+                            title="Remover produto"
                             onClick={() => handleRemoveNewItem(idx)}
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
+                        </div>
+
+                        {/* Linha de edição */}
+                        <div className="grid grid-cols-12 gap-2 pt-2 border-t border-brand/20 items-center">
+                          <div className="col-span-5 flex flex-col gap-1">
+                            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                              Qtd
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7 rounded-md shrink-0"
+                                onClick={() => handleChangeNewItemQty(idx, -1)}
+                                disabled={item.quantidade <= 1}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              <Input
+                                type="number"
+                                min="1"
+                                className="h-7 w-12 text-center text-xs font-semibold px-1"
+                                value={item.quantidade}
+                                onChange={(e) =>
+                                  handleSetNewItemQty(idx, parseInt(e.target.value) || 1)
+                                }
+                              />
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7 rounded-md shrink-0"
+                                onClick={() => handleChangeNewItemQty(idx, 1)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="col-span-4 flex flex-col gap-1">
+                            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                              Vlr Unit. (R$)
+                            </span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              className="h-7 text-xs font-semibold px-2"
+                              value={item.valor_unitario}
+                              onChange={(e) =>
+                                handleChangeNewItemUnitario(
+                                  idx,
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
+                            />
+                          </div>
+
+                          <div className="col-span-3 flex flex-col gap-1 text-right">
+                            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                              Subtotal
+                            </span>
+                            <div className="text-xs font-bold text-foreground truncate h-7 flex items-center justify-end">
+                              R${" "}
+                              {Number(item.subtotal || 0).toLocaleString("pt-BR", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))}
 
                     {editItens.length === 0 && newItems.length === 0 && (
-                      <p className="text-sm text-muted-foreground text-center py-4">Nenhum item. Adicione produtos abaixo.</p>
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        Nenhum item. Adicione produtos abaixo.
+                      </p>
                     )}
                   </div>
 
