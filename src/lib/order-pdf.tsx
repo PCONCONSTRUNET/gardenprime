@@ -451,7 +451,7 @@ export async function preloadLogos(): Promise<{ prime: string | null; plus: stri
 
   try {
     const [prime, plus] = await Promise.all([
-      toBase64("/garden-prime-logo.png"),
+      toBase64("/garden-prime-lado.png").then((res) => res || toBase64("/garden-prime-logo.png")),
       toBase64("/garden-plus.png"),
     ]);
     cachedLogos = { prime, plus };
@@ -469,6 +469,10 @@ export async function generateOrderPdfDoc(
   items: OrderItem[],
   logos?: { prime?: string | null; plus?: string | null; icons?: any },
 ): Promise<{ doc: jsPDF; blob: Blob; file: File; filename: string }> {
+  if (!logos) {
+    logos = await preloadLogos();
+  }
+
   // Buscar configurações da empresa
   let config: any = null;
   try {
@@ -525,53 +529,66 @@ export async function generateOrderPdfDoc(
   const colorGray = [243, 244, 246] as [number, number, number]; // #F3F4F6
 
   // 1. CABEÇALHO CLARO
-  // Logo left
+  // Logo Garden Prime
   const primeLogo = logos?.prime || cachedLogos?.prime;
+  const plusLogo = logos?.plus || cachedLogos?.plus;
+
   if (primeLogo) {
     try {
-      doc.addImage(primeLogo, "PNG", margin, y, 50, 20); // adjust size
+      doc.addImage(primeLogo, "PNG", margin, y, 46, 12);
     } catch {}
   } else {
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(20);
+    doc.setFontSize(14);
     doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
-    doc.text(config?.nome_fantasia || config?.razao_social || "GARDEN PLUS", margin, y + 10);
+    doc.text("GARDEN PRIME", margin, y + 8);
+  }
+
+  // Logo Garden Plus embaixo da Garden Prime
+  if (plusLogo) {
+    try {
+      doc.addImage(plusLogo, "PNG", margin + 1, y + 13, 30, 11);
+    } catch {}
+  } else {
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
-    doc.text("TERRA VEGETAL E VASOS", margin, y + 15);
+    doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
+    doc.text("GARDEN PLUS", margin, y + 20);
   }
 
   // Divisor 1
-  const div1X = margin + 65;
+  const div1X = margin + 55;
   doc.setDrawColor(colorGold[0], colorGold[1], colorGold[2]);
-  doc.line(div1X, y + 2, div1X, y + 18);
+  doc.setLineWidth(0.4);
+  doc.line(div1X, y + 1, div1X, y + 25);
 
-  // Info Empresa
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(50, 50, 50);
+  // Info Empresa (negrito e preto bem definido)
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(0, 0, 0);
   const infoX = div1X + 4;
   doc.text(`CNPJ: ${config?.cnpj || "50.387.381/0001-81"}`, infoX, y + 5);
-  doc.text(`Inscr. Estadual: ${config?.inscricao_estadual || "266031100110"}`, infoX, y + 8);
+  doc.text(`Inscr. Estadual: ${config?.inscricao_estadual || "266031100110"}`, infoX, y + 9);
   
   const tipo = config?.tipo_logradouro ? config.tipo_logradouro + " " : "";
   const end = config?.endereco || "MATEUS RODRIGUES DA COSTA";
   const numero = config?.numero ? ", " + config.numero : "";
   const compl = config?.complemento ? " " + config.complemento : "";
   const bairro = config?.bairro ? ", " + config.bairro : "";
-  doc.text(`${tipo}${end}${numero}${compl}${bairro}`, infoX, y + 12);
+  doc.text(`${tipo}${end}${numero}${compl}${bairro}`, infoX, y + 13);
   
   const mun = config?.municipio || "Charqueada";
   const uf = config?.uf || "SP";
   const cep = config?.cep ? " - CEP " + config.cep : "";
-  doc.text(`${mun} - ${uf}${cep}`, infoX, y + 15);
+  doc.text(`${mun} - ${uf}${cep}`, infoX, y + 17);
   
   const cel = config?.celular || config?.telefone || "(19) 99930-8784";
-  doc.text(cel, infoX, y + 19);
+  doc.text(cel, infoX, y + 21);
   
-  doc.text(config?.email_contato || "garden-plus@hotmail.com", infoX, y + 23);
+  doc.text(config?.email_contato || "garden-plus@hotmail.com", infoX, y + 25);
 
   // Slogan Top Right
-  doc.setFont("times", "italic");
+  doc.setFont("times", "bolditalic");
   doc.setFontSize(14);
   doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
   doc.text("Mais verde", pageWidth - margin - 40, y + 8);
@@ -589,17 +606,19 @@ export async function generateOrderPdfDoc(
   doc.setTextColor(255, 255, 255);
   doc.text(docType, margin + 20, y + 9);
   doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
+  doc.setFont("helvetica", "bold");
   doc.text(`DAV Nº: ${num}`, margin + 20, y + 15);
 
   const dataEmissao = new Date(order.created_at).toLocaleDateString("pt-BR");
   const horaEmissao = new Date(order.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   
   // Emissão
-  doc.setFontSize(6);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.5);
   doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
   doc.text("Emissão", margin + 80, y + 8);
   doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
   doc.setTextColor(255, 255, 255);
   doc.text(`${dataEmissao} às ${horaEmissao}`, margin + 80, y + 13);
 
@@ -612,10 +631,12 @@ export async function generateOrderPdfDoc(
     base.setDate(base.getDate() + 30);
     validadeStr = base.toLocaleDateString("pt-BR");
   }
-  doc.setFontSize(6);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.5);
   doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
   doc.text("Validade", margin + 120, y + 8);
   doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
   doc.setTextColor(255, 255, 255);
   doc.text(validadeStr, margin + 120, y + 13);
 
@@ -625,10 +646,10 @@ export async function generateOrderPdfDoc(
   doc.roundedRect(pageWidth - margin - boxW, y + 2, boxW - 2, 18, 1, 1, "F");
   
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6);
+  doc.setFontSize(6.5);
   doc.setTextColor(255, 255, 255);
   doc.text("CONDIÇÕES COMERCIAIS", pageWidth - margin - boxW + 4, y + 7);
-  doc.setFont("helvetica", "normal");
+  doc.setFont("helvetica", "bold");
   doc.text(`Pagamento: ${order.condicao_pagamento || "Não informado"}`, pageWidth - margin - boxW + 4, y + 11);
   const freteInfo = order.frete_tipo || (order as any).frete || "Retirada";
   const prazoInfo = order.prazo_entrega || (order as any).prazo || "Imediato";
@@ -641,13 +662,14 @@ export async function generateOrderPdfDoc(
   doc.roundedRect(margin, y, pageWidth - margin * 2, 32, 2, 2, "F");
   
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(50, 50, 50);
+  doc.setFontSize(8.5);
+  doc.setTextColor(0, 0, 0);
   doc.text("DADOS DO CLIENTE", margin + 10, y + 6);
   
   const c = order.cliente || order.clientes || ({} as any);
-  doc.setFont("helvetica", "normal");
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
+  doc.setTextColor(0, 0, 0);
   
   const labelX1 = margin + 5;
   const valX1 = margin + 25;
@@ -675,9 +697,9 @@ export async function generateOrderPdfDoc(
   doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
   doc.text("Obrigado pela", obX + 15, y + 10);
   doc.text("sua confiança!", obX + 15, y + 14);
-  doc.setFont("helvetica", "normal");
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(6);
-  doc.setTextColor(100, 100, 100);
+  doc.setTextColor(0, 0, 0);
   doc.text("Estamos à disposição", obX + 15, y + 20);
   doc.text("para lhe atender sempre!", obX + 15, y + 23);
 
@@ -685,8 +707,8 @@ export async function generateOrderPdfDoc(
 
   // 4. PRODUTOS
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(50, 50, 50);
+  doc.setFontSize(9.5);
+  doc.setTextColor(0, 0, 0);
   doc.text("PRODUTOS", margin + 10, y + 2);
   y += 6;
 
@@ -712,19 +734,22 @@ export async function generateOrderPdfDoc(
       fontStyle: "bold",
       halign: "center",
       valign: "middle",
+      fontSize: 8,
     },
     styles: {
-      fontSize: 7,
+      fontSize: 7.5,
       cellPadding: 3,
       valign: "middle",
       overflow: "linebreak",
+      fontStyle: "bold",
+      textColor: [0, 0, 0],
     },
     columnStyles: {
-      0: { halign: "center", cellWidth: 15 },
+      0: { halign: "center", cellWidth: 15, fontStyle: "bold" },
       1: { cellWidth: 14 }, // Imagem
-      2: { halign: "left" }, // Produto (flex - ocupa o restante)
-      3: { halign: "center", cellWidth: 12 }, // Qtd
-      4: { halign: "right", cellWidth: 22 }, // Unit
+      2: { halign: "left", fontStyle: "bold" }, // Produto (flex - ocupa o restante)
+      3: { halign: "center", cellWidth: 12, fontStyle: "bold" }, // Qtd
+      4: { halign: "right", cellWidth: 22, fontStyle: "bold" }, // Unit
       5: { halign: "right", cellWidth: 27, fontStyle: "bold" }, // Total
     },
     alternateRowStyles: {
@@ -755,9 +780,9 @@ export async function generateOrderPdfDoc(
   
   doc.setFillColor(colorGray[0], colorGray[1], colorGray[2]);
   doc.rect(totX, y, totW, 8, "F");
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(50, 50, 50);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(0, 0, 0);
   doc.text("Subtotal", totX + 2, y + 5);
   const vSub = `R$ ${Number(order.subtotal || order.valor_total || 0).toFixed(2).replace(".", ",")}`;
   doc.text(vSub, totX + totW - 2, y + 5, { align: "right" });
@@ -766,7 +791,7 @@ export async function generateOrderPdfDoc(
   doc.setFillColor(colorGold[0], colorGold[1], colorGold[2]);
   doc.rect(totX, y, totW, 8, "F");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
+  doc.setFontSize(9.5);
   doc.setTextColor(255, 255, 255);
   doc.text("Total", totX + 2, y + 5.5);
   const vTot = `R$ ${Number(order.valor_total || order.total || 0).toFixed(2).replace(".", ",")}`;
@@ -775,13 +800,14 @@ export async function generateOrderPdfDoc(
   y += 25;
 
   // 6. ASSINATURAS
-  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.4);
+  doc.setDrawColor(0, 0, 0);
   doc.line(margin + 5, y, margin + 65, y);
   doc.line(margin + 80, y, margin + 140, y);
   
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6);
-  doc.setTextColor(50, 50, 50);
+  doc.setFontSize(6.5);
+  doc.setTextColor(0, 0, 0);
   doc.text("ASSINATURA DO VENDEDOR", margin + 35, y + 4, { align: "center" });
   doc.text("ASSINATURA DO CLIENTE", margin + 110, y + 4, { align: "center" });
   
@@ -790,9 +816,9 @@ export async function generateOrderPdfDoc(
   doc.roundedRect(margin + 150, y - 5, 40, 12, 1, 1, "F");
   doc.setDrawColor(colorGold[0], colorGold[1], colorGold[2]);
   doc.roundedRect(margin + 150, y - 5, 40, 12, 1, 1, "S");
-  doc.setFont("helvetica", "normal");
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(5);
-  doc.setTextColor(100, 100, 100);
+  doc.setTextColor(50, 50, 50);
   doc.text("Este documento não possui", margin + 155, y - 1);
   doc.text("valor fiscal, é apenas um", margin + 155, y + 2);
   doc.text("Documento Auxiliar de Venda.", margin + 155, y + 5);
@@ -802,17 +828,21 @@ export async function generateOrderPdfDoc(
   doc.setFillColor(colorDark[0], colorDark[1], colorDark[2]);
   doc.rect(0, pageHeight - footerH, pageWidth, footerH, "F");
   
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(6);
-  doc.setTextColor(200, 200, 200);
-  doc.text("Qualidade em cada detalhe", 30, pageHeight - 10);
-  doc.text("Entrega rápida e segura", 80, pageHeight - 10);
-  doc.text("Produtos selecionados para o seu jardim", 130, pageHeight - 10);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.5);
+  doc.setTextColor(220, 220, 220);
+  doc.text("Qualidade em cada detalhe", 25, pageHeight - 10);
+  doc.text("Entrega rápida e segura", 75, pageHeight - 10);
+  doc.text("Produtos selecionados para o seu jardim", 125, pageHeight - 10);
   
   if (primeLogo) {
     try {
-      // Trying to add logo to footer
-      doc.addImage(primeLogo, "PNG", pageWidth - 45, pageHeight - 15, 30, 12);
+      doc.addImage(primeLogo, "PNG", pageWidth - 55, pageHeight - 16, 26, 7);
+    } catch {}
+  }
+  if (plusLogo) {
+    try {
+      doc.addImage(plusLogo, "PNG", pageWidth - 26, pageHeight - 16, 18, 7);
     } catch {}
   }
 

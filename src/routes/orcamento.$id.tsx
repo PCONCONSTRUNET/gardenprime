@@ -196,7 +196,7 @@ function ImprimirDAV() {
       <style>{`
         @media print {
           @page { margin: 8mm; size: A4; }
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; font-weight: 700; }
           .no-print { display: none !important; }
         }
       `}</style>
@@ -205,13 +205,13 @@ function ImprimirDAV() {
       <div className="no-print flex gap-4 mb-6 sticky top-0 bg-white/90 backdrop-blur pb-4 z-10 border-b border-slate-100">
         <button
           onClick={handleVoltar}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-bold transition-colors"
         >
           <ArrowLeft className="w-4 h-4" /> Voltar
         </button>
         <button
           onClick={() => window.print()}
-          className="flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-2 bg-brand text-white hover:bg-brand-dark rounded-lg text-sm font-medium transition-colors"
+          className="flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-2 bg-brand text-white hover:bg-brand-dark rounded-lg text-sm font-bold transition-colors"
         >
           <Printer className="w-4 h-4" /> Imprimir / Salvar PDF
         </button>
@@ -225,7 +225,7 @@ function ImprimirDAV() {
             }
           }}
           disabled={sharing}
-          className="flex items-center gap-2 px-4 py-2 bg-[#25D366] hover:bg-[#20bd5a] text-white rounded-lg text-sm font-medium transition-colors ml-auto"
+          className="flex items-center gap-2 px-4 py-2 bg-[#25D366] hover:bg-[#20bd5a] text-white rounded-lg text-sm font-bold transition-colors ml-auto"
         >
           {sharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <WhatsAppIcon className="w-4 h-4" />}
           <span>WhatsApp</span>
@@ -233,26 +233,40 @@ function ImprimirDAV() {
       </div>
 
       {/* ── PDF LAYOUT INÍCIO ── */}
-      <div className="print:shadow-none shadow-sm border border-slate-100 print:border-none p-4 sm:p-6 rounded-xl bg-white">
+      <div className="print:shadow-none shadow-sm border border-slate-200 print:border-none p-4 sm:p-6 rounded-xl bg-white">
         
         {/* 1. CABEÇALHO CLARO */}
         <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-6">
-            <GardenPrimeLogo horizontal size="large" />
-            <div className="w-px h-16 bg-[#C5A059] mx-2 hidden sm:block"></div>
-            <div className="text-[10px] sm:text-xs text-slate-700 space-y-1">
-              <p>CNPJ: {config?.cnpj || "50.387.381/0001-81"} | Inscr. Estadual: {config?.inscricao_estadual || "266031100110"}</p>
+          <div className="flex items-center gap-5 sm:gap-6">
+            {/* Logos Garden Prime e Garden Plus (embaixo) */}
+            <div className="flex flex-col items-center justify-center gap-1.5 shrink-0">
+              <GardenPrimeLogo horizontal size="large" />
+              <img
+                src="/garden-plus.png"
+                alt="Garden Plus"
+                className="h-10 sm:h-12 w-auto object-contain"
+              />
+            </div>
+            <div className="w-px h-24 bg-[#C5A059] mx-1 sm:mx-2 hidden sm:block"></div>
+            <div className="text-[10px] sm:text-xs text-black font-extrabold space-y-1">
+              <p>
+                <span className="font-black">CNPJ:</span> {config?.cnpj || "50.387.381/0001-81"} |{" "}
+                <span className="font-black">Inscr. Estadual:</span> {config?.inscricao_estadual || "266031100110"}
+              </p>
               <p>
                 {config?.tipo_logradouro ? config.tipo_logradouro + " " : ""}
                 {config?.endereco || "MATEUS RODRIGUES DA COSTA"}{config?.numero ? ", " + config.numero : ""}
                 {config?.complemento ? " " + config.complemento : ""}{config?.bairro ? ", " + config.bairro : ""}
                 {", " + (config?.municipio || "Charqueada") + " - " + (config?.uf || "SP")}
               </p>
-              <p>{config?.celular || config?.telefone || "(19) 99930-8784"} | {config?.email_contato || "garden-plus@hotmail.com"}</p>
+              <p>
+                <span className="font-black">{config?.celular || config?.telefone || "(19) 99930-8784"}</span> |{" "}
+                <span className="font-black">{config?.email_contato || "garden-plus@hotmail.com"}</span>
+              </p>
             </div>
           </div>
           <div className="hidden sm:block text-right transform -rotate-2">
-            <p className="font-serif italic text-[#C5A059] text-xl leading-tight">
+            <p className="font-serif italic font-black text-[#C5A059] text-xl leading-tight">
               Mais verde<br />para um futuro<br />melhor!
             </p>
           </div>
@@ -262,14 +276,14 @@ function ImprimirDAV() {
         <div className="bg-[#112321] text-white rounded-xl px-4 py-3 sm:px-5 sm:py-3.5 flex items-center justify-between gap-3 sm:gap-4 mb-6 shadow-sm">
           {/* Título e DAV */}
           <div className="flex items-center gap-3 shrink-0">
-            <div className="p-2 border border-[#C5A059] rounded-lg text-[#C5A059] flex items-center justify-center shrink-0">
-              <FileText className="w-6 h-6 stroke-[1.75]" />
+            <div className="p-2 border-2 border-[#C5A059] rounded-lg text-[#C5A059] flex items-center justify-center shrink-0">
+              <FileText className="w-6 h-6 stroke-[2.5]" />
             </div>
             <div>
-              <h1 className="text-lg sm:text-xl font-bold tracking-wider uppercase text-white leading-tight">
+              <h1 className="text-xl sm:text-2xl font-black tracking-wider uppercase text-white leading-tight">
                 {dav.isVenda ? "PEDIDO DE VENDA" : "ORÇAMENTO"}
               </h1>
-              <p className="text-xs text-white/80 font-normal leading-tight">
+              <p className="text-xs text-white font-black leading-tight">
                 DAV Nº: {dav.numero !== undefined && dav.numero !== null ? String(dav.numero).padStart(3, "0") : (dav.id ? dav.id.substring(0, 6) : "001")}
               </p>
             </div>
@@ -280,10 +294,10 @@ function ImprimirDAV() {
 
           {/* Emissão */}
           <div className="flex items-center gap-2.5 shrink-0">
-            <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-[#C5A059] shrink-0 stroke-[1.75]" />
+            <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-[#C5A059] shrink-0 stroke-[2.5]" />
             <div className="text-xs leading-tight">
-              <p className="text-[10px] text-white/70 font-normal leading-none mb-1">Emissão</p>
-              <p className="text-[11px] sm:text-xs text-white font-medium whitespace-nowrap leading-none">
+              <p className="text-[10px] text-[#E5C378] font-black leading-none mb-1">Emissão</p>
+              <p className="text-[11px] sm:text-xs text-white font-black whitespace-nowrap leading-none">
                 {dataDAV} às {horaDAV}
               </p>
             </div>
@@ -294,10 +308,10 @@ function ImprimirDAV() {
 
           {/* Validade */}
           <div className="flex items-center gap-2.5 shrink-0">
-            <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-[#C5A059] shrink-0 stroke-[1.75]" />
+            <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-[#C5A059] shrink-0 stroke-[2.5]" />
             <div className="text-xs leading-tight">
-              <p className="text-[10px] text-white/70 font-normal leading-none mb-1">Validade</p>
-              <p className="text-[11px] sm:text-xs text-white font-medium whitespace-nowrap leading-none">
+              <p className="text-[10px] text-[#E5C378] font-black leading-none mb-1">Validade</p>
+              <p className="text-[11px] sm:text-xs text-white font-black whitespace-nowrap leading-none">
                 {validadeStr}
               </p>
             </div>
@@ -305,89 +319,89 @@ function ImprimirDAV() {
 
           {/* Condições Comerciais */}
           <div className="bg-[#a57f33] text-white rounded-lg px-3.5 py-2 sm:px-4 sm:py-2.5 text-xs flex flex-col justify-center shrink-0 ml-auto sm:ml-0">
-            <p className="font-bold text-[9px] sm:text-[10px] tracking-wider uppercase mb-0.5 leading-none">
+            <p className="font-black text-[10px] sm:text-[11px] tracking-wider uppercase mb-0.5 leading-none">
               CONDIÇÕES COMERCIAIS
             </p>
-            <p className="text-[10px] sm:text-[11px] text-white/95 leading-tight">
+            <p className="text-[10px] sm:text-[11px] text-white font-extrabold leading-tight">
               Pagamento: {dav.condicao_pagamento || "Dinheiro / Pix"}
             </p>
-            <p className="text-[10px] sm:text-[11px] text-white/95 leading-tight">
+            <p className="text-[10px] sm:text-[11px] text-white font-extrabold leading-tight">
               Frete: Retirada | Prazo: Imediato
             </p>
           </div>
         </div>
 
         {/* 3. DADOS DO CLIENTE */}
-        <div className="bg-white border border-[#E5E7EB] rounded-xl p-5 flex flex-wrap justify-between gap-6 mb-6 shadow-xs">
+        <div className="bg-white border-2 border-slate-300 rounded-xl p-5 flex flex-wrap justify-between gap-6 mb-6 shadow-xs">
           <div className="flex-1 min-w-[250px]">
-            <h2 className="font-bold text-sm mb-3 flex items-center gap-2">
+            <h2 className="font-black text-sm mb-3 flex items-center gap-2">
               <div className="w-5 h-5 rounded-full bg-[#B89547] flex items-center justify-center text-white shrink-0">
-                <User className="w-3.5 h-3.5" />
+                <User className="w-3.5 h-3.5 stroke-[2.5]" />
               </div>
               <span className="tracking-wide">
-                <span className="text-[#B89547] font-bold">DADOS</span>{" "}
-                <span className="text-black font-bold">DO CLIENTE</span>
+                <span className="text-[#B89547] font-black">DADOS</span>{" "}
+                <span className="text-black font-black">DO CLIENTE</span>
               </span>
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
               <div className="flex sm:col-span-2 print:col-span-2">
-                <span className="w-20 font-bold text-black shrink-0">Nome:</span>
-                <span className="flex-1 break-words font-bold text-black">{dav.cliente_nome || "-"}</span>
+                <span className="w-20 font-black text-black shrink-0">Nome:</span>
+                <span className="flex-1 break-words font-black text-black">{dav.cliente_nome || "-"}</span>
               </div>
               <div className="flex">
-                <span className="w-20 font-bold text-black shrink-0">CNPJ/CPF:</span>
-                <span className="flex-1 break-words font-bold text-black">{dav.cliente_cnpj || "-"}</span>
+                <span className="w-20 font-black text-black shrink-0">CNPJ/CPF:</span>
+                <span className="flex-1 break-words font-black text-black">{dav.cliente_cnpj || "-"}</span>
               </div>
               <div className="flex">
-                <span className="w-20 font-bold text-black shrink-0">Telefone:</span>
-                <span className="flex-1 break-words font-bold text-black">{dav.cliente_telefone || "-"}</span>
+                <span className="w-20 font-black text-black shrink-0">Telefone:</span>
+                <span className="flex-1 break-words font-black text-black">{dav.cliente_telefone || "-"}</span>
               </div>
               <div className="flex">
-                <span className="w-20 font-bold text-black shrink-0">E-mail:</span>
-                <span className="flex-1 break-words font-bold text-black">{dav.rawVenda?.cliente?.email || dav.email || "-"}</span>
+                <span className="w-20 font-black text-black shrink-0">E-mail:</span>
+                <span className="flex-1 break-words font-black text-black">{dav.rawVenda?.cliente?.email || dav.email || "-"}</span>
               </div>
               <div className="flex">
-                <span className="w-20 font-bold text-black shrink-0">Bairro:</span>
-                <span className="flex-1 break-words font-bold text-black">{dav.rawVenda?.cliente?.bairro || dav.bairro || "-"}</span>
+                <span className="w-20 font-black text-black shrink-0">Bairro:</span>
+                <span className="flex-1 break-words font-black text-black">{dav.rawVenda?.cliente?.bairro || dav.bairro || "-"}</span>
               </div>
               <div className="flex">
-                <span className="w-20 font-bold text-black shrink-0">Cidade:</span>
-                <span className="flex-1 break-words font-bold text-black">{dav.rawVenda?.cliente?.cidade || dav.cidade || "-"}</span>
+                <span className="w-20 font-black text-black shrink-0">Cidade:</span>
+                <span className="flex-1 break-words font-black text-black">{dav.rawVenda?.cliente?.cidade || dav.cidade || "-"}</span>
               </div>
               <div className="flex">
-                <span className="w-20 font-bold text-black shrink-0">UF:</span>
-                <span className="flex-1 break-words font-bold text-black">{dav.rawVenda?.cliente?.uf || dav.uf || "-"}</span>
+                <span className="w-20 font-black text-black shrink-0">UF:</span>
+                <span className="flex-1 break-words font-black text-black">{dav.rawVenda?.cliente?.uf || dav.uf || "-"}</span>
               </div>
               <div className="flex sm:col-span-2 print:col-span-2">
-                <span className="w-20 font-bold text-black shrink-0">Endereço:</span>
-                <span className="flex-1 break-words whitespace-normal font-bold text-black">{dav.rawVenda?.cliente?.endereco || dav.cliente_endereco || "-"}</span>
+                <span className="w-20 font-black text-black shrink-0">Endereço:</span>
+                <span className="flex-1 break-words whitespace-normal font-black text-black">{dav.rawVenda?.cliente?.endereco || dav.cliente_endereco || "-"}</span>
               </div>
             </div>
           </div>
           
-          <div className="bg-[#FAF7EE] border border-[#EAE3D2] rounded-xl p-4 text-center w-full sm:w-[200px] flex flex-col justify-center items-center shrink-0">
-             <Handshake className="w-8 h-8 text-[#A57F33] mb-1.5 stroke-[1.75]" />
-             <p className="text-[#A57F33] font-bold text-xs mb-1">Obrigado pela sua confiança!</p>
-             <p className="text-[9px] text-black font-semibold leading-tight">Estamos à disposição para lhe atender sempre!</p>
+          <div className="bg-[#FAF7EE] border-2 border-[#EAE3D2] rounded-xl p-4 text-center w-full sm:w-[200px] flex flex-col justify-center items-center shrink-0">
+             <Handshake className="w-8 h-8 text-[#A57F33] mb-1.5 stroke-[2.2]" />
+             <p className="text-[#A57F33] font-black text-xs mb-1">Obrigado pela sua confiança!</p>
+             <p className="text-[9px] text-black font-extrabold leading-tight">Estamos à disposição para lhe atender sempre!</p>
           </div>
         </div>
 
         {/* 4. PRODUTOS */}
         <div className="mb-6">
-          <h2 className="font-bold text-sm mb-3 flex items-center gap-2">
-            <Package className="w-5 h-5 text-[#B89547] shrink-0" strokeWidth={2} />
-            <span className="text-black tracking-wider uppercase font-bold">PRODUTOS</span>
+          <h2 className="font-black text-sm mb-3 flex items-center gap-2">
+            <Package className="w-5 h-5 text-[#B89547] shrink-0" strokeWidth={2.5} />
+            <span className="text-black tracking-wider uppercase font-black">PRODUTOS</span>
           </h2>
           
-          <div className="overflow-x-auto rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+          <div className="overflow-x-auto rounded-xl border-2 border-slate-300 overflow-hidden shadow-xs">
             <table className="w-full text-left text-xs whitespace-nowrap">
               <thead className="bg-[#112321] text-white">
                 <tr>
-                  <th className="p-3 text-left pl-4 font-bold text-xs">Código</th>
-                  <th className="p-3 text-left font-bold text-xs">Produto</th>
-                  <th className="p-3 text-center font-bold text-xs">Qtd</th>
-                  <th className="p-3 text-right font-bold text-xs">Vlr. Unit.</th>
-                  <th className="p-3 text-right pr-4 font-bold text-xs">Vlr. Total</th>
+                  <th className="p-3 text-left pl-4 font-black text-xs uppercase tracking-wider">Código</th>
+                  <th className="p-3 text-left font-black text-xs uppercase tracking-wider">Produto</th>
+                  <th className="p-3 text-center font-black text-xs uppercase tracking-wider">Qtd</th>
+                  <th className="p-3 text-right font-black text-xs uppercase tracking-wider">Vlr. Unit.</th>
+                  <th className="p-3 text-right pr-4 font-black text-xs uppercase tracking-wider">Vlr. Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -399,25 +413,25 @@ function ImprimirDAV() {
                       <td className="p-3 pl-4">
                         <div className="flex items-center gap-3">
                           {imgUrl ? (
-                            <div className="w-10 h-10 rounded-md border border-slate-200 bg-white overflow-hidden flex items-center justify-center shrink-0">
+                            <div className="w-10 h-10 rounded-md border border-slate-300 bg-white overflow-hidden flex items-center justify-center shrink-0">
                               <img src={imgUrl} alt="" className="w-full h-full object-cover" />
                             </div>
                           ) : (
-                            <div className="w-10 h-10 rounded-md border border-slate-100 bg-slate-50 flex items-center justify-center shrink-0">
+                            <div className="w-10 h-10 rounded-md border border-slate-200 bg-slate-50 flex items-center justify-center shrink-0">
                               <Package className="w-4 h-4 text-slate-400" />
                             </div>
                           )}
-                          <span className="font-bold text-black text-xs">{it.codigo || "-"}</span>
+                          <span className="font-black text-black text-xs">{it.codigo || "-"}</span>
                         </div>
                       </td>
                       <td className="p-3">
                         <p className="font-black text-black text-xs">{it.produto}</p>
                         {desc && (
-                          <p className="text-[10px] text-black font-semibold max-w-[240px] sm:max-w-md truncate mt-0.5">{desc}</p>
+                          <p className="text-[10px] text-black font-extrabold max-w-[240px] sm:max-w-md truncate mt-0.5">{desc}</p>
                         )}
                       </td>
                       <td className="p-3 text-center font-black text-black text-xs">{it.qtd}</td>
-                      <td className="p-3 text-right text-black font-bold text-xs whitespace-nowrap">
+                      <td className="p-3 text-right text-black font-black text-xs whitespace-nowrap">
                         R$ {Number(it.valor_unitario || 0).toFixed(2).replace(".", ",")}
                       </td>
                       <td className="p-3 pr-4 text-right font-black text-black text-xs whitespace-nowrap">
@@ -433,22 +447,22 @@ function ImprimirDAV() {
 
         {/* 5. SUBTOTAL / TOTAL */}
         <div className="flex justify-end mb-8">
-          <div className="bg-[#FAF7EE] border border-[#EBE4D5] rounded-xl p-2.5 flex items-center gap-3 min-w-[260px] shadow-xs">
+          <div className="bg-[#FAF7EE] border-2 border-[#EBE4D5] rounded-xl p-3 flex items-center gap-3 min-w-[270px] shadow-xs">
             {/* Ícone de Moeda/Cifrão à esquerda */}
-            <div className="w-7 h-7 rounded-full border border-[#1B382F] flex items-center justify-center text-[#1B382F] shrink-0 ml-1">
-              <span className="font-bold text-xs leading-none">$</span>
+            <div className="w-8 h-8 rounded-full border-2 border-[#1B382F] flex items-center justify-center text-[#1B382F] shrink-0 ml-1">
+              <span className="font-black text-sm leading-none">$</span>
             </div>
             {/* Linhas de Valores à direita */}
             <div className="flex-1 flex flex-col gap-1.5">
               <div className="flex justify-between items-center px-1 text-xs">
-                <span className="text-black font-bold">Subtotal</span>
-                <span className="text-black font-black">
+                <span className="text-black font-black">Subtotal</span>
+                <span className="text-black font-black text-sm">
                   R$ {Number(dav.subtotal || dav.total || 0).toFixed(2).replace(".", ",")}
                 </span>
               </div>
-              <div className="bg-[#A37E36] text-white rounded-lg px-3 py-1.5 flex justify-between items-center">
-                <span className="text-xs font-bold uppercase tracking-wider">Total</span>
-                <span className="text-sm font-black">
+              <div className="bg-[#A37E36] text-white rounded-lg px-3.5 py-2 flex justify-between items-center">
+                <span className="text-xs font-black uppercase tracking-wider">Total</span>
+                <span className="text-base font-black">
                   R$ {Number(dav.total || 0).toFixed(2).replace(".", ",")}
                 </span>
               </div>
@@ -459,21 +473,21 @@ function ImprimirDAV() {
         {/* 6. ASSINATURAS */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 items-end mb-8 text-xs">
           <div>
-            <div className="border-b border-slate-300 mb-2"></div>
-            <p className="text-center font-bold text-slate-600 flex items-center justify-center gap-1">
+            <div className="border-b-2 border-black mb-2"></div>
+            <p className="text-center font-black text-black flex items-center justify-center gap-1">
               <span className="text-[#C5A059]">👤</span> ASSINATURA DO VENDEDOR
             </p>
           </div>
           <div>
-            <div className="border-b border-slate-300 mb-2"></div>
-            <p className="text-center font-bold text-slate-600 flex items-center justify-center gap-1">
+            <div className="border-b-2 border-black mb-2"></div>
+            <p className="text-center font-black text-black flex items-center justify-center gap-1">
               <span className="text-[#C5A059]">👤</span> ASSINATURA DO CLIENTE
             </p>
           </div>
           <div className="flex justify-end">
-            <div className="bg-[#FAF9F5] border border-[#EBE4D5] rounded-lg p-3 flex gap-3 items-center w-full max-w-[200px]">
+            <div className="bg-[#FAF9F5] border-2 border-[#EBE4D5] rounded-lg p-3 flex gap-3 items-center w-full max-w-[210px]">
               <div className="text-[#C5A059] text-xl">📄</div>
-              <p className="text-[8px] text-slate-500 leading-tight">
+              <p className="text-[8px] text-black font-extrabold leading-tight">
                 Este documento não possui valor fiscal, é apenas um Documento Auxiliar de Venda.
               </p>
             </div>
@@ -482,12 +496,15 @@ function ImprimirDAV() {
 
         {/* 7. RODAPÉ */}
         <div className="bg-[#171F1E] text-white rounded-lg p-4 flex flex-wrap items-center justify-between gap-4 mt-auto">
-           <div className="flex items-center gap-4 sm:gap-8 text-[9px] sm:text-xs">
+           <div className="flex items-center gap-4 sm:gap-8 text-[9px] sm:text-xs font-black">
              <div className="flex items-center gap-2"><span className="text-[#C5A059]">🛡️</span> Qualidade em cada detalhe</div>
              <div className="flex items-center gap-2"><span className="text-[#C5A059]">🚚</span> Entrega rápida e segura</div>
              <div className="flex items-center gap-2"><span className="text-[#C5A059]">🌱</span> Produtos selecionados</div>
            </div>
-           <GardenPrimeLogo size="small" />
+           <div className="flex items-center gap-3">
+             <GardenPrimeLogo size="small" />
+             <img src="/garden-plus.png" alt="Garden Plus" className="h-6 w-auto object-contain brightness-0 invert" />
+           </div>
         </div>
 
       </div>
