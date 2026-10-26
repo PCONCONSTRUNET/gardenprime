@@ -238,16 +238,16 @@ function ImprimirDAV() {
         {/* 1. CABEÇALHO CLARO */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-5 sm:gap-6">
-            {/* Logos Garden Prime e Garden Plus (embaixo) */}
-            <div className="flex flex-col items-center justify-center gap-1.5 shrink-0">
+            {/* Logos Garden Prime e Logo 02 (embaixo) */}
+            <div className="flex flex-col items-center justify-center gap-2 shrink-0">
               <GardenPrimeLogo horizontal size="large" />
               <img
-                src="/garden-plus.png"
-                alt="Garden Plus"
-                className="h-10 sm:h-12 w-auto object-contain"
+                src="/logo-02.png"
+                alt="Logo 02"
+                className="h-14 sm:h-16 w-auto object-contain max-w-[200px]"
               />
             </div>
-            <div className="w-px h-24 bg-[#C5A059] mx-1 sm:mx-2 hidden sm:block"></div>
+            <div className="w-px h-28 bg-[#C5A059] mx-1 sm:mx-2 hidden sm:block"></div>
             <div className="text-[10px] sm:text-xs text-black font-extrabold space-y-1">
               <p>
                 <span className="font-black">CNPJ:</span> {config?.cnpj || "50.387.381/0001-81"} |{" "}
@@ -503,7 +503,7 @@ function ImprimirDAV() {
            </div>
            <div className="flex items-center gap-3">
              <GardenPrimeLogo size="small" />
-             <img src="/garden-plus.png" alt="Garden Plus" className="h-6 w-auto object-contain brightness-0 invert" />
+             <img src="/logo-02.png" alt="Logo 02" className="h-6 w-auto object-contain brightness-0 invert" />
            </div>
         </div>
 

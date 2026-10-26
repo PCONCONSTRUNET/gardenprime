@@ -452,7 +452,7 @@ export async function preloadLogos(): Promise<{ prime: string | null; plus: stri
   try {
     const [prime, plus] = await Promise.all([
       toBase64("/garden-prime-lado.png").then((res) => res || toBase64("/garden-prime-logo.png")),
-      toBase64("/garden-plus.png"),
+      toBase64("/logo-02.png").then((res) => res || toBase64("/garden-plus.png")),
     ]);
     cachedLogos = { prime, plus };
   } catch {
@@ -531,11 +531,11 @@ export async function generateOrderPdfDoc(
   // 1. CABEÇALHO CLARO
   // Logo Garden Prime
   const primeLogo = logos?.prime || cachedLogos?.prime;
-  const plusLogo = logos?.plus || cachedLogos?.plus;
+  const logo02 = logos?.plus || cachedLogos?.plus;
 
   if (primeLogo) {
     try {
-      doc.addImage(primeLogo, "PNG", margin, y, 46, 12);
+      doc.addImage(primeLogo, "PNG", margin, y, 48, 12);
     } catch {}
   } else {
     doc.setFont("helvetica", "bold");
@@ -544,23 +544,18 @@ export async function generateOrderPdfDoc(
     doc.text("GARDEN PRIME", margin, y + 8);
   }
 
-  // Logo Garden Plus embaixo da Garden Prime
-  if (plusLogo) {
+  // Logo 02 embaixo da Garden Prime (tamanho médio para bem grande)
+  if (logo02) {
     try {
-      doc.addImage(plusLogo, "PNG", margin + 1, y + 13, 30, 11);
+      doc.addImage(logo02, "PNG", margin + 5, y + 13.5, 38, 16.8);
     } catch {}
-  } else {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
-    doc.text("GARDEN PLUS", margin, y + 20);
   }
 
   // Divisor 1
-  const div1X = margin + 55;
+  const div1X = margin + 58;
   doc.setDrawColor(colorGold[0], colorGold[1], colorGold[2]);
   doc.setLineWidth(0.4);
-  doc.line(div1X, y + 1, div1X, y + 25);
+  doc.line(div1X, y + 1, div1X, y + 30);
 
   // Info Empresa (negrito e preto bem definido)
   doc.setFont("helvetica", "bold");
@@ -595,7 +590,7 @@ export async function generateOrderPdfDoc(
   doc.text("para um futuro", pageWidth - margin - 40, y + 13);
   doc.text("melhor!", pageWidth - margin - 35, y + 18);
 
-  y += 28;
+  y += 33;
 
   // 2. BLOCO ESCURO (TÍTULO)
   doc.setFillColor(colorDark[0], colorDark[1], colorDark[2]);
@@ -840,9 +835,9 @@ export async function generateOrderPdfDoc(
       doc.addImage(primeLogo, "PNG", pageWidth - 55, pageHeight - 16, 26, 7);
     } catch {}
   }
-  if (plusLogo) {
+  if (logo02) {
     try {
-      doc.addImage(plusLogo, "PNG", pageWidth - 26, pageHeight - 16, 18, 7);
+      doc.addImage(logo02, "PNG", pageWidth - 28, pageHeight - 16, 20, 8.8);
     } catch {}
   }
 
