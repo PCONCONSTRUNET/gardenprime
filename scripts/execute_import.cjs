@@ -31,7 +31,7 @@ async function run() {
     for (const item of mogiProducts) {
       const codigoSistema = currentCode.toString();
       const nomeFormatado = `${item.nome} CODIGO ${item.codFornecedor}`;
-      const descComp = `Embalagem: ${item.embalagem}${item.valor_fardo ? ` | Fardo: R$ ${item.valor_fardo.toFixed(2)}` : ''} | Cód. Tabela: ${item.codFornecedor}`;
+      const descComp = `Embalagem: ${item.embalagem} | Cód. Tabela: ${item.codFornecedor}`;
 
       const query = `
         INSERT INTO produtos (

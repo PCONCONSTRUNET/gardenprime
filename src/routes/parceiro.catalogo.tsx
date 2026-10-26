@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import { ColorDock } from "@/components/color-dock";
 import jsPDF from "jspdf";
-import { cn, sortCategorias, getCategoryPriority } from "@/lib/utils";
+import { cn, sortCategorias, getCategoryPriority, limparDescricaoComplementar } from "@/lib/utils";
 
 const WhatsAppIcon = ({ className }: { className?: string }) => (
   <svg
@@ -789,9 +789,9 @@ function ParceiroCatalogoPage() {
                     </h3>
 
                     {/* Descrição Complementar */}
-                    {prod.descricao_complementar && (
+                    {limparDescricaoComplementar(prod.descricao_complementar) && (
                       <p className="text-[10px] text-slate-500 mt-1 leading-snug line-clamp-2">
-                        {prod.descricao_complementar}
+                        {limparDescricaoComplementar(prod.descricao_complementar)}
                       </p>
                     )}
 
@@ -1009,13 +1009,13 @@ function ParceiroCatalogoPage() {
                 )}
 
                 {/* Descrição Complementar se houver */}
-                {selectedProduto.descricao_complementar && (
+                {limparDescricaoComplementar(selectedProduto.descricao_complementar) && (
                   <div className="space-y-1">
                     <span className="text-xs font-bold uppercase text-slate-400 tracking-wider block">
                       Descrição do Produto
                     </span>
                     <p className="text-sm text-slate-600 leading-relaxed">
-                      {selectedProduto.descricao_complementar}
+                      {limparDescricaoComplementar(selectedProduto.descricao_complementar)}
                     </p>
                   </div>
                 )}

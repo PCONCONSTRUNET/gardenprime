@@ -21,7 +21,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Check, ChevronsUpDown, Search, Heart, ShoppingCart, FileText } from "lucide-react";
-import { cn, sortCategorias, getCategoryPriority } from "@/lib/utils";
+import { cn, sortCategorias, getCategoryPriority, limparDescricaoComplementar } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ColorDock } from "@/components/color-dock";
@@ -498,8 +498,8 @@ function Catalogo() {
 
                         {/* Especificações Sura */}
                         <div className="py-1 text-xs text-muted-foreground space-y-1 border-b pb-3 mb-3 flex-1">
-                          {p.descricao_complementar && (
-                            <p className="text-slate-600 leading-snug">{p.descricao_complementar}</p>
+                          {limparDescricaoComplementar(p.descricao_complementar) && (
+                            <p className="text-slate-600 leading-snug">{limparDescricaoComplementar(p.descricao_complementar)}</p>
                           )}
                           {p.numero && (
                             <p>

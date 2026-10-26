@@ -68,3 +68,18 @@ export function getRotuloFaixaBoleto(valorTotal: number): string {
   }
   return "28, 35, 42 dias (pedidos acima de R$ 1.000)";
 }
+
+/**
+ * Remove qualquer menção a valores de custo ou preços internos (como Fardo: R$ ...)
+ * da descrição complementar para não confundir os clientes finais nos catálogos públicos.
+ */
+export function limparDescricaoComplementar(desc?: string | null): string {
+  if (!desc) return "";
+  return desc
+    .replace(/\s*\|\s*Fardo:\s*R\$?\s*[\d.,]+/gi, "")
+    .replace(/Fardo:\s*R\$?\s*[\d.,]+\s*\|\s*/gi, "")
+    .replace(/Fardo:\s*R\$?\s*[\d.,]+/gi, "")
+    .replace(/\s*\|\s*Custo:\s*R\$?\s*[\d.,]+/gi, "")
+    .replace(/Custo:\s*R\$?\s*[\d.,]+/gi, "")
+    .trim();
+}
