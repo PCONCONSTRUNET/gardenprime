@@ -342,7 +342,7 @@ function ParceiroCatalogoPage() {
       const cols = 3;
       const colWidth = (pageWidth - margin * 2) / cols;
       const imgSize = colWidth - 6;
-      const cardHeight = imgSize + 30;
+      const cardHeight = imgSize + 48;
       const titleH = 14;
 
       const toBase64 = (url: string): Promise<string | null> =>
@@ -451,24 +451,39 @@ function ParceiroCatalogoPage() {
             doc.rect(imgX, imgY, imgW, imgH, "F");
           }
 
-          const textY = rowStartY + imgSize + 6;
+          const textX = xPos + 4;
+          const textW = colWidth - 10;
+          let textY = rowStartY + imgSize + 6;
           doc.setFontSize(7.5);
           doc.setFont("helvetica", "bold");
           doc.setTextColor(30, 41, 59);
-          const maxChars = 24;
-          const nomeTrunc = p.nome.length > maxChars ? p.nome.slice(0, maxChars - 1) + "…" : p.nome;
-          doc.text(nomeTrunc, xPos + 4, textY);
+          const nomeLines = (doc.splitTextToSize(p.nome || "", textW) as string[]).slice(0, 2);
+          doc.text(nomeLines, textX, textY);
+          textY += nomeLines.length * 3.2 + 1.3;
 
           doc.setFontSize(6.5);
           doc.setFont("helvetica", "normal");
           doc.setTextColor(100, 116, 139);
-          doc.text(`Cód: ${p.codigo || "-"}`, xPos + 4, textY + 4.5);
+          doc.text(`Cód: ${p.codigo || "-"}`, textX, textY);
+          textY += 3.8;
+
+          const descTxt = limparDescricaoComplementar(p.descricao_complementar) || p.descricao || "";
+          if (descTxt) {
+            doc.setFontSize(6);
+            doc.setTextColor(70, 70, 70);
+            let descLines = doc.splitTextToSize(String(descTxt), textW) as string[];
+            if (descLines.length > 4) {
+              descLines = descLines.slice(0, 4);
+              descLines[3] = descLines[3].replace(/.{0,2}$/, "") + "...";
+            }
+            doc.text(descLines, textX, textY);
+          }
 
           const preco = Number(p.valorFinal || p.valor);
           doc.setFontSize(9);
           doc.setFont("helvetica", "bold");
           doc.setTextColor(22, 163, 74);
-          doc.text(`R$ ${preco.toFixed(2).replace(".", ",")}`, xPos + 4, textY + 10.5);
+          doc.text(`R$ ${preco.toFixed(2).replace(".", ",")}`, textX, rowStartY + cardHeight - 3);
 
           col++;
         }

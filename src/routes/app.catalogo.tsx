@@ -148,7 +148,7 @@ function Catalogo() {
     const cols = 3;
     const colWidth = (pageWidth - margin * 2) / cols;
     const imgSize = colWidth - 6;
-    const cardHeight = imgSize + 28;
+    const cardHeight = imgSize + 44;
     const titleH = 16; // espaço reservado para o título da categoria
 
     // Fetch imagem como base64
@@ -299,24 +299,43 @@ function Catalogo() {
           doc.text("Sem foto", imgX + imgW / 2, imgY + imgH / 2, { align: "center" });
         }
 
-        // Nome do produto
-        const textY = rowStartY + imgSize + 5;
-        const maxChars = Math.floor((colWidth - 6) / 2.1);
-        const nomeTrunc = p.nome.length > maxChars ? p.nome.slice(0, maxChars - 1) + "…" : p.nome;
+        // Nome do produto (até 2 linhas)
+        const textX = xPos + 3;
+        const textW = colWidth - 8;
+        let textY = rowStartY + imgSize + 5;
+        doc.setFont("helvetica", "bold");
         doc.setFontSize(6.5);
         doc.setTextColor(40, 40, 40);
-        doc.text(nomeTrunc, xPos + 3, textY);
+        const nomeLines = (doc.splitTextToSize(p.nome || "", textW) as string[]).slice(0, 2);
+        doc.text(nomeLines, textX, textY);
+        textY += nomeLines.length * 2.8 + 1.5;
 
         // Código
+        doc.setFont("helvetica", "normal");
         doc.setFontSize(5.5);
         doc.setTextColor(120, 120, 120);
-        doc.text(`Cód: ${p.codigo || "-"}`, xPos + 3, textY + 5);
+        doc.text(`Cód: ${p.codigo || "-"}`, textX, textY);
+        textY += 3.5;
 
-        // Preço
+        // Descrição (até 4 linhas)
+        const descTxt = limparDescricaoComplementar(p.descricao_complementar) || p.descricao || "";
+        if (descTxt) {
+          doc.setFontSize(5.5);
+          doc.setTextColor(70, 70, 70);
+          let descLines = doc.splitTextToSize(String(descTxt), textW) as string[];
+          if (descLines.length > 4) {
+            descLines = descLines.slice(0, 4);
+            descLines[3] = descLines[3].replace(/.{0,2}$/, "") + "...";
+          }
+          doc.text(descLines, textX, textY);
+        }
+
+        // Preço (fixo no rodapé do card)
         const precoFinal = getPrecoProduto(p);
+        doc.setFont("helvetica", "bold");
         doc.setFontSize(8);
         doc.setTextColor(22, 163, 74);
-        doc.text(`R$ ${precoFinal.toFixed(2).replace(".", ",")}`, xPos + 3, textY + 11);
+        doc.text(`R$ ${precoFinal.toFixed(2).replace(".", ",")}`, textX, rowStartY + cardHeight - 3);
 
         col++;
       }
