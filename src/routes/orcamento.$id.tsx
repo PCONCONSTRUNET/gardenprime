@@ -233,14 +233,14 @@ function ImprimirDAV() {
       </div>
 
       {/* ── PDF LAYOUT INÍCIO ── */}
-      <div className="print:shadow-none shadow-sm border border-slate-200 print:border-none p-4 sm:p-6 rounded-xl bg-white">
+      <div className="p-4 sm:p-6 print:p-0 bg-white">
         
         {/* 1. CABEÇALHO CLARO */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-5 sm:gap-6">
             {/* Logos Garden Prime e Logo 02 (embaixo) */}
             <div className="flex flex-col items-center justify-center gap-2 shrink-0">
-              <GardenPrimeLogo horizontal size="large" />
+              <img src="/garden-prime-pdf.png" alt="Garden Prime" className="h-14 sm:h-16 w-auto object-contain max-w-[220px]" />
               <img
                 src="/logo-02.png"
                 alt="Logo 02"
@@ -318,21 +318,21 @@ function ImprimirDAV() {
           </div>
 
           {/* Condições Comerciais */}
-          <div className="bg-[#a57f33] text-white rounded-lg px-3.5 py-2 sm:px-4 sm:py-2.5 text-xs flex flex-col justify-center shrink-0 ml-auto sm:ml-0">
+          <div className="bg-black text-white rounded-lg px-3.5 py-2 sm:px-4 sm:py-2.5 text-xs flex flex-col justify-center shrink-0 ml-auto sm:ml-0">
             <p className="font-black text-[10px] sm:text-[11px] tracking-wider uppercase mb-0.5 leading-none">
               CONDIÇÕES COMERCIAIS
             </p>
-            <p className="text-[10px] sm:text-[11px] text-white font-extrabold leading-tight">
+            <p className="text-[10px] sm:text-[11px] text-white font-black leading-tight">
               Pagamento: {dav.condicao_pagamento || "Dinheiro / Pix"}
             </p>
-            <p className="text-[10px] sm:text-[11px] text-white font-extrabold leading-tight">
+            <p className="text-[10px] sm:text-[11px] text-white font-black leading-tight">
               Frete: Retirada | Prazo: Imediato
             </p>
           </div>
         </div>
 
         {/* 3. DADOS DO CLIENTE */}
-        <div className="bg-white border-2 border-slate-300 rounded-xl p-5 flex flex-wrap justify-between gap-6 mb-6 shadow-xs">
+        <div className="bg-white p-2 flex flex-wrap justify-between gap-6 mb-6 shadow-xs">
           <div className="flex-1 min-w-[250px]">
             <h2 className="font-black text-sm mb-3 flex items-center gap-2">
               <div className="w-5 h-5 rounded-full bg-[#B89547] flex items-center justify-center text-white shrink-0">
@@ -393,7 +393,7 @@ function ImprimirDAV() {
             <span className="text-black tracking-wider uppercase font-black">PRODUTOS</span>
           </h2>
           
-          <div className="overflow-x-auto rounded-xl border-2 border-slate-300 overflow-hidden shadow-xs">
+          <div className="overflow-x-auto print:overflow-visible">
             <table className="w-full text-left text-xs whitespace-nowrap">
               <thead className="bg-[#112321] text-white">
                 <tr>
@@ -410,11 +410,11 @@ function ImprimirDAV() {
                   const desc = it.descricao || (it.rawVenda || it).produto?.descricao;
                   return (
                     <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-[#FBFBFA]"}>
-                      <td className="p-3 pl-4">
+                      <td className="p-3 pl-2">
                         <div className="flex items-center gap-3">
                           {imgUrl ? (
                             <div className="w-10 h-10 rounded-md border border-slate-300 bg-white overflow-hidden flex items-center justify-center shrink-0">
-                              <img src={imgUrl} alt="" className="w-full h-full object-cover" />
+                              <img src={imgUrl} alt="" className="w-full h-full object-contain" />
                             </div>
                           ) : (
                             <div className="w-10 h-10 rounded-md border border-slate-200 bg-slate-50 flex items-center justify-center shrink-0">

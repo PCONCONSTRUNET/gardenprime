@@ -451,7 +451,7 @@ export async function preloadLogos(): Promise<{ prime: string | null; plus: stri
 
   try {
     const [prime, plus] = await Promise.all([
-      toBase64("/garden-prime-lado.png").then((res) => res || toBase64("/garden-prime-logo.png")),
+      toBase64("/garden-prime-pdf.png").then((res) => res || toBase64("/garden-prime-lado.png")).then((res) => res || toBase64("/garden-prime-logo.png")),
       toBase64("/logo-02.png").then((res) => res || toBase64("/garden-plus.png")),
     ]);
     cachedLogos = { prime, plus };
@@ -535,7 +535,7 @@ export async function generateOrderPdfDoc(
 
   if (primeLogo) {
     try {
-      doc.addImage(primeLogo, "PNG", margin, y, 48, 12);
+      doc.addImage(primeLogo, "PNG", margin, y, 45, 15.2);
     } catch {}
   } else {
     doc.setFont("helvetica", "bold");
@@ -547,7 +547,7 @@ export async function generateOrderPdfDoc(
   // Logo 02 embaixo da Garden Prime (tamanho médio para bem grande)
   if (logo02) {
     try {
-      doc.addImage(logo02, "PNG", margin + 5, y + 13.5, 38, 16.8);
+      doc.addImage(logo02, "PNG", margin + 6, y + 16, 32, 14.1);
     } catch {}
   }
 
@@ -635,9 +635,9 @@ export async function generateOrderPdfDoc(
   doc.setTextColor(255, 255, 255);
   doc.text(validadeStr, margin + 120, y + 13);
 
-  // Box Dourado de Condições Comerciais
+  // Box Preto de Condições Comerciais
   const boxW = 60;
-  doc.setFillColor(colorGold[0], colorGold[1], colorGold[2]);
+  doc.setFillColor(0, 0, 0);
   doc.roundedRect(pageWidth - margin - boxW, y + 2, boxW - 2, 18, 1, 1, "F");
   
   doc.setFont("helvetica", "bold");
