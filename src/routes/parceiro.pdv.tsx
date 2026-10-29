@@ -46,6 +46,7 @@ import {
   getPrazoBoleto,
   getDescricaoBoleto,
   getRotuloFaixaBoleto,
+  loadCategoryOrderFromDb,
 } from "@/lib/utils";
 
 export const Route = createFileRoute("/parceiro/pdv")({
@@ -259,6 +260,7 @@ function ParceiroPDV() {
   useEffect(() => {
     const init = async () => {
       try {
+        await loadCategoryOrderFromDb();
         const {
           data: { session },
         } = await supabase.auth.getSession();

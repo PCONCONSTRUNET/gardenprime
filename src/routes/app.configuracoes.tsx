@@ -23,7 +23,10 @@ import {
   EyeOff,
   Zap,
   Globe,
+  SlidersHorizontal,
 } from "lucide-react";
+import { OrganizarCategoriasModal } from "@/components/organizar-categorias-modal";
+import { sortCategorias, loadCategoryOrderFromDb } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { useConfirm } from "@/contexts/ConfirmContext";
 import { supabase } from "@/lib/supabase";
@@ -79,6 +82,8 @@ function Configuracoes() {
 
   const [novoUserNome, setNovoUserNome] = useState("");
   const [novoUserEmail, setNovoUserEmail] = useState("");
+  const [modalOrdemOpen, setModalOrdemOpen] = useState(false);
+  const [categoriasAtivas, setCategoriasAtivas] = useState<string[]>([]);
 
   const fetchUsers = async () => {
     setLoadingUsers(true);
@@ -99,6 +104,16 @@ function Configuracoes() {
 
   useEffect(() => {
     fetchUsers();
+
+    const fetchCategorias = async () => {
+      await loadCategoryOrderFromDb();
+      const { data } = await supabase.from("produtos").select("categoria").eq("status", "Ativo");
+      if (data) {
+        const unique = Array.from(new Set(data.map((p) => p.categoria))).filter(Boolean) as string[];
+        setCategoriasAtivas(unique.sort(sortCategorias));
+      }
+    };
+    fetchCategorias();
 
     const fetchConfigs = async () => {
       try {
@@ -138,6 +153,16 @@ function Configuracoes() {
       setNovoUserEmail("");
       alert("Usuário convidado com sucesso! Um e-mail foi enviado para ele.");
       fetchUsers();
+
+    const fetchCategorias = async () => {
+      await loadCategoryOrderFromDb();
+      const { data } = await supabase.from("produtos").select("categoria").eq("status", "Ativo");
+      if (data) {
+        const unique = Array.from(new Set(data.map((p) => p.categoria))).filter(Boolean) as string[];
+        setCategoriasAtivas(unique.sort(sortCategorias));
+      }
+    };
+    fetchCategorias();
     } catch (err: any) {
       alert("Erro ao adicionar usuário: " + err.message);
     }
@@ -153,6 +178,16 @@ function Configuracoes() {
       try {
         await supabase.from("usuarios").delete().eq("id", id);
         fetchUsers();
+
+    const fetchCategorias = async () => {
+      await loadCategoryOrderFromDb();
+      const { data } = await supabase.from("produtos").select("categoria").eq("status", "Ativo");
+      if (data) {
+        const unique = Array.from(new Set(data.map((p) => p.categoria))).filter(Boolean) as string[];
+        setCategoriasAtivas(unique.sort(sortCategorias));
+      }
+    };
+    fetchCategorias();
       } catch (err: any) {
         alert("Erro ao remover usuário: " + err.message);
       }
@@ -250,6 +285,10 @@ function Configuracoes() {
           <TabsTrigger value="preferencias">
             <Cog className="mr-1.5 h-4 w-4" />
             Preferências
+          </TabsTrigger>
+          <TabsTrigger value="categorias">
+            <SlidersHorizontal className="mr-1.5 h-4 w-4" />
+            Ordem das Categorias
           </TabsTrigger>
           <TabsTrigger value="fiscal">
             <FileText className="mr-1.5 h-4 w-4" />
@@ -693,11 +732,73 @@ function Configuracoes() {
           </Card>
         </TabsContent>
 
+        {/* ── Aba Ordem das Categorias ── */}
+        <TabsContent value="categorias">
+          <Card className="shadow-card">
+            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b">
+              <div>
+                <CardTitle className="text-xl font-bold flex items-center gap-2">
+                  <SlidersHorizontal className="w-5 h-5 text-emerald-600" />
+                  Ordem Geral das Categorias
+                </CardTitle>
+                <CardDescription className="text-xs text-slate-500 mt-1">
+                  Defina a ordem exata de exibição de todas as categorias. Ao salvar, a ordem é aplicada imediatamente em todo o sistema (Catálogo Digital online dos clientes, Catálogo dos Parceiros, PDV e PDFs).
+                </CardDescription>
+              </div>
+              <Button
+                onClick={() => setModalOrdemOpen(true)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shrink-0"
+              >
+                <SlidersHorizontal className="mr-2 h-4 w-4" />
+                Organizar Ordem Manualmente
+              </Button>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="rounded-xl border p-5 bg-slate-50/70">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm text-slate-800 font-bold">
+                    Ordem de exibição ativa ({categoriasAtivas.length} categorias):
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setModalOrdemOpen(true)}
+                    className="text-xs font-bold border-emerald-600/40 text-emerald-800 hover:bg-emerald-50"
+                  >
+                    Editar Posições
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {categoriasAtivas.map((cat, idx) => (
+                    <Badge
+                      key={cat}
+                      variant="outline"
+                      className="bg-white text-slate-800 border-slate-300 py-1.5 px-3 text-xs font-semibold shadow-2xs"
+                    >
+                      <span className="text-emerald-700 font-bold mr-1.5 font-mono">#{idx + 1}</span>
+                      {cat}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* ── Aba Fiscal / NFe ── */}
         <TabsContent value="fiscal">
           <FiscalTab />
         </TabsContent>
       </Tabs>
+
+      <OrganizarCategoriasModal
+        open={modalOrdemOpen}
+        onOpenChange={setModalOrdemOpen}
+        categoriasDisponiveis={categoriasAtivas}
+        onSaveSuccess={(novaOrdem) => {
+          setCategoriasAtivas([...categoriasAtivas].sort((a, b) => sortCategorias(a, b, novaOrdem)));
+        }}
+      />
     </>
   );
 }

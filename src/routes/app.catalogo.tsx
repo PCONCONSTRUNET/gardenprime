@@ -20,8 +20,9 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Check, ChevronsUpDown, Search, Heart, ShoppingCart, FileText } from "lucide-react";
-import { cn, sortCategorias, getCategoryPriority, limparDescricaoComplementar } from "@/lib/utils";
+import { Check, ChevronsUpDown, Search, Heart, ShoppingCart, FileText, SlidersHorizontal } from "lucide-react";
+import { OrganizarCategoriasModal } from "@/components/organizar-categorias-modal";
+import { cn, sortCategorias, getCategoryPriority, limparDescricaoComplementar, loadCategoryOrderFromDb } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ColorDock } from "@/components/color-dock";
@@ -51,9 +52,12 @@ function Catalogo() {
   const [busca, setBusca] = useState("");
   const [categoria, setCategoria] = useState("Todos");
   const [openCategoria, setOpenCategoria] = useState(false);
+  const [modalOrdemOpen, setModalOrdemOpen] = useState(false);
+  const [ordemTick, setOrdemTick] = useState(0);
 
   const fetchData = async () => {
     setLoading(true);
+    await loadCategoryOrderFromDb();
     try {
       const { data: prodData } = await supabase
         .from("produtos")
@@ -377,7 +381,15 @@ function Catalogo() {
         title="Catálogo Digital"
         subtitle="Compartilhe seus produtos pelo WhatsApp, link público ou QR Code"
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => setModalOrdemOpen(true)}
+              variant="outline"
+              className="border-emerald-600/40 text-emerald-800 hover:bg-emerald-50 font-bold"
+            >
+              <SlidersHorizontal className="mr-2 h-4 w-4 text-emerald-700" />
+              Organizar Categorias
+            </Button>
             <Button onClick={gerarPDF} variant="outline" className="border-slate-200">
               <FileText className="mr-2 h-4 w-4" />
               Gerar PDF
@@ -574,6 +586,15 @@ function Catalogo() {
           })
         )}
       </div>
+
+      <OrganizarCategoriasModal
+        open={modalOrdemOpen}
+        onOpenChange={setModalOrdemOpen}
+        categoriasDisponiveis={Array.from(new Set(produtos.map((p) => p.categoria))).filter(Boolean) as string[]}
+        onSaveSuccess={() => {
+          setOrdemTick((t) => t + 1);
+        }}
+      />
     </>
   );
 }

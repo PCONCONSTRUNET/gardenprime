@@ -23,11 +23,13 @@ import {
   ArrowDown,
   Power,
   Settings2,
+  SlidersHorizontal,
   Check,
   X,
 } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
+import { OrganizarCategoriasModal } from "@/components/organizar-categorias-modal";
 import { useConfirm } from "@/contexts/ConfirmContext";
 import {
   Select,
@@ -67,6 +69,7 @@ function Produtos() {
 
   // Category management state
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
+  const [isOrganizarModalOpen, setIsOrganizarModalOpen] = useState(false);
   const [editingCat, setEditingCat] = useState<string | null>(null);
   const [editingCatValue, setEditingCatValue] = useState("");
   const [catActionLoading, setCatActionLoading] = useState(false);
@@ -400,6 +403,15 @@ function Produtos() {
             <Settings2 className="h-4 w-4" />
             Gerenciar Categorias
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-1.5 text-sm border-emerald-600/40 text-emerald-800 hover:bg-emerald-50 font-medium"
+            onClick={() => setIsOrganizarModalOpen(true)}
+          >
+            <SlidersHorizontal className="h-4 w-4 text-emerald-700" />
+            Ordem das Categorias
+          </Button>
         </div>
 
         {/* Category Management Modal */}
@@ -636,6 +648,12 @@ function Produtos() {
           </Table>
         </div>
       </Card>
+
+      <OrganizarCategoriasModal
+        open={isOrganizarModalOpen}
+        onOpenChange={setIsOrganizarModalOpen}
+        categoriasDisponiveis={categoriasList}
+      />
     </>
   );
 }

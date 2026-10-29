@@ -35,6 +35,7 @@ import {
   getDescricaoBoleto,
   getRotuloFaixaBoleto,
   limparDescricaoComplementar,
+  loadCategoryOrderFromDb,
 } from "@/lib/utils";
 
 export const Route = createFileRoute("/catalogo")({
@@ -239,6 +240,7 @@ function PublicCatalogo() {
 
   useEffect(() => {
     const fetchProdutos = async () => {
+      await loadCategoryOrderFromDb();
       const { data } = await supabase
         .from("produtos")
         .select("*")

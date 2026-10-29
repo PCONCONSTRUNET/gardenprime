@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import { ColorDock } from "@/components/color-dock";
 import jsPDF from "jspdf";
-import { cn, sortCategorias, getCategoryPriority, limparDescricaoComplementar } from "@/lib/utils";
+import { cn, sortCategorias, getCategoryPriority, limparDescricaoComplementar, loadCategoryOrderFromDb } from "@/lib/utils";
 
 const WhatsAppIcon = ({ className }: { className?: string }) => (
   <svg
@@ -121,6 +121,8 @@ function ParceiroCatalogoPage() {
             });
           }
         }
+
+        await loadCategoryOrderFromDb();
 
         // 3. Produtos ativos
         const { data: prods } = await supabase
