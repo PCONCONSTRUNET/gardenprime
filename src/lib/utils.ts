@@ -9,16 +9,25 @@ export function getCategoryPriority(cat?: string | null): number {
   if (!cat) return 99;
   const c = cat.toLowerCase().trim();
 
-  // 1. Mogi Mirim em primeiro
-  if (c.includes("mogi")) return 1;
+  // 1. Terra em primeiro lugar
+  if (c.includes("terra")) return 1;
 
-  // 2. Jardinagem em segundo
-  if (c.includes("jardinagem")) return 2;
+  // 2. Substrato em segundo lugar
+  if (c.includes("substrat")) return 2;
 
-  // 3. Pedra / Pedras Decorativas em terceiro
-  if (c.includes("pedra")) return 3;
+  // 3. Casca, Adubo e Fertilizantes
+  if (c.includes("casca") || c.includes("adubo") || c.includes("fertiliz") || c.includes("npk")) return 3;
 
-  // 6. Ferragens, Suportes, Correntes, Alças (no final de tudo)
+  // 4. Mogi Mirim
+  if (c.includes("mogi")) return 4;
+
+  // 5. Jardinagem
+  if (c.includes("jardinagem")) return 5;
+
+  // 6. Pedra / Pedras Decorativas
+  if (c.includes("pedra")) return 6;
+
+  // 9. Ferragens, Suportes, Correntes, Alças (no final de tudo)
   if (
     c.includes("suporte") ||
     c.includes("ferrag") ||
@@ -26,16 +35,16 @@ export function getCategoryPriority(cat?: string | null): number {
     c.includes("alça") ||
     c.includes("alca")
   ) {
-    return 6;
+    return 9;
   }
 
-  // 5. Vasos (no final, antes das ferragens/correntes)
+  // 8. Vasos (no final, conforme solicitado)
   if (c.includes("vaso")) {
-    return 5;
+    return 8;
   }
 
-  // 4. Intermediários (Pratos, Cuias, Floreiras, Sementeiras, etc.)
-  return 4;
+  // 7. Intermediários (Pratos, Cuias, Floreiras, Sementeiras, etc.)
+  return 7;
 }
 
 export function sortCategorias(a: string, b: string): number {

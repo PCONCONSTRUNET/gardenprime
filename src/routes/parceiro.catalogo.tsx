@@ -159,7 +159,7 @@ function ParceiroCatalogoPage() {
     carregarCatalogo();
   }, [navigate]);
 
-  // Categorias disponíveis (Mogi -> Jardinagem -> Pedra -> Demais -> Vasos -> Ferragens/Suportes)
+  // Categorias disponíveis (Terra -> Substrato -> Casca/Adubo -> Mogi -> Jardinagem -> Pedra -> Intermediários -> Vasos -> Ferragens/Suportes)
   const categorias = useMemo(() => {
     const set = new Set<string>();
     produtos.forEach((p) => {
