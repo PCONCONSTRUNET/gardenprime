@@ -42,7 +42,7 @@ function VendasProdutos() {
     try {
       const { data: prods, error: pError } = await supabase
         .from("produtos")
-        .select("*")
+        .select("id, nome, codigo, categoria, estoque, valor, status, created_at, emoji, quantidade_vendas")
         .order("created_at", { ascending: false });
       if (pError) throw pError;
 

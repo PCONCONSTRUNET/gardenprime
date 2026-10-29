@@ -241,11 +241,33 @@ function PublicCatalogo() {
   useEffect(() => {
     const fetchProdutos = async () => {
       await loadCategoryOrderFromDb();
-      const { data } = await supabase
-        .from("produtos")
-        .select("*")
-        .eq("status", "Ativo")
-        .order("nome");
+      
+      // Cache de 5 minutos no sessionStorage para economizar Egress
+      const CACHE_KEY = "gp_catalogo_prod_v1";
+      const CACHE_TIME = "gp_catalogo_time_v1";
+      let data: any[] | null = null;
+      try {
+        const cached = sessionStorage.getItem(CACHE_KEY);
+        const time = sessionStorage.getItem(CACHE_TIME);
+        if (cached && time && Date.now() - Number(time) < 5 * 60 * 1000) {
+          data = JSON.parse(cached);
+        }
+      } catch {}
+
+      if (!data) {
+        const res = await supabase
+          .from("produtos")
+          .select("id, codigo, nome, categoria, imagem, emoji, valor, cores, descricao, descricao_complementar, estoque, status")
+          .eq("status", "Ativo")
+          .order("nome");
+        data = res.data;
+        if (data) {
+          try {
+            sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
+            sessionStorage.setItem(CACHE_TIME, String(Date.now()));
+          } catch {}
+        }
+      }
 
       const params = new URLSearchParams(window.location.search);
       const p = params.get("p");

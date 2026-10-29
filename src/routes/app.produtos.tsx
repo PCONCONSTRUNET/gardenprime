@@ -139,7 +139,7 @@ function Produtos() {
     try {
       const { data, error } = await supabase
         .from("produtos")
-        .select("*")
+        .select("id, codigo, nome, categoria, estoque, estoque_minimo, valor, custo, unidade, status, emoji, cores, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
       setProducts(data || []);

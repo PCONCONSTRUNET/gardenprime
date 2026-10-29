@@ -40,7 +40,7 @@ function NovaCompra() {
   useEffect(() => {
     const fetchData = async () => {
       const { data: f } = await supabase.from("fornecedores").select("*").order("empresa");
-      const { data: p } = await supabase.from("produtos").select("*").order("nome");
+      const { data: p } = await supabase.from("produtos").select("id, nome, codigo, categoria, estoque, valor, custo, status").order("nome");
       if (f) setFornecedores(f);
       if (p) setProdutos(p);
     };

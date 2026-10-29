@@ -270,7 +270,7 @@ function NovoDAV() {
     const fetchProdutos = async () => {
       const { data } = await supabase
         .from("produtos")
-        .select("*")
+        .select("id, nome, codigo, categoria, valor, estoque, status, descricao, descricao_complementar")
         .eq("status", "Ativo")
         .order("nome");
       if (data) setProdutos(data);
@@ -330,7 +330,7 @@ function NovoDAV() {
 
       const { data: produtosData } = await supabase
         .from("produtos")
-        .select("*")
+        .select("id, nome, codigo, categoria, valor, estoque, status, descricao, descricao_complementar")
         .eq("status", "Ativo")
         .order("nome");
       if (produtosData) {
@@ -350,7 +350,7 @@ function NovoDAV() {
               qtd: qty,
               vlrUnit: Number(prod.valor),
               openSearch: false,
-              imagem: prod.imagem,
+              imagem: (prod as any).imagem || null,
             });
           }
         });

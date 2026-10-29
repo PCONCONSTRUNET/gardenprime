@@ -124,12 +124,32 @@ function ParceiroCatalogoPage() {
 
         await loadCategoryOrderFromDb();
 
-        // 3. Produtos ativos
-        const { data: prods } = await supabase
-          .from("produtos")
-          .select("*")
-          .eq("status", "Ativo")
-          .order("nome");
+        // 3. Produtos ativos (com cache de 5 minutos no sessionStorage para economizar Egress)
+        const CACHE_KEY = "gp_parceiro_catalogo_prod_v1";
+        const CACHE_TIME = "gp_parceiro_catalogo_time_v1";
+        let prods: any[] | null = null;
+        try {
+          const cached = sessionStorage.getItem(CACHE_KEY);
+          const time = sessionStorage.getItem(CACHE_TIME);
+          if (cached && time && Date.now() - Number(time) < 5 * 60 * 1000) {
+            prods = JSON.parse(cached);
+          }
+        } catch {}
+
+        if (!prods) {
+          const res = await supabase
+            .from("produtos")
+            .select("id, codigo, nome, categoria, imagem, emoji, valor, cores, descricao, descricao_complementar, estoque, status, dimensao, volume")
+            .eq("status", "Ativo")
+            .order("nome");
+          prods = res.data;
+          if (prods) {
+            try {
+              sessionStorage.setItem(CACHE_KEY, JSON.stringify(prods));
+              sessionStorage.setItem(CACHE_TIME, String(Date.now()));
+            } catch {}
+          }
+        }
 
         if (prods) {
           const percentual =

@@ -130,7 +130,7 @@ function PDV() {
     const fetchProdutos = async () => {
       const { data } = await supabase
         .from("produtos")
-        .select("*")
+        .select("id, nome, codigo, categoria, valor, estoque, status, emoji")
         .eq("status", "Ativo")
         .order("nome");
       if (data) {

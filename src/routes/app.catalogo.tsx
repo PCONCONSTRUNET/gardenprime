@@ -59,11 +59,32 @@ function Catalogo() {
     setLoading(true);
     await loadCategoryOrderFromDb();
     try {
-      const { data: prodData } = await supabase
-        .from("produtos")
-        .select("*")
-        .eq("status", "Ativo")
-        .order("nome");
+      // Cache de 5 minutos no sessionStorage para economizar Egress
+      const CACHE_KEY = "gp_admin_catalogo_prod_v1";
+      const CACHE_TIME = "gp_admin_catalogo_time_v1";
+      let prodData: any[] | null = null;
+      try {
+        const cached = sessionStorage.getItem(CACHE_KEY);
+        const time = sessionStorage.getItem(CACHE_TIME);
+        if (cached && time && Date.now() - Number(time) < 5 * 60 * 1000) {
+          prodData = JSON.parse(cached);
+        }
+      } catch {}
+
+      if (!prodData) {
+        const res = await supabase
+          .from("produtos")
+          .select("id, codigo, nome, categoria, imagem, emoji, valor, cores, descricao, descricao_complementar, estoque, status")
+          .eq("status", "Ativo")
+          .order("nome");
+        prodData = res.data;
+        if (prodData) {
+          try {
+            sessionStorage.setItem(CACHE_KEY, JSON.stringify(prodData));
+            sessionStorage.setItem(CACHE_TIME, String(Date.now()));
+          } catch {}
+        }
+      }
       if (prodData) setProdutos(prodData);
 
       const { data: vendData } = await supabase
