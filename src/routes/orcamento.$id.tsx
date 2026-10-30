@@ -336,15 +336,15 @@ function ImprimirDAV() {
 
               if (vencList.length > 1) {
                 return (
-                  <div className="text-[10px] sm:text-[11px] text-white font-black leading-tight my-1">
-                    <span className="block mb-0.5">Vencimentos:</span>
-                    <div className="bg-white text-slate-800 font-black px-2 py-1 rounded text-[10px] tracking-wider font-mono border border-slate-300 shadow-2xs space-y-0.5">
+                  <div className="text-xs text-white font-black leading-tight my-1">
+                    <span className="block mb-1 text-[11px] text-slate-300">Vencimentos:</span>
+                    <div className="bg-white text-slate-900 font-bold px-3 py-1.5 rounded-md border border-slate-300 shadow-2xs space-y-1">
                       {vencList.map((v: any, idx: number) => {
                         const d = typeof v === "object" && v !== null ? v.data : v;
                         return (
-                          <div key={idx} className="flex justify-between items-center text-[10px]">
-                            <span className="text-slate-600 font-bold">{idx + 1}ª:</span>
-                            <span className="font-black text-slate-900">{formatarDataBr(d)}</span>
+                          <div key={idx} className="flex items-center gap-2.5 text-xs sm:text-[12px] font-black">
+                            <span className="text-slate-600 font-bold whitespace-nowrap">{idx + 1}ª Parcela:</span>
+                            <span className="font-black text-black whitespace-nowrap">{formatarDataBr(d)}</span>
                           </div>
                         );
                       })}
@@ -356,9 +356,9 @@ function ImprimirDAV() {
               if (vencList.length === 1) {
                 const d = typeof vencList[0] === "object" && vencList[0] !== null ? vencList[0].data : vencList[0];
                 return (
-                  <div className="text-[10px] sm:text-[11px] text-white font-black leading-tight flex items-center gap-1.5 my-1">
-                    <span>Vencimento:</span>
-                    <span className="bg-white text-slate-800 font-black px-2 py-0.5 rounded text-[10px] tracking-wider font-mono border border-slate-300 shadow-2xs">
+                  <div className="text-xs sm:text-[12px] text-white font-black leading-tight flex items-center gap-2 my-1">
+                    <span className="text-slate-300 text-[11px]">Vencimento:</span>
+                    <span className="bg-white text-black font-black px-2.5 py-0.5 rounded text-xs sm:text-[12px] border border-slate-300 shadow-2xs">
                       {formatarDataBr(d)}
                     </span>
                   </div>
@@ -366,9 +366,9 @@ function ImprimirDAV() {
               }
 
               return (
-                <div className="text-[10px] sm:text-[11px] text-white font-black leading-tight flex items-center gap-1.5 my-1">
-                  <span>Vencimento:</span>
-                  <span className="bg-white text-slate-800 font-black px-2 py-0.5 rounded text-[10px] tracking-wider font-mono border border-slate-300 shadow-2xs">
+                <div className="text-xs sm:text-[12px] text-white font-black leading-tight flex items-center gap-2 my-1">
+                  <span className="text-slate-300 text-[11px]">Vencimento:</span>
+                  <span className="bg-white text-slate-700 font-black px-2.5 py-0.5 rounded text-xs sm:text-[12px] tracking-widest font-mono border border-slate-300 shadow-2xs">
                     ___ / ___ / ______
                   </span>
                 </div>

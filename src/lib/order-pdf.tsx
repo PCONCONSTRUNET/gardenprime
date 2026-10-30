@@ -674,8 +674,8 @@ export async function generateOrderPdfDoc(
     doc.setFillColor(255, 255, 255);
     doc.roundedRect(vBoxX, y + 11.0, vBoxW, vBoxH, 0.6, 0.6, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.2);
-    doc.setTextColor(30, 30, 30);
+    doc.setFontSize(6.8);
+    doc.setTextColor(10, 10, 10);
 
     orderVenc.forEach((v: any, idx: number) => {
       const d = typeof v === "object" && v !== null ? v.data : v;
