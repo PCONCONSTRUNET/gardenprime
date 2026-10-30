@@ -318,13 +318,19 @@ function ImprimirDAV() {
           </div>
 
           {/* Condições Comerciais */}
-          <div className="bg-black text-white rounded-lg px-3.5 py-2 sm:px-4 sm:py-2.5 text-xs flex flex-col justify-center shrink-0 ml-auto sm:ml-0">
-            <p className="font-black text-[10px] sm:text-[11px] tracking-wider uppercase mb-0.5 leading-none">
+          <div className="bg-black text-white rounded-lg px-3.5 py-2 sm:px-4 sm:py-2.5 text-xs flex flex-col justify-center shrink-0 ml-auto sm:ml-0 min-w-[210px]">
+            <p className="font-black text-[10px] sm:text-[11px] tracking-wider uppercase mb-1 leading-none text-white">
               CONDIÇÕES COMERCIAIS
             </p>
             <p className="text-[10px] sm:text-[11px] text-white font-black leading-tight">
               Pagamento: {dav.condicao_pagamento || "Dinheiro / Pix"}
             </p>
+            <div className="text-[10px] sm:text-[11px] text-white font-black leading-tight flex items-center gap-1.5 my-1">
+              <span>Vencimento:</span>
+              <span className="bg-white text-slate-800 font-black px-2.5 py-0.5 rounded text-[10px] tracking-widest font-mono border border-slate-300 shadow-2xs">
+                ___ / ___ / ______
+              </span>
+            </div>
             <p className="text-[10px] sm:text-[11px] text-white font-black leading-tight">
               Frete: Retirada | Prazo: Imediato
             </p>

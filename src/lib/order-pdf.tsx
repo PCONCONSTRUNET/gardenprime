@@ -594,15 +594,15 @@ export async function generateOrderPdfDoc(
 
   // 2. BLOCO ESCURO (TÍTULO)
   doc.setFillColor(colorDark[0], colorDark[1], colorDark[2]);
-  doc.roundedRect(margin, y, pageWidth - margin * 2, 22, 2, 2, "F");
+  doc.roundedRect(margin, y, pageWidth - margin * 2, 23.5, 2, 2, "F");
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
   doc.setTextColor(255, 255, 255);
-  doc.text(docType, margin + 20, y + 9);
+  doc.text(docType, margin + 18, y + 9.5);
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
-  doc.text(`DAV Nº: ${num}`, margin + 20, y + 15);
+  doc.text(`DAV Nº: ${num}`, margin + 18, y + 15.5);
 
   const dataEmissao = new Date(order.created_at).toLocaleDateString("pt-BR");
   const horaEmissao = new Date(order.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -611,11 +611,11 @@ export async function generateOrderPdfDoc(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(6.5);
   doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
-  doc.text("Emissão", margin + 80, y + 8);
+  doc.text("Emissão", margin + 74, y + 8);
   doc.setFontSize(8);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(255, 255, 255);
-  doc.text(`${dataEmissao} às ${horaEmissao}`, margin + 80, y + 13);
+  doc.text(`${dataEmissao} às ${horaEmissao}`, margin + 74, y + 13.5);
 
   // Validade – padrão: 30 dias a partir da emissão
   let validadeStr: string;
@@ -629,28 +629,44 @@ export async function generateOrderPdfDoc(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(6.5);
   doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
-  doc.text("Validade", margin + 120, y + 8);
+  doc.text("Validade", margin + 114, y + 8);
   doc.setFontSize(8);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(255, 255, 255);
-  doc.text(validadeStr, margin + 120, y + 13);
+  doc.text(validadeStr, margin + 114, y + 13.5);
 
-  // Box Preto de Condições Comerciais
-  const boxW = 60;
+  // Box Preto de Condições Comerciais com campo de Vencimento
+  const boxW = 66;
+  const boxX = pageWidth - margin - boxW;
   doc.setFillColor(0, 0, 0);
-  doc.roundedRect(pageWidth - margin - boxW, y + 2, boxW - 2, 18, 1, 1, "F");
+  doc.roundedRect(boxX, y + 1.2, boxW - 1, 21, 1, 1, "F");
   
   doc.setFont("helvetica", "bold");
   doc.setFontSize(6.5);
   doc.setTextColor(255, 255, 255);
-  doc.text("CONDIÇÕES COMERCIAIS", pageWidth - margin - boxW + 4, y + 7);
+  doc.text("CONDIÇÕES COMERCIAIS", boxX + 3.5, y + 5.5);
+  doc.text(`Pagamento: ${order.condicao_pagamento || "Não informado"}`, boxX + 3.5, y + 9.5);
+
+  // Campo Vencimento para preenchimento a mão
+  doc.text("Vencimento:", boxX + 3.5, y + 13.8);
+  const vBoxX = boxX + 21;
+  const vBoxW = 40;
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(vBoxX, y + 11.2, vBoxW, 3.8, 0.5, 0.5, "F");
   doc.setFont("helvetica", "bold");
-  doc.text(`Pagamento: ${order.condicao_pagamento || "Não informado"}`, pageWidth - margin - boxW + 4, y + 11);
+  doc.setFontSize(6.5);
+  doc.setTextColor(70, 70, 70);
+  doc.text("___ / ___ / ______", vBoxX + vBoxW / 2, y + 13.9, { align: "center" });
+
+  // Frete e Prazo
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.5);
+  doc.setTextColor(255, 255, 255);
   const freteInfo = order.frete_tipo || (order as any).frete || "Retirada";
   const prazoInfo = order.prazo_entrega || (order as any).prazo || "Imediato";
-  doc.text(`Frete: ${freteInfo} | Prazo: ${prazoInfo}`, pageWidth - margin - boxW + 4, y + 15);
+  doc.text(`Frete: ${freteInfo} | Prazo: ${prazoInfo}`, boxX + 3.5, y + 18.2);
 
-  y += 28;
+  y += 29;
 
   // 3. DADOS DO CLIENTE
   doc.setFillColor(colorGray[0], colorGray[1], colorGray[2]);
