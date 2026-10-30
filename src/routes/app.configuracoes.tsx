@@ -237,7 +237,9 @@ function Configuracoes() {
       const backupData: Record<string, any[]> = {};
 
       for (const table of tables) {
-        const { data, error } = await supabase.from(table).select("*");
+        // Excluir campo imagem (base64 pesado) da tabela produtos para economizar egress
+        const selectCols = table === "produtos" ? "id, nome, codigo, categoria, valor, estoque, status, emoji, unidade, custo, descricao, created_at" : "*";
+        const { data, error } = await supabase.from(table).select(selectCols);
         if (!error && data) {
           backupData[table] = data;
         }

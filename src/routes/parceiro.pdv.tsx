@@ -332,7 +332,7 @@ function ParceiroPDV() {
 
         const { data } = await supabase
           .from("produtos")
-          .select("*")
+          .select("id, nome, codigo, categoria, valor, estoque, status, emoji, unidade")
           .eq("status", "Ativo")
           .order("nome");
         if (data) {
@@ -464,7 +464,7 @@ function ParceiroPDV() {
               }
               const { data: draftItens } = await supabase
                 .from("vendas_itens")
-                .select("*, produtos(*)")
+                .select("*, produtos(nome, codigo, valor, estoque, emoji)")
                 .eq("venda_id", draftId);
 
               if (draftItens && draftItens.length > 0) {
