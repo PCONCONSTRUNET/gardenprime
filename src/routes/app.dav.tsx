@@ -894,7 +894,7 @@ function DAVList() {
               <Button
                 variant="outline"
                 className="h-10 border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5"
-                onClick={() => openOrderPdf(selectedDav?.id)}
+                onClick={() => openOrderPdf(selectedDav, davItens)}
               >
                 <Printer className="h-3.5 w-3.5 text-slate-500 shrink-0" />
                 Imprimir PDF

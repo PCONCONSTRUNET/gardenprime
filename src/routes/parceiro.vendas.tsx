@@ -1479,7 +1479,7 @@ function VendasParceiro() {
                     type="button"
                     variant="outline"
                     className="h-10 border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5"
-                    onClick={() => openOrderPdf(selectedVenda.id)}
+                    onClick={() => openOrderPdf(selectedVenda, vendaItens)}
                   >
                     <FileText className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                     <span>Ver / Imprimir PDF</span>

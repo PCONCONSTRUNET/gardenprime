@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase, supabaseParceiro } from "@/lib/supabase";
+import { calcularVencimentosPadrao } from "@/lib/utils";
 import React from "react";
 
 export const WhatsAppIcon = ({ className }: { className?: string }) => (
@@ -593,7 +594,16 @@ export async function generateOrderPdfDoc(
 
   y += 33;
 
-  const orderVenc = (order as any).vencimentos;
+  let orderVenc = (order as any).vencimentos;
+  if (!Array.isArray(orderVenc) || orderVenc.length === 0) {
+    if (order.condicao_pagamento && order.condicao_pagamento.trim() !== "") {
+      orderVenc = calcularVencimentosPadrao(
+        order.condicao_pagamento,
+        order.created_at,
+        order.valor_total || order.total
+      );
+    }
+  }
   const hasVencList = Array.isArray(orderVenc) && orderVenc.length > 0;
   const numVenc = hasVencList ? orderVenc.length : 1;
   const extraHeight = numVenc > 1 ? (numVenc - 1) * 3.8 : 0;
@@ -951,11 +961,40 @@ export async function shareOrderWhatsApp(rawOrder: OrderData, rawItems?: OrderIt
 }
 
 /**
- * Abre a visualização / impressão oficial do PDF do pedido em uma nova aba
+ * Abre a visualização / impressão oficial do PDF do pedido usando o mesmo fluxo do Baixar PDF
  */
-export function openOrderPdf(orderId: string): void {
-  const url = `/orcamento/${orderId}`;
-  window.open(url, "_blank");
+export async function openOrderPdf(rawOrderOrId: string | OrderData, rawItems?: OrderItem[]): Promise<void> {
+  try {
+    let order: OrderData;
+    let items: OrderItem[] | undefined = rawItems;
+
+    if (typeof rawOrderOrId === "string") {
+      order = { id: rawOrderOrId } as OrderData;
+    } else {
+      order = rawOrderOrId;
+    }
+
+    const [enriched, logos] = await Promise.all([
+      enrichOrderAndItems(order, items),
+      preloadLogos(),
+    ]);
+
+    const { doc } = await generateOrderPdfDoc(enriched.order, enriched.items, logos);
+
+    // Abre direto o PDF oficial configurado com autoprint
+    doc.autoPrint();
+    const blobUrl = doc.output("bloburl");
+    const w = window.open(blobUrl, "_blank");
+    if (!w) {
+      doc.save(`pedido_${getOrderNumber(enriched.order)}.pdf`);
+    }
+  } catch (err: any) {
+    console.error("Erro ao imprimir PDF:", err);
+    const id = typeof rawOrderOrId === "string" ? rawOrderOrId : rawOrderOrId?.id;
+    if (id) {
+      window.open(`/orcamento/${id}`, "_blank");
+    }
+  }
 }
 
 /**

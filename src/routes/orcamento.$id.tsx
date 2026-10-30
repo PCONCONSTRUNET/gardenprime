@@ -3,8 +3,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { GardenPrimeLogo } from "@/components/garden-prime-logo";
 import { Printer, ArrowLeft, Loader2, FileText, Calendar, Clock, Handshake, Package, User } from "lucide-react";
-import { WhatsAppIcon, shareOrderWhatsApp } from "@/lib/order-pdf";
-import { formatarVencimentosResumo, formatarDataBr } from "@/lib/utils";
+import { WhatsAppIcon, shareOrderWhatsApp, openOrderPdf } from "@/lib/order-pdf";
+import { formatarVencimentosResumo, formatarDataBr, calcularVencimentosPadrao } from "@/lib/utils";
 
 export const Route = createFileRoute("/orcamento/$id")({
   head: () => ({ meta: [{ title: "Orçamento (DAV) - Impressão" }] }),
@@ -211,7 +211,13 @@ function ImprimirDAV() {
           <ArrowLeft className="w-4 h-4" /> Voltar
         </button>
         <button
-          onClick={() => window.print()}
+          onClick={() => {
+            if (dav) {
+              openOrderPdf(dav, itens);
+            } else {
+              window.print();
+            }
+          }}
           className="flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-2 bg-brand text-white hover:bg-brand-dark rounded-lg text-sm font-bold transition-colors"
         >
           <Printer className="w-4 h-4" /> Imprimir / Salvar PDF
@@ -326,29 +332,53 @@ function ImprimirDAV() {
             <p className="text-[10px] sm:text-[11px] text-white font-black leading-tight">
               Pagamento: {dav.condicao_pagamento || "Dinheiro / Pix"}
             </p>
-            {dav.vencimentos && Array.isArray(dav.vencimentos) && dav.vencimentos.length > 1 ? (
-              <div className="text-[10px] sm:text-[11px] text-white font-black leading-tight my-1">
-                <span className="block mb-0.5">Vencimentos:</span>
-                <div className="bg-white text-slate-800 font-black px-2 py-1 rounded text-[10px] tracking-wider font-mono border border-slate-300 shadow-2xs space-y-0.5">
-                  {dav.vencimentos.map((v: any, idx: number) => {
-                    const d = typeof v === "object" && v !== null ? v.data : v;
-                    return (
-                      <div key={idx} className="flex justify-between items-center text-[10px]">
-                        <span className="text-slate-600 font-bold">{idx + 1}ª:</span>
-                        <span className="font-black text-slate-900">{formatarDataBr(d)}</span>
-                      </div>
-                    );
-                  })}
+            {(() => {
+              const vencList = Array.isArray(dav.vencimentos) && dav.vencimentos.length > 0
+                ? dav.vencimentos
+                : (dav.condicao_pagamento && dav.condicao_pagamento.trim() !== ""
+                    ? calcularVencimentosPadrao(dav.condicao_pagamento, dav.emissao || dav.created_at, dav.total || dav.valor_total)
+                    : []);
+
+              if (vencList.length > 1) {
+                return (
+                  <div className="text-[10px] sm:text-[11px] text-white font-black leading-tight my-1">
+                    <span className="block mb-0.5">Vencimentos:</span>
+                    <div className="bg-white text-slate-800 font-black px-2 py-1 rounded text-[10px] tracking-wider font-mono border border-slate-300 shadow-2xs space-y-0.5">
+                      {vencList.map((v: any, idx: number) => {
+                        const d = typeof v === "object" && v !== null ? v.data : v;
+                        return (
+                          <div key={idx} className="flex justify-between items-center text-[10px]">
+                            <span className="text-slate-600 font-bold">{idx + 1}ª:</span>
+                            <span className="font-black text-slate-900">{formatarDataBr(d)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (vencList.length === 1) {
+                const d = typeof vencList[0] === "object" && vencList[0] !== null ? vencList[0].data : vencList[0];
+                return (
+                  <div className="text-[10px] sm:text-[11px] text-white font-black leading-tight flex items-center gap-1.5 my-1">
+                    <span>Vencimento:</span>
+                    <span className="bg-white text-slate-800 font-black px-2 py-0.5 rounded text-[10px] tracking-wider font-mono border border-slate-300 shadow-2xs">
+                      {formatarDataBr(d)}
+                    </span>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="text-[10px] sm:text-[11px] text-white font-black leading-tight flex items-center gap-1.5 my-1">
+                  <span>Vencimento:</span>
+                  <span className="bg-white text-slate-800 font-black px-2 py-0.5 rounded text-[10px] tracking-wider font-mono border border-slate-300 shadow-2xs">
+                    ___ / ___ / ______
+                  </span>
                 </div>
-              </div>
-            ) : (
-              <div className="text-[10px] sm:text-[11px] text-white font-black leading-tight flex items-center gap-1.5 my-1">
-                <span>Vencimento:</span>
-                <span className="bg-white text-slate-800 font-black px-2 py-0.5 rounded text-[10px] tracking-wider font-mono border border-slate-300 shadow-2xs">
-                  {dav.vencimentos && formatarVencimentosResumo(dav.vencimentos) ? formatarVencimentosResumo(dav.vencimentos) : "___ / ___ / ______"}
-                </span>
-              </div>
-            )}
+              );
+            })()}
             <p className="text-[10px] sm:text-[11px] text-white font-black leading-tight">
               Frete: Retirada | Prazo: Imediato
             </p>

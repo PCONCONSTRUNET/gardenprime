@@ -1362,7 +1362,16 @@ function Vendas() {
                 <Button
                   variant="outline"
                   className="h-10 border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5"
-                  onClick={() => openOrderPdf(selectedVenda?.id)}
+                  onClick={() => openOrderPdf(
+                    {
+                      ...selectedVenda,
+                      cliente: selectedVenda?.clientes || selectedVenda?.cliente,
+                      condicao_pagamento: selectedVenda?.condicao_pagamento || selectedVenda?.metodo_pagamento,
+                      total: selectedVenda?.valor_total ?? selectedVenda?.total,
+                      subtotal: selectedVenda?.subtotal ?? selectedVenda?.valor_total,
+                    },
+                    vendaItens
+                  )}
                 >
                   <Printer className="h-3.5 w-3.5 text-slate-500 shrink-0" />
                   Imprimir PDF
@@ -1374,7 +1383,7 @@ function Vendas() {
                     {
                       ...selectedVenda,
                       cliente: selectedVenda?.clientes || selectedVenda?.cliente,
-                      condicao_pagamento: selectedVenda?.metodo_pagamento || selectedVenda?.condicao_pagamento,
+                      condicao_pagamento: selectedVenda?.condicao_pagamento || selectedVenda?.metodo_pagamento,
                       total: selectedVenda?.valor_total ?? selectedVenda?.total,
                       subtotal: selectedVenda?.subtotal ?? selectedVenda?.valor_total,
                     },
