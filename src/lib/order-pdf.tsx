@@ -961,40 +961,13 @@ export async function shareOrderWhatsApp(rawOrder: OrderData, rawItems?: OrderIt
 }
 
 /**
- * Abre a visualização / impressão oficial do PDF do pedido usando o mesmo fluxo do Baixar PDF
+ * Abre a tela de visualização e impressão oficial do pedido em nova aba com o modal de impressão
  */
-export async function openOrderPdf(rawOrderOrId: string | OrderData, rawItems?: OrderItem[]): Promise<void> {
-  try {
-    let order: OrderData;
-    let items: OrderItem[] | undefined = rawItems;
-
-    if (typeof rawOrderOrId === "string") {
-      order = { id: rawOrderOrId } as OrderData;
-    } else {
-      order = rawOrderOrId;
-    }
-
-    const [enriched, logos] = await Promise.all([
-      enrichOrderAndItems(order, items),
-      preloadLogos(),
-    ]);
-
-    const { doc } = await generateOrderPdfDoc(enriched.order, enriched.items, logos);
-
-    // Abre direto o PDF oficial configurado com autoprint
-    doc.autoPrint();
-    const blobUrl = doc.output("bloburl");
-    const w = window.open(blobUrl, "_blank");
-    if (!w) {
-      doc.save(`pedido_${getOrderNumber(enriched.order)}.pdf`);
-    }
-  } catch (err: any) {
-    console.error("Erro ao imprimir PDF:", err);
-    const id = typeof rawOrderOrId === "string" ? rawOrderOrId : rawOrderOrId?.id;
-    if (id) {
-      window.open(`/orcamento/${id}`, "_blank");
-    }
-  }
+export function openOrderPdf(rawOrderOrId: string | OrderData, rawItems?: OrderItem[]): void {
+  const id = typeof rawOrderOrId === "string" ? rawOrderOrId : rawOrderOrId?.id;
+  if (!id) return;
+  const url = `/orcamento/${id}`;
+  window.open(url, "_blank");
 }
 
 /**

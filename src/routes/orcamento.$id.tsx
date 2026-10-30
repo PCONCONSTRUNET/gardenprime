@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { GardenPrimeLogo } from "@/components/garden-prime-logo";
 import { Printer, ArrowLeft, Loader2, FileText, Calendar, Clock, Handshake, Package, User } from "lucide-react";
-import { WhatsAppIcon, shareOrderWhatsApp, openOrderPdf } from "@/lib/order-pdf";
+import { WhatsAppIcon, shareOrderWhatsApp } from "@/lib/order-pdf";
 import { formatarVencimentosResumo, formatarDataBr, calcularVencimentosPadrao } from "@/lib/utils";
 
 export const Route = createFileRoute("/orcamento/$id")({
@@ -96,6 +96,7 @@ function ImprimirDAV() {
             uf: cli?.uf || null,
             email: cli?.email || null,
             condicao_pagamento: v.condicao_pagamento || v.metodo_pagamento,
+            vencimentos: v.vencimentos || null,
             subtotal: v.subtotal || v.valor_total,
             desconto_valor: v.desconto_valor || 0,
             desconto_percentual: v.desconto_percentual || 0,
@@ -211,13 +212,7 @@ function ImprimirDAV() {
           <ArrowLeft className="w-4 h-4" /> Voltar
         </button>
         <button
-          onClick={() => {
-            if (dav) {
-              openOrderPdf(dav, itens);
-            } else {
-              window.print();
-            }
-          }}
+          onClick={() => window.print()}
           className="flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-2 bg-brand text-white hover:bg-brand-dark rounded-lg text-sm font-bold transition-colors"
         >
           <Printer className="w-4 h-4" /> Imprimir / Salvar PDF
