@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { GardenPrimeLogo } from "@/components/garden-prime-logo";
 import { Printer, ArrowLeft, Loader2, FileText, Calendar, Clock, Handshake, Package, User } from "lucide-react";
 import { WhatsAppIcon, shareOrderWhatsApp } from "@/lib/order-pdf";
+import { formatarVencimentosResumo } from "@/lib/utils";
 
 export const Route = createFileRoute("/orcamento/$id")({
   head: () => ({ meta: [{ title: "Orçamento (DAV) - Impressão" }] }),
@@ -327,8 +328,8 @@ function ImprimirDAV() {
             </p>
             <div className="text-[10px] sm:text-[11px] text-white font-black leading-tight flex items-center gap-1.5 my-1">
               <span>Vencimento:</span>
-              <span className="bg-white text-slate-800 font-black px-2.5 py-0.5 rounded text-[10px] tracking-widest font-mono border border-slate-300 shadow-2xs">
-                ___ / ___ / ______
+              <span className="bg-white text-slate-800 font-black px-2 py-0.5 rounded text-[10px] tracking-wider font-mono border border-slate-300 shadow-2xs">
+                {dav.vencimentos && formatarVencimentosResumo(dav.vencimentos) ? formatarVencimentosResumo(dav.vencimentos) : "___ / ___ / ______"}
               </span>
             </div>
             <p className="text-[10px] sm:text-[11px] text-white font-black leading-tight">

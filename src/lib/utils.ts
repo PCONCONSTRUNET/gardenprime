@@ -189,3 +189,124 @@ export function limparDescricaoComplementar(desc?: string | null): string {
     .replace(/Custo:\s*R\$?\s*[\d.,]+/gi, "")
     .trim();
 }
+
+export interface ParcelaVencimento {
+  parcela: number;
+  data: string; // YYYY-MM-DD
+  label?: string;
+  valor?: number;
+}
+
+/**
+ * Formata string YYYY-MM-DD para DD/MM/AAAA
+ */
+export function formatarDataBr(dataStr?: string | null): string {
+  if (!dataStr) return "";
+  const clean = dataStr.split("T")[0];
+  const parts = clean.split("-");
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return dataStr;
+}
+
+/**
+ * Retorna resumo legível dos vencimentos para impressão ou badges
+ * Ex: 28/11/2026 | 05/12/2026 | 12/12/2026
+ */
+export function formatarVencimentosResumo(vencimentos?: any[] | null): string {
+  if (!Array.isArray(vencimentos) || vencimentos.length === 0) return "";
+  return vencimentos
+    .map((v, i) => {
+      const d = typeof v === "object" && v !== null ? v.data : v;
+      const dataBr = formatarDataBr(d);
+      return vencimentos.length > 1 ? `${i + 1}ª: ${dataBr}` : dataBr;
+    })
+    .join(" | ");
+}
+
+/**
+ * Calcula vencimentos padrão sugeridos a partir da condição de pagamento
+ */
+export function calcularVencimentosPadrao(
+  condicao: string = "",
+  dataBaseStr?: string,
+  valorTotal?: number
+): ParcelaVencimento[] {
+  const base = dataBaseStr ? new Date(dataBaseStr) : new Date();
+  const validBase = isNaN(base.getTime()) ? new Date() : base;
+
+  const addDays = (d: Date, days: number): string => {
+    const copy = new Date(d.getTime());
+    copy.setDate(copy.getDate() + days);
+    return copy.toISOString().split("T")[0];
+  };
+
+  const c = (condicao || "").toLowerCase().trim();
+
+  // 1. Detectar padrões com entrada + dias (ex: "Entrada + 30 dias")
+  const numeros = c.match(/\d+/g)?.map(Number) || [];
+
+  if (c.includes("entrada") && numeros.length > 0) {
+    const res: ParcelaVencimento[] = [
+      { parcela: 1, data: validBase.toISOString().split("T")[0], label: "Entrada" },
+    ];
+    numeros.forEach((num, idx) => {
+      res.push({
+        parcela: idx + 2,
+        data: addDays(validBase, num),
+        label: `${idx + 2}ª Parcela (${num} dias)`,
+      });
+    });
+    return res;
+  }
+
+  // 2. Múltiplos prazos (ex: "28, 35, 42 dias" ou "30/60/90" ou "30/60")
+  if (numeros.length > 1) {
+    return numeros.map((dias, idx) => ({
+      parcela: idx + 1,
+      data: addDays(validBase, dias),
+      label: `${idx + 1}º Vencimento (${dias} dias)`,
+    }));
+  }
+
+  // 3. Apenas um número (ex: "30 dias", "28 dias")
+  if (numeros.length === 1) {
+    if (c.includes("2x") || c.includes("2 x")) {
+      return [
+        { parcela: 1, data: addDays(validBase, 30), label: "1º Vencimento (30 dias)" },
+        { parcela: 2, data: addDays(validBase, 60), label: "2º Vencimento (60 dias)" },
+      ];
+    }
+    if (c.includes("3x") || c.includes("3 x")) {
+      return [
+        { parcela: 1, data: addDays(validBase, 30), label: "1º Vencimento (30 dias)" },
+        { parcela: 2, data: addDays(validBase, 60), label: "2º Vencimento (60 dias)" },
+        { parcela: 3, data: addDays(validBase, 90), label: "3º Vencimento (90 dias)" },
+      ];
+    }
+    return [
+      { parcela: 1, data: addDays(validBase, numeros[0]), label: `1º Vencimento (${numeros[0]} dias)` },
+    ];
+  }
+
+  // 4. Cartão parcelado sem número de dias especificado (ex: "2x sem juros", "3x sem juros")
+  if (c.includes("2x") || c.includes("2 x")) {
+    return [
+      { parcela: 1, data: addDays(validBase, 30), label: "1ª Parcela (30 dias)" },
+      { parcela: 2, data: addDays(validBase, 60), label: "2ª Parcela (60 dias)" },
+    ];
+  }
+  if (c.includes("3x") || c.includes("3 x")) {
+    return [
+      { parcela: 1, data: addDays(validBase, 30), label: "1ª Parcela (30 dias)" },
+      { parcela: 2, data: addDays(validBase, 60), label: "2ª Parcela (60 dias)" },
+      { parcela: 3, data: addDays(validBase, 90), label: "3ª Parcela (90 dias)" },
+    ];
+  }
+
+  // 5. Padrão à vista / Pix / Dinheiro / Boleto à vista
+  return [
+    { parcela: 1, data: validBase.toISOString().split("T")[0], label: "1º Vencimento" },
+  ];
+}

@@ -36,3 +36,5 @@ dist-ssr
 .vercel
 .env*
 secret.env
+
+scripts/backup_imagens_produtos.json

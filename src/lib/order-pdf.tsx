@@ -57,6 +57,7 @@ export interface OrderData {
   prazo_entrega?: string;
   observacoes?: string;
   validade?: string;
+  vencimentos?: any[];
   cliente_id?: string;
   cliente_nome?: string;
   cliente_cnpj?: string;
@@ -647,16 +648,36 @@ export async function generateOrderPdfDoc(
   doc.text("CONDIÇÕES COMERCIAIS", boxX + 3.5, y + 5.5);
   doc.text(`Pagamento: ${order.condicao_pagamento || "Não informado"}`, boxX + 3.5, y + 9.5);
 
-  // Campo Vencimento para preenchimento a mão
+  // Campo Vencimento (preenchimento a mão ou automático se configurado)
   doc.text("Vencimento:", boxX + 3.5, y + 13.8);
   const vBoxX = boxX + 21;
   const vBoxW = 40;
   doc.setFillColor(255, 255, 255);
   doc.roundedRect(vBoxX, y + 11.2, vBoxW, 3.8, 0.5, 0.5, "F");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.5);
-  doc.setTextColor(70, 70, 70);
-  doc.text("___ / ___ / ______", vBoxX + vBoxW / 2, y + 13.9, { align: "center" });
+
+  let vencTexto = "___ / ___ / ______";
+  const orderVenc = (order as any).vencimentos;
+  if (Array.isArray(orderVenc) && orderVenc.length > 0) {
+    vencTexto = orderVenc
+      .map((v: any, idx: number) => {
+        const d = typeof v === "object" && v !== null ? v.data : v;
+        const clean = (d || "").split("T")[0].split("-");
+        const dtBr = clean.length === 3 ? `${clean[2]}/${clean[1]}/${clean[0]}` : d;
+        return orderVenc.length > 1 ? `${idx + 1}ª: ${dtBr.substring(0, 5)}` : dtBr;
+      })
+      .join(" ");
+  }
+
+  if (vencTexto.length > 20) {
+    doc.setFontSize(5.2);
+  } else if (vencTexto.length > 14) {
+    doc.setFontSize(6.0);
+  } else {
+    doc.setFontSize(6.5);
+  }
+  doc.setTextColor(40, 40, 40);
+  doc.text(vencTexto, vBoxX + vBoxW / 2, y + 13.9, { align: "center" });
 
   // Frete e Prazo
   doc.setFont("helvetica", "bold");

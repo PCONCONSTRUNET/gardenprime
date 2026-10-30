@@ -28,8 +28,8 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { cn } from "@/lib/utils";
-import { Save, Plus, Trash2, Check, ChevronsUpDown, Search, Loader2 } from "lucide-react";
+import { cn, calcularVencimentosPadrao, type ParcelaVencimento } from "@/lib/utils";
+import { Save, Plus, Trash2, Check, ChevronsUpDown, Search, Loader2, Calendar } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -72,6 +72,9 @@ function NovoDAV() {
     frete: "Retirada",
     prazo: "Imediato",
   });
+  const [vencimentos, setVencimentos] = useState<ParcelaVencimento[]>(() =>
+    calcularVencimentosPadrao("Dinheiro / Pix", new Date().toISOString())
+  );
   const [observacoes, setObservacoes] = useState("");
 
   const [itens, setItens] = useState<
@@ -218,6 +221,11 @@ function NovoDAV() {
               frete: dav.frete_tipo || "Retirada",
               prazo: dav.prazo_entrega || "Imediato",
             });
+            if (Array.isArray(dav.vencimentos) && dav.vencimentos.length > 0) {
+              setVencimentos(dav.vencimentos);
+            } else {
+              setVencimentos(calcularVencimentosPadrao(dav.condicao_pagamento || "Dinheiro / Pix", dav.emissao, dav.total));
+            }
             setDescontoValor(dav.desconto_valor || 0);
             setFreteValor(dav.frete_valor || 0);
             setObservacoes(dav.observacoes || "");
@@ -440,6 +448,7 @@ function NovoDAV() {
         frete_valor: freteValor,
         total: total,
         observacoes: observacoes,
+        vencimentos: vencimentos && vencimentos.length > 0 ? vencimentos : null,
       };
 
       let davId: string;
@@ -671,20 +680,83 @@ function NovoDAV() {
               <Label>Condição de Pagamento</Label>
               <Input
                 value={condicoes.pagamento}
-                onChange={(e) => setCondicoes({ ...condicoes, pagamento: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setCondicoes({ ...condicoes, pagamento: val });
+                  setVencimentos(calcularVencimentosPadrao(val, new Date().toISOString(), total));
+                }}
                 placeholder="Ex: Pix, Dinheiro, Cartão"
               />
               <div className="flex flex-wrap gap-1.5 mt-1">
-                {["Dinheiro / Pix", "Boleto (28, 35, 42 dias)", "Cartão de Crédito"].map((c) => (
+                {["Dinheiro / Pix", "Boleto (28, 35, 42 dias)", "Boleto 30 dias", "Boleto 30/60 dias", "Cartão de Crédito", "2x sem juros", "3x sem juros"].map((c) => (
                   <button
                     key={c}
                     type="button"
-                    onClick={() => setCondicoes({ ...condicoes, pagamento: c })}
+                    onClick={() => {
+                      setCondicoes({ ...condicoes, pagamento: c });
+                      setVencimentos(calcularVencimentosPadrao(c, new Date().toISOString(), total));
+                    }}
                     className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 border border-slate-200 transition-colors"
                   >
                     {c}
                   </button>
                 ))}
+              </div>
+
+              {/* Vencimentos configuráveis */}
+              <div className="space-y-2 pt-2 border-t border-slate-100 mt-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5 text-slate-700">
+                    <Calendar className="h-3.5 w-3.5 text-emerald-600" /> Vencimentos das Parcelas ({vencimentos.length})
+                  </Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-6 text-[10px] px-2"
+                    onClick={() => {
+                      const nextNum = vencimentos.length + 1;
+                      setVencimentos([
+                        ...vencimentos,
+                        {
+                          parcela: nextNum,
+                          data: new Date().toISOString().split("T")[0],
+                          label: `${nextNum}º Vencimento`,
+                        },
+                      ]);
+                    }}
+                  >
+                    <Plus className="h-3 w-3 mr-1" /> Parcela
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {vencimentos.map((venc, idx) => (
+                    <div key={idx} className="p-2 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-semibold text-slate-700">{venc.label || `${idx + 1}º Vencimento`}</span>
+                        {vencimentos.length > 1 && (
+                          <button
+                            type="button"
+                            className="text-red-500 hover:underline text-[10px]"
+                            onClick={() => setVencimentos(vencimentos.filter((_, i) => i !== idx))}
+                          >
+                            Remover
+                          </button>
+                        )}
+                      </div>
+                      <Input
+                        type="date"
+                        className="h-8 text-xs bg-white"
+                        value={venc.data ? venc.data.split("T")[0] : ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setVencimentos(vencimentos.map((v, i) => (i === idx ? { ...v, data: val } : v)));
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="space-y-2">

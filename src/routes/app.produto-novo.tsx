@@ -436,6 +436,28 @@ function NovoProduto() {
 
     setLoading(true);
     try {
+      let finalImagem = produto.imagem;
+      if (finalImagem && finalImagem.startsWith("data:")) {
+        try {
+          const parts = finalImagem.split(";base64,");
+          const mime = parts[0].replace("data:", "") || "image/webp";
+          const ext = mime.includes("webp") ? "webp" : mime.includes("jpeg") || mime.includes("jpg") ? "jpg" : "png";
+          const fileName = `prod_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+          const res = await fetch(finalImagem);
+          const blob = await res.blob();
+          const { error: upErr } = await supabase.storage.from("produtos").upload(fileName, blob, {
+            contentType: mime,
+            upsert: true,
+          });
+          if (!upErr) {
+            const { data: pubData } = supabase.storage.from("produtos").getPublicUrl(fileName);
+            if (pubData?.publicUrl) finalImagem = pubData.publicUrl;
+          }
+        } catch (e) {
+          console.warn("Erro ao enviar imagem para storage:", e);
+        }
+      }
+
       const payload = {
         codigo: produto.codigo,
         nome: produto.nome,
@@ -443,7 +465,7 @@ function NovoProduto() {
         estoque: produto.estoque,
         valor: produto.valor,
         status: produto.status,
-        imagem: produto.imagem,
+        imagem: finalImagem,
         numero: produto.numero || null,
         dimensao: produto.dimensao || null,
         volume: produto.volume || null,

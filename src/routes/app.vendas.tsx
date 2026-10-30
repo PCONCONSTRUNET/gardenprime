@@ -62,7 +62,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { cn } from "@/lib/utils";
+import { cn, calcularVencimentosPadrao, formatarDataBr, type ParcelaVencimento } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/vendas")({
   head: () => ({ meta: [{ title: "Vendas — GARDEN PRIME ERP" }] }),
@@ -100,6 +100,7 @@ function Vendas() {
   const [isEditingPayment, setIsEditingPayment] = useState(false);
   const [editMetodoPagamento, setEditMetodoPagamento] = useState("");
   const [editCondicaoPagamento, setEditCondicaoPagamento] = useState("");
+  const [editVencimentos, setEditVencimentos] = useState<ParcelaVencimento[]>([]);
   const [savingPayment, setSavingPayment] = useState(false);
 
   // Date editing
@@ -178,6 +179,11 @@ function Vendas() {
     setIsEditingCliente(false);
     setEditMetodoPagamento(venda.metodo_pagamento || "");
     setEditCondicaoPagamento(venda.condicao_pagamento || "");
+    if (Array.isArray(venda.vencimentos) && venda.vencimentos.length > 0) {
+      setEditVencimentos(venda.vencimentos);
+    } else {
+      setEditVencimentos(calcularVencimentosPadrao(venda.condicao_pagamento || "", venda.created_at, venda.valor_total));
+    }
     setLoadingItens(true);
     try {
       const { data, error } = await supabase
@@ -203,6 +209,7 @@ function Vendas() {
         .update({
           metodo_pagamento: editMetodoPagamento || null,
           condicao_pagamento: editCondicaoPagamento || null,
+          vencimentos: editVencimentos && editVencimentos.length > 0 ? editVencimentos : null,
         })
         .eq("id", selectedVenda.id);
 
@@ -212,6 +219,7 @@ function Vendas() {
         ...prev,
         metodo_pagamento: editMetodoPagamento,
         condicao_pagamento: editCondicaoPagamento,
+        vencimentos: editVencimentos,
       }));
 
       setVendas((prev) =>
@@ -221,6 +229,7 @@ function Vendas() {
                 ...v,
                 metodo_pagamento: editMetodoPagamento,
                 condicao_pagamento: editCondicaoPagamento,
+                vencimentos: editVencimentos,
               }
             : v
         )
@@ -1133,7 +1142,12 @@ function Vendas() {
                           className="h-8 text-xs font-medium"
                           placeholder="Ex: À Vista, Boleto a Prazo..."
                           value={editCondicaoPagamento}
-                          onChange={(e) => setEditCondicaoPagamento(e.target.value)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setEditCondicaoPagamento(val);
+                            const baseDate = selectedVenda?.created_at || new Date().toISOString();
+                            setEditVencimentos(calcularVencimentosPadrao(val, baseDate, selectedVenda?.valor_total));
+                          }}
                         />
                       </div>
                     </div>
@@ -1162,11 +1176,80 @@ function Vendas() {
                               if (preset.toLowerCase().includes("boleto") && !editMetodoPagamento) {
                                 setEditMetodoPagamento("Boleto");
                               }
+                              const baseDate = selectedVenda?.created_at || new Date().toISOString();
+                              setEditVencimentos(calcularVencimentosPadrao(preset, baseDate, selectedVenda?.valor_total));
                             }}
                             className="text-[10px] px-2 py-0.5 rounded-md bg-muted hover:bg-primary/10 hover:text-primary transition-colors text-muted-foreground border border-border/40"
                           >
                             {preset}
                           </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Vencimentos das Parcelas */}
+                    <div className="space-y-2 pt-2 border-t border-border/40">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
+                          <Calendar className="h-3.5 w-3.5 text-primary" /> Datas de Vencimento ({editVencimentos.length})
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-6 text-[10px] px-2"
+                          onClick={() => {
+                            const nextNum = editVencimentos.length + 1;
+                            setEditVencimentos([
+                              ...editVencimentos,
+                              {
+                                parcela: nextNum,
+                                data: new Date().toISOString().split("T")[0],
+                                label: `${nextNum}º Vencimento`,
+                              },
+                            ]);
+                          }}
+                        >
+                          <Plus className="h-3 w-3 mr-1" /> Parcela
+                        </Button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                        {editVencimentos.map((venc, idx) => (
+                          <div
+                            key={idx}
+                            className="p-2 rounded-lg bg-muted/40 border border-border/60 space-y-1"
+                          >
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-semibold text-foreground">
+                                {venc.label || `${idx + 1}º Vencimento`}
+                              </span>
+                              {editVencimentos.length > 1 && (
+                                <button
+                                  type="button"
+                                  className="text-destructive hover:underline text-[10px]"
+                                  onClick={() => {
+                                    setEditVencimentos(editVencimentos.filter((_, i) => i !== idx));
+                                  }}
+                                >
+                                  Remover
+                                </button>
+                              )}
+                            </div>
+                            <Input
+                              type="date"
+                              className="h-8 text-xs bg-background font-medium"
+                              value={venc.data ? venc.data.split("T")[0] : ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditVencimentos(
+                                  editVencimentos.map((v, i) =>
+                                    i === idx ? { ...v, data: val } : v
+                                  )
+                                );
+                              }}
+                            />
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -1208,6 +1291,25 @@ function Vendas() {
                           </Badge>
                         )}
                       </div>
+                      {selectedVenda?.vencimentos &&
+                        Array.isArray(selectedVenda.vencimentos) &&
+                        selectedVenda.vencimentos.length > 0 && (
+                          <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                            <span className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1">
+                              <Calendar className="h-3.5 w-3.5 text-primary" /> Vencimento(s):
+                            </span>
+                            {selectedVenda.vencimentos.map((v: any, i: number) => (
+                              <Badge
+                                key={i}
+                                variant="outline"
+                                className="text-[11px] bg-background font-medium border-primary/40 text-primary px-2 py-0.5"
+                              >
+                                {selectedVenda.vencimentos.length > 1 ? `${i + 1}ª: ` : ""}
+                                {formatarDataBr(v.data || v)}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                     </div>
                     <Button
                       size="sm"
@@ -1216,6 +1318,17 @@ function Vendas() {
                       onClick={() => {
                         setEditMetodoPagamento(selectedVenda?.metodo_pagamento || "");
                         setEditCondicaoPagamento(selectedVenda?.condicao_pagamento || "");
+                        if (Array.isArray(selectedVenda?.vencimentos) && selectedVenda.vencimentos.length > 0) {
+                          setEditVencimentos(selectedVenda.vencimentos);
+                        } else {
+                          setEditVencimentos(
+                            calcularVencimentosPadrao(
+                              selectedVenda?.condicao_pagamento || "",
+                              selectedVenda?.created_at,
+                              selectedVenda?.valor_total
+                            )
+                          );
+                        }
                         setIsEditingPayment(true);
                       }}
                     >
