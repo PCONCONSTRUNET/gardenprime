@@ -243,8 +243,8 @@ function PublicCatalogo() {
       await loadCategoryOrderFromDb();
       
       // Cache de 5 minutos no sessionStorage para economizar Egress
-      const CACHE_KEY = "gp_catalogo_prod_v1";
-      const CACHE_TIME = "gp_catalogo_time_v1";
+      const CACHE_KEY = "gp_catalogo_prod_v2";
+      const CACHE_TIME = "gp_catalogo_time_v2";
       let data: any[] | null = null;
       try {
         const cached = sessionStorage.getItem(CACHE_KEY);
@@ -261,7 +261,7 @@ function PublicCatalogo() {
           .eq("status", "Ativo")
           .order("nome");
         data = res.data;
-        if (data) {
+        if (data && data.length > 0) {
           try {
             sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
             sessionStorage.setItem(CACHE_TIME, String(Date.now()));
@@ -296,7 +296,7 @@ function PublicCatalogo() {
         }
       }
 
-      if (data) {
+      if (data && data.length > 0) {
         let customPricesMap: Record<string, number> = {};
         if (partnerData) {
           const { data: precos } = await supabase

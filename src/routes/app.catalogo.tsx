@@ -60,8 +60,8 @@ function Catalogo() {
     await loadCategoryOrderFromDb();
     try {
       // Cache de 5 minutos no sessionStorage para economizar Egress
-      const CACHE_KEY = "gp_admin_catalogo_prod_v1";
-      const CACHE_TIME = "gp_admin_catalogo_time_v1";
+      const CACHE_KEY = "gp_admin_catalogo_prod_v2";
+      const CACHE_TIME = "gp_admin_catalogo_time_v2";
       let prodData: any[] | null = null;
       try {
         const cached = sessionStorage.getItem(CACHE_KEY);
@@ -78,7 +78,7 @@ function Catalogo() {
           .eq("status", "Ativo")
           .order("nome");
         prodData = res.data;
-        if (prodData) {
+        if (prodData && prodData.length > 0) {
           try {
             sessionStorage.setItem(CACHE_KEY, JSON.stringify(prodData));
             sessionStorage.setItem(CACHE_TIME, String(Date.now()));

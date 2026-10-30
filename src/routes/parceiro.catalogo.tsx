@@ -125,8 +125,8 @@ function ParceiroCatalogoPage() {
         await loadCategoryOrderFromDb();
 
         // 3. Produtos ativos (com cache de 5 minutos no sessionStorage para economizar Egress)
-        const CACHE_KEY = "gp_parceiro_catalogo_prod_v1";
-        const CACHE_TIME = "gp_parceiro_catalogo_time_v1";
+        const CACHE_KEY = "gp_parceiro_catalogo_prod_v2";
+        const CACHE_TIME = "gp_parceiro_catalogo_time_v2";
         let prods: any[] | null = null;
         try {
           const cached = sessionStorage.getItem(CACHE_KEY);
@@ -143,7 +143,7 @@ function ParceiroCatalogoPage() {
             .eq("status", "Ativo")
             .order("nome");
           prods = res.data;
-          if (prods) {
+          if (prods && prods.length > 0) {
             try {
               sessionStorage.setItem(CACHE_KEY, JSON.stringify(prods));
               sessionStorage.setItem(CACHE_TIME, String(Date.now()));
@@ -151,7 +151,7 @@ function ParceiroCatalogoPage() {
           }
         }
 
-        if (prods) {
+        if (prods && prods.length > 0) {
           const percentual =
             vData?.acrescimo_catalogo_percentual !== null &&
             vData?.acrescimo_catalogo_percentual !== undefined
