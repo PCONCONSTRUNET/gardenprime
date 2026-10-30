@@ -61,7 +61,7 @@ function Estoque() {
   const fetchData = async () => {
     try {
       const [prodRes, movRes] = await Promise.all([
-        supabase.from("produtos").select("id, nome, codigo, categoria, estoque, estoque_minimo, valor, status").order("nome"),
+        supabase.from("produtos").select("id, nome, codigo, categoria, estoque, qtd_minima, valor, status").order("nome"),
         supabase
           .from("movimentacoes_estoque")
           .select("*, produto:produtos(nome)")
