@@ -32,6 +32,13 @@ import { cn, calcularVencimentosPadrao, type ParcelaVencimento } from "@/lib/uti
 import { Save, Plus, Trash2, Check, ChevronsUpDown, Search, Loader2, Calendar } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/app/dav-novo")({
   validateSearch: (search: Record<string, unknown>): { id?: string } => ({
@@ -68,10 +75,12 @@ function NovoDAV() {
   });
   const [condicoes, setCondicoes] = useState({
     vendedor: "",
+    vendedor_id: null as string | null,
     pagamento: "Dinheiro / Pix",
     frete: "Retirada",
     prazo: "Imediato",
   });
+  const [vendedoresList, setVendedoresList] = useState<any[]>([]);
   const [vencimentos, setVencimentos] = useState<ParcelaVencimento[]>(() =>
     calcularVencimentosPadrao("Dinheiro / Pix", new Date().toISOString())
   );
@@ -217,6 +226,7 @@ function NovoDAV() {
             });
             setCondicoes({
               vendedor: dav.vendedor || "",
+              vendedor_id: dav.vendedor_id || null,
               pagamento: dav.condicao_pagamento || "Dinheiro / Pix",
               frete: dav.frete_tipo || "Retirada",
               prazo: dav.prazo_entrega || "Imediato",
@@ -284,6 +294,16 @@ function NovoDAV() {
       if (data) setProdutos(data);
     };
     fetchProdutos();
+
+    const fetchVendedores = async () => {
+      const { data } = await supabase
+        .from("vendedores")
+        .select("id, nome")
+        .eq("status", "Ativo")
+        .order("nome");
+      if (data) setVendedoresList(data);
+    };
+    fetchVendedores();
 
     const loadCartFromURL = async () => {
       const params = new URLSearchParams(window.location.search);
@@ -438,7 +458,8 @@ function NovoDAV() {
         emissor_cnpj: emissor.cnpj,
         emissor_endereco: emissor.endereco,
         emissor_telefone: emissor.telefone,
-        vendedor: condicoes.vendedor,
+        vendedor: condicoes.vendedor || null,
+        vendedor_id: condicoes.vendedor_id || null,
         condicao_pagamento: condicoes.pagamento,
         frete_tipo: condicoes.frete,
         prazo_entrega: condicoes.prazo,
@@ -669,12 +690,30 @@ function NovoDAV() {
           <div className="space-y-4">
             <h3 className="font-semibold border-b pb-2">Condições Comerciais</h3>
             <div className="space-y-2">
-              <Label>Vendedor</Label>
-              <Input
-                value={condicoes.vendedor}
-                onChange={(e) => setCondicoes({ ...condicoes, vendedor: e.target.value })}
-                placeholder="Nome do vendedor"
-              />
+              <Label>Vendedor / Parceiro</Label>
+              <Select
+                value={condicoes.vendedor_id || (condicoes.vendedor ? condicoes.vendedor : "nenhum")}
+                onValueChange={(val) => {
+                  const vend = vendedoresList.find((v) => v.id === val || v.nome === val);
+                  setCondicoes({
+                    ...condicoes,
+                    vendedor_id: val === "nenhum" ? null : (vend ? vend.id : null),
+                    vendedor: val === "nenhum" ? "" : (vend ? vend.nome : val),
+                  });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o vendedor / parceiro..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nenhum">Sem Vendedor (Venda Direta)</SelectItem>
+                  {vendedoresList.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Condição de Pagamento</Label>

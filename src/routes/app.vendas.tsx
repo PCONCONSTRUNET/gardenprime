@@ -32,6 +32,7 @@ import {
   CreditCard,
   Calendar,
   User,
+  UserCheck,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -114,6 +115,12 @@ function Vendas() {
   const [openClientePop, setOpenClientePop] = useState(false);
   const [savingCliente, setSavingCliente] = useState(false);
 
+  // Vendedor/Parceiro editing
+  const [isEditingVendedor, setIsEditingVendedor] = useState(false);
+  const [vendedoresList, setVendedoresList] = useState<any[]>([]);
+  const [openVendedorPop, setOpenVendedorPop] = useState(false);
+  const [savingVendedor, setSavingVendedor] = useState(false);
+
   // ASAAS Modal
   const [openAsaas, setOpenAsaas] = useState(false);
   const [asaasCliente, setAsaasCliente] = useState<any>(null);
@@ -122,7 +129,7 @@ function Vendas() {
     try {
       const { data, error } = await supabase
         .from("vendas")
-        .select(`*, clientes (*)`)
+        .select(`*, clientes (*), vendedor:vendedores (*)`)
         .or("status_aprovacao.neq.Pendente,status_aprovacao.is.null")
         .order("created_at", { ascending: false });
 
@@ -136,8 +143,23 @@ function Vendas() {
     }
   };
 
+  const fetchVendedores = async () => {
+    if (vendedoresList.length > 0) return;
+    try {
+      const { data, error } = await supabase
+        .from("vendedores")
+        .select("id, nome, email, telefone, tipo_comissao, valor_comissao, status")
+        .order("nome");
+      if (error) throw error;
+      setVendedoresList(data || []);
+    } catch (err: any) {
+      console.error("Erro ao buscar vendedores parceiros:", err);
+    }
+  };
+
   useEffect(() => {
     fetchVendas();
+    fetchVendedores();
   }, []);
 
   // Fetch products for editing
@@ -166,7 +188,8 @@ function Vendas() {
     const name = (v.clientes?.nome || "").toLowerCase();
     const cnpj = (v.clientes?.cpf_cnpj || "").toLowerCase();
     const numero = String(v.numero_venda || v.numero || v.id).toLowerCase();
-    return name.includes(lower) || cnpj.includes(lower) || numero.includes(lower);
+    const vendName = (v.vendedor?.nome || "").toLowerCase();
+    return name.includes(lower) || cnpj.includes(lower) || numero.includes(lower) || vendName.includes(lower);
   });
 
   const handleOpenDetails = async (venda: any) => {
@@ -177,6 +200,7 @@ function Vendas() {
     setIsEditingPayment(false);
     setIsEditingDate(false);
     setIsEditingCliente(false);
+    setIsEditingVendedor(false);
     setEditMetodoPagamento(venda.metodo_pagamento || "");
     setEditCondicaoPagamento(venda.condicao_pagamento || "");
     if (Array.isArray(venda.vencimentos) && venda.vencimentos.length > 0) {
@@ -314,6 +338,70 @@ function Vendas() {
       toast.error("Erro ao alterar cliente: " + err.message);
     } finally {
       setSavingCliente(false);
+    }
+  };
+
+  const handleChangeVendedor = async (novoVendedorId: string | null) => {
+    if (!selectedVenda) return;
+    setSavingVendedor(true);
+    try {
+      const novoVendedor = novoVendedorId
+        ? vendedoresList.find((vend) => vend.id === novoVendedorId) || null
+        : null;
+
+      // Calcular comissão atualizada com base na regra do parceiro
+      let novoValorComissao = 0;
+      if (novoVendedor) {
+        const totalVenda = Number(selectedVenda.valor_total || 0);
+        if (novoVendedor.tipo_comissao === "porcentagem") {
+          novoValorComissao = totalVenda * (Number(novoVendedor.valor_comissao || 0) / 100);
+        } else {
+          novoValorComissao = Number(novoVendedor.valor_comissao || 0);
+        }
+      }
+
+      const { error } = await supabase
+        .from("vendas")
+        .update({
+          vendedor_id: novoVendedorId,
+          valor_comissao: novoValorComissao,
+        })
+        .eq("id", selectedVenda.id);
+
+      if (error) throw error;
+
+      setSelectedVenda((prev: any) => ({
+        ...prev,
+        vendedor_id: novoVendedorId,
+        valor_comissao: novoValorComissao,
+        vendedor: novoVendedor,
+      }));
+
+      setVendas((prev) =>
+        prev.map((v) =>
+          v.id === selectedVenda.id
+            ? {
+                ...v,
+                vendedor_id: novoVendedorId,
+                valor_comissao: novoValorComissao,
+                vendedor: novoVendedor,
+              }
+            : v
+        )
+      );
+
+      setIsEditingVendedor(false);
+      setOpenVendedorPop(false);
+      toast.success(
+        novoVendedor
+          ? `Vendedor alterado para ${novoVendedor.nome} com sucesso!`
+          : "Vendedor desvinculado (definido como Venda Direta)."
+      );
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Erro ao alterar vendedor: " + (err.message || "Erro desconhecido"));
+    } finally {
+      setSavingVendedor(false);
     }
   };
 
@@ -766,7 +854,7 @@ function Vendas() {
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Buscar por nome, CNPJ/CPF ou número..."
+            placeholder="Buscar por cliente, vendedor, CNPJ ou número..."
             className="pl-8 bg-card"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -781,6 +869,7 @@ function Vendas() {
               <TableHead>Nº</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead>Cliente</TableHead>
+              <TableHead>Vendedor</TableHead>
               <TableHead>Pagamento</TableHead>
               <TableHead>Data</TableHead>
               <TableHead className="text-right">Valor</TableHead>
@@ -791,13 +880,13 @@ function Vendas() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8">
+                <TableCell colSpan={9} className="text-center py-8">
                   Carregando operações...
                 </TableCell>
               </TableRow>
             ) : filteredVendas.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                   Nenhuma venda ou orçamento encontrado.
                 </TableCell>
               </TableRow>
@@ -814,6 +903,22 @@ function Vendas() {
                   </TableCell>
                   <TableCell className="font-semibold">
                     {v.cliente_id ? v.clientes?.nome || "Cliente Removido" : "Venda Avulsa"}
+                  </TableCell>
+                  <TableCell>
+                    {v.vendedor ? (
+                      <Badge
+                        variant="outline"
+                        className="bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700/60 font-semibold text-xs flex items-center gap-1.5 w-fit"
+                        title={`Vendedor Parceiro: ${v.vendedor.nome}`}
+                      >
+                        <UserCheck className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span className="truncate max-w-[120px]">{v.vendedor.nome}</span>
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground/70 italic flex items-center gap-1">
+                        <User className="h-3 w-3 opacity-40 shrink-0" /> Direta
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell
                     className="text-xs text-muted-foreground max-w-[120px] truncate"
@@ -1085,6 +1190,178 @@ function Vendas() {
                       onClick={handleEditTotal}
                     >
                       <Pencil className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Vendedor / Parceiro Destacado */}
+              <div className="col-span-2 pt-3 border-t border-border/50">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-muted-foreground block text-xs uppercase tracking-wider font-semibold flex items-center gap-1.5">
+                    <UserCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                    Vendedor / Parceiro
+                  </span>
+                  {!isEditingVendedor && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-[11px] text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 font-medium flex items-center gap-1"
+                      onClick={() => {
+                        fetchVendedores();
+                        setIsEditingVendedor(true);
+                      }}
+                    >
+                      <Pencil className="h-3 w-3" />
+                      {selectedVenda?.vendedor ? "Alterar Vendedor" : "Vincular Vendedor"}
+                    </Button>
+                  )}
+                </div>
+
+                {isEditingVendedor ? (
+                  <div className="space-y-2 bg-background p-3 rounded-lg border-2 border-emerald-500/30 shadow-sm animate-in fade-in-50">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <UserCheck className="h-3.5 w-3.5 text-emerald-600" /> Selecione o Parceiro Cadastrado:
+                      </span>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6 text-muted-foreground"
+                        onClick={() => setIsEditingVendedor(false)}
+                        disabled={savingVendedor}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+
+                    <Popover open={openVendedorPop} onOpenChange={setOpenVendedorPop}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between h-9 text-xs font-medium"
+                          onClick={() => fetchVendedores()}
+                          disabled={savingVendedor}
+                        >
+                          <span className="truncate">
+                            {selectedVenda?.vendedor?.nome || "Venda Direta / Sem Vendedor"}
+                          </span>
+                          <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[320px] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Buscar parceiro por nome..." />
+                          <CommandList>
+                            <CommandEmpty>Nenhum parceiro encontrado.</CommandEmpty>
+                            <CommandGroup heading="Opções">
+                              <CommandItem
+                                value="venda direta sem vendedor nenhum desvincular"
+                                onSelect={() => handleChangeVendedor(null)}
+                                className="cursor-pointer"
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-3.5 w-3.5",
+                                    !selectedVenda?.vendedor_id ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                <div className="truncate text-xs">
+                                  <p className="font-semibold text-muted-foreground">Venda Direta (Sem Vendedor)</p>
+                                  <p className="text-[10px] text-muted-foreground">Não vincula comissão a nenhum parceiro</p>
+                                </div>
+                              </CommandItem>
+                            </CommandGroup>
+                            <CommandGroup heading="Parceiros Cadastrados">
+                              {vendedoresList
+                                .filter((vend) => vend.status === "Ativo" || vend.id === selectedVenda?.vendedor_id)
+                                .map((vend) => (
+                                  <CommandItem
+                                    key={vend.id}
+                                    value={`${vend.nome} ${vend.email || ""} ${vend.telefone || ""}`}
+                                    onSelect={() => handleChangeVendedor(vend.id)}
+                                    className="cursor-pointer"
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-3.5 w-3.5 text-emerald-600",
+                                        selectedVenda?.vendedor_id === vend.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <div className="truncate text-xs flex-1">
+                                      <div className="flex items-center justify-between gap-1">
+                                        <p className="font-bold text-foreground truncate">{vend.nome}</p>
+                                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-emerald-300 text-emerald-700 bg-emerald-50">
+                                          {vend.tipo_comissao === "fixo" ? `R$ ${vend.valor_comissao}` : `${vend.valor_comissao}%`}
+                                        </Badge>
+                                      </div>
+                                      {vend.email && (
+                                        <p className="text-[10px] text-muted-foreground truncate">{vend.email}</p>
+                                      )}
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 text-[11px] text-muted-foreground"
+                        onClick={() => setIsEditingVendedor(false)}
+                        disabled={savingVendedor}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border-2 border-emerald-200/80 dark:border-emerald-800/60 rounded-xl p-3 flex items-center justify-between gap-2 shadow-2xs">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-9 w-9 rounded-full bg-emerald-100 dark:bg-emerald-900/60 flex items-center justify-center text-emerald-700 dark:text-emerald-300 shrink-0 font-bold">
+                        <UserCheck className="h-4.5 w-4.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-sm text-foreground truncate">
+                            {selectedVenda?.vendedor?.nome || "Venda Direta (Sem Vendedor)"}
+                          </span>
+                          {selectedVenda?.vendedor ? (
+                            <Badge className="bg-emerald-600 text-white hover:bg-emerald-700 text-[10px] px-1.5 py-0 h-4 font-semibold">
+                              Parceiro
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-muted-foreground border-dashed">
+                              Venda Direta
+                            </Badge>
+                          )}
+                        </div>
+                        {selectedVenda?.vendedor && (
+                          <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                            {selectedVenda.vendedor.email || ""}
+                            {selectedVenda.vendedor.telefone ? ` • Tel: ${selectedVenda.vendedor.telefone}` : ""}
+                            {selectedVenda.valor_comissao ? ` • Comissão: R$ ${Number(selectedVenda.valor_comissao).toFixed(2).replace(".", ",")}` : ""}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 border-emerald-300 text-emerald-700 hover:bg-emerald-100/50 dark:border-emerald-700 dark:text-emerald-300 text-xs font-semibold shrink-0 gap-1"
+                      title="Alterar vendedor parceiro"
+                      onClick={() => {
+                        fetchVendedores();
+                        setIsEditingVendedor(true);
+                      }}
+                    >
+                      <Pencil className="h-3 w-3" />
+                      {selectedVenda?.vendedor ? "Alterar" : "Vincular"}
                     </Button>
                   </div>
                 )}
@@ -1369,6 +1646,7 @@ function Vendas() {
                       condicao_pagamento: selectedVenda?.condicao_pagamento || selectedVenda?.metodo_pagamento,
                       total: selectedVenda?.valor_total ?? selectedVenda?.total,
                       subtotal: selectedVenda?.subtotal ?? selectedVenda?.valor_total,
+                      vendedor_nome: selectedVenda?.vendedor?.nome || undefined,
                     },
                     vendaItens
                   )}
@@ -1386,6 +1664,7 @@ function Vendas() {
                       condicao_pagamento: selectedVenda?.condicao_pagamento || selectedVenda?.metodo_pagamento,
                       total: selectedVenda?.valor_total ?? selectedVenda?.total,
                       subtotal: selectedVenda?.subtotal ?? selectedVenda?.valor_total,
+                      vendedor_nome: selectedVenda?.vendedor?.nome || undefined,
                     },
                     vendaItens
                   )}

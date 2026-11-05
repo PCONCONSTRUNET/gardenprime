@@ -327,6 +327,11 @@ function ImprimirDAV() {
             <p className="text-[10px] sm:text-[11px] text-white font-black leading-tight">
               Pagamento: {dav.condicao_pagamento || "Dinheiro / Pix"}
             </p>
+            {dav.vendedor && (
+              <p className="text-[10px] sm:text-[11px] text-[#E5C378] font-black leading-tight mt-0.5">
+                Vendedor: {dav.vendedor}
+              </p>
+            )}
             {(() => {
               const vencList = Array.isArray(dav.vencimentos) && dav.vencimentos.length > 0
                 ? dav.vencimentos
@@ -524,7 +529,7 @@ function ImprimirDAV() {
           <div>
             <div className="border-b-2 border-black mb-2"></div>
             <p className="text-center font-black text-black flex items-center justify-center gap-1">
-              <span className="text-[#C5A059]">👤</span> ASSINATURA DO VENDEDOR
+              <span className="text-[#C5A059]">👤</span> ASSINATURA DO VENDEDOR {dav.vendedor ? `(${dav.vendedor})` : ""}
             </p>
           </div>
           <div>

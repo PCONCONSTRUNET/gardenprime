@@ -725,6 +725,12 @@ export async function generateOrderPdfDoc(
   doc.setFontSize(8.5);
   doc.setTextColor(0, 0, 0);
   doc.text("DADOS DO CLIENTE", margin + 10, y + 6);
+  if (order.vendedor_nome) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
+    doc.text(`VENDEDOR: ${String(order.vendedor_nome).toUpperCase()}`, pageWidth - margin - 55, y + 6, { align: "right" });
+  }
   
   const c = order.cliente || order.clientes || ({} as any);
   doc.setFont("helvetica", "bold");
@@ -868,7 +874,8 @@ export async function generateOrderPdfDoc(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(6.5);
   doc.setTextColor(0, 0, 0);
-  doc.text("ASSINATURA DO VENDEDOR", margin + 35, y + 4, { align: "center" });
+  const vendSignLabel = order.vendedor_nome ? `ASSINATURA DO VENDEDOR (${order.vendedor_nome.toUpperCase()})` : "ASSINATURA DO VENDEDOR";
+  doc.text(vendSignLabel, margin + 35, y + 4, { align: "center" });
   doc.text("ASSINATURA DO CLIENTE", margin + 110, y + 4, { align: "center" });
   
   // Caixa Este doc nao possui valor fiscal

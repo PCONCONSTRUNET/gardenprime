@@ -12,10 +12,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Save, ArrowLeft, Plus, Trash2, ShoppingCart, Check, ChevronsUpDown } from "lucide-react";
+import { Save, ArrowLeft, Plus, Trash2, ShoppingCart, Check, ChevronsUpDown, UserCheck } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Command,
   CommandEmpty,
@@ -73,6 +80,8 @@ function NovaVenda() {
     uf: "",
   });
   const [loadingCliente, setLoadingCliente] = useState(false);
+  const [vendedorId, setVendedorId] = useState<string>("");
+  const [vendedores, setVendedores] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -82,8 +91,14 @@ function NovaVenda() {
         .select("id, nome, codigo, categoria, valor, estoque, status")
         .eq("status", "Ativo")
         .order("nome");
+      const { data: v } = await supabase
+        .from("vendedores")
+        .select("id, nome, email, tipo_comissao, valor_comissao")
+        .eq("status", "Ativo")
+        .order("nome");
       if (c) setClientes(c);
       if (p) setProdutos(p);
+      if (v) setVendedores(v);
     };
     fetchData();
   }, []);
@@ -220,12 +235,26 @@ function NovaVenda() {
         nextNumero = Number(maxVenda.numero) + 1;
       }
 
+      let comissaoCalculada = 0;
+      if (vendedorId) {
+        const vend = vendedores.find((p) => p.id === vendedorId);
+        if (vend) {
+          if (vend.tipo_comissao === "porcentagem") {
+            comissaoCalculada = totalVenda * (Number(vend.valor_comissao || 0) / 100);
+          } else {
+            comissaoCalculada = Number(vend.valor_comissao || 0);
+          }
+        }
+      }
+
       // 1. Criar a Venda/DAV
       const { data: vendaData, error: vendaError } = await supabase
         .from("vendas")
         .insert([
           {
             cliente_id: idDoCliente,
+            vendedor_id: vendedorId || null,
+            valor_comissao: comissaoCalculada,
             tipo: tipo,
             status: status,
             subtotal: subtotal,
@@ -391,6 +420,29 @@ function NovaVenda() {
                   </Command>
                 </PopoverContent>
               </Popover>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5">
+                <UserCheck className="h-4 w-4 text-emerald-600" />
+                Vendedor / Parceiro (Opcional)
+              </Label>
+              <Select
+                value={vendedorId || "nenhum"}
+                onValueChange={(val) => setVendedorId(val === "nenhum" ? "" : val)}
+              >
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Selecione o parceiro..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nenhum">Sem Vendedor (Venda Direta)</SelectItem>
+                  {vendedores.map((vend) => (
+                    <SelectItem key={vend.id} value={vend.id}>
+                      {vend.nome} {vend.tipo_comissao === "fixo" ? `(R$ ${vend.valor_comissao})` : `(${vend.valor_comissao}%)`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </Card>
 
