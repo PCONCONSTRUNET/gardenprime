@@ -523,7 +523,7 @@ function Catalogo() {
                         className={`relative aspect-square overflow-hidden bg-gradient-to-br ${getGradient(index)} grid place-items-center text-7xl`}
                       >
                         {p.imagem ? (
-                          <img src={p.imagem} alt={p.nome} className="w-full h-full object-cover" />
+                          <img src={p.imagem} alt={p.nome} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                         ) : (
                           p.emoji || "🪴"
                         )}

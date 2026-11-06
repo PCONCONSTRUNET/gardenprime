@@ -447,6 +447,7 @@ function NovoProduto() {
           const blob = await res.blob();
           const { error: upErr } = await supabase.storage.from("produtos").upload(fileName, blob, {
             contentType: mime,
+            cacheControl: "31536000",
             upsert: true,
           });
           if (!upErr) {
