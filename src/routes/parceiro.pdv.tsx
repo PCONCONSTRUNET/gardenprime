@@ -486,7 +486,7 @@ function ParceiroPDV() {
               }
               const { data: draftItens } = await supabase
                 .from("vendas_itens")
-                .select("*, produtos(nome, codigo, valor, estoque, emoji)")
+                .select("*, produtos(nome, codigo, valor, estoque, emoji, imagem)")
                 .eq("venda_id", draftId);
 
               if (draftItens && draftItens.length > 0) {
@@ -502,6 +502,7 @@ function ParceiroPDV() {
                     imagem: di.produtos?.imagem,
                   }))
                 );
+                setIsCartSheetOpen(true);
               }
               window.history.replaceState({}, "", "/parceiro/pdv");
             }

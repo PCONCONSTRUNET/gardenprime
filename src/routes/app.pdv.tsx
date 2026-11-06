@@ -130,20 +130,95 @@ function PDV() {
     const fetchProdutos = async () => {
       const { data } = await supabase
         .from("produtos")
-        .select("id, nome, codigo, categoria, valor, estoque, status, emoji")
+        .select("id, nome, codigo, categoria, valor, estoque, status, emoji, imagem")
         .eq("status", "Ativo")
         .order("nome");
       if (data) {
         setProdutos(data);
 
-        // Formato do Carrinho e Cliente via Catálogo
+        // Formato do Carrinho e Cliente via Catálogo ou Clonagem
         const params = new URLSearchParams(window.location.search);
-        const cartMagic = params.get("c");
-        const pagParam = params.get("pag");
-        const prazoParam = params.get("prazo");
-        const eParam = params.get("e");
-        const cnjParam = params.get("cnpj");
-        const telParam = params.get("tel");
+
+        const cloneId = params.get("clone_id");
+        if (cloneId) {
+          const { data: vendaClone } = await supabase
+            .from("vendas")
+            .select("*, clientes(*)")
+            .eq("id", cloneId)
+            .maybeSingle();
+
+          if (vendaClone) {
+            if (vendaClone.clientes) {
+              setClienteSelecionado({
+                id: vendaClone.cliente_id || vendaClone.clientes.id,
+                nome: vendaClone.clientes.nome || "Cliente",
+              });
+            }
+            const cond = vendaClone.condicao_pagamento || vendaClone.metodo_pagamento;
+            if (cond) {
+              setCondicaoPagamento(cond);
+              if (cond.toLowerCase().includes("boleto")) {
+                setMetodoPagamento("Boleto");
+              } else if (cond.toLowerCase().includes("cartão") || cond.toLowerCase().includes("cartao")) {
+                setMetodoPagamento("Cartão");
+              } else if (cond.toLowerCase().includes("pix")) {
+                setMetodoPagamento("Pix");
+              } else {
+                setMetodoPagamento("Dinheiro");
+              }
+            }
+          }
+
+          const { data: cloneItens } = await supabase
+            .from("vendas_itens")
+            .select("*, produto:produtos(id, nome, codigo, valor, estoque, emoji, imagem)")
+            .eq("venda_id", cloneId);
+
+          if (cloneItens && cloneItens.length > 0) {
+            const parsedClone = cloneItens
+              .filter((ci: any) => ci.produto_id)
+              .map((ci: any) => {
+                const prodLocal = data.find((p: any) => p.id === ci.produto_id);
+                const uVal = Number(ci.valor_unitario || prodLocal?.valor || 0);
+                const qVal = Number(ci.quantidade || 1);
+                return {
+                  id: ci.produto_id,
+                  p: ci.produto?.nome || prodLocal?.nome || "Produto",
+                  q: qVal,
+                  u: uVal,
+                  t: Number(ci.subtotal || qVal * uVal),
+                  emoji: ci.produto?.emoji || prodLocal?.emoji || "📦",
+                  imagem: ci.produto?.imagem || (prodLocal as any)?.imagem || null,
+                  max: ci.produto?.estoque ?? prodLocal?.estoque ?? 9999,
+                  hasDbId: true,
+                };
+              });
+            if (parsedClone.length > 0) {
+              setCart(parsedClone);
+              window.history.replaceState({}, "", "/app/pdv");
+              return;
+            }
+          }
+        }
+
+        let shortData: any = null;
+        const shortCodeParam = params.get("p");
+        if (shortCodeParam) {
+          const { data: linkRow } = await supabase
+            .from("links_curtos")
+            .select("dados")
+            .ilike("codigo", shortCodeParam.trim())
+            .maybeSingle();
+          if (linkRow?.dados) {
+            shortData = linkRow.dados;
+          }
+        }
+
+        const cartMagic = shortData?.c ?? params.get("c");
+        const pagParam = shortData?.pag ?? params.get("pag");
+        const prazoParam = shortData?.prazo ?? params.get("prazo");
+        const eParam = shortData?.e ?? params.get("e");
+        const cnjParam = shortData?.cnpj ?? params.get("cnpj");
 
         if (eParam || cnjParam) {
           setClienteSelecionado({
@@ -169,11 +244,16 @@ function PDV() {
 
         if (cartMagic) {
           const parsedCart: any[] = [];
-          const items = cartMagic.split(",");
+          const items = String(cartMagic).split(",");
           items.forEach((item) => {
             const [id, qStr] = item.split(":");
             const qty = parseInt(qStr) || 1;
-            const prod = data.find((p) => p.id === id);
+            const idClean = String(id || "").trim().toLowerCase();
+            const prod = data.find(
+              (p: any) =>
+                String(p.id || "").toLowerCase() === idClean ||
+                (p.codigo && String(p.codigo).trim().toLowerCase() === idClean)
+            );
             if (prod) {
               parsedCart.push({
                 id: prod.id,
@@ -182,7 +262,9 @@ function PDV() {
                 u: Number(prod.valor),
                 t: qty * Number(prod.valor),
                 emoji: prod.emoji,
+                imagem: (prod as any).imagem || null,
                 max: prod.estoque,
+                hasDbId: true,
               });
             }
           });
@@ -342,6 +424,7 @@ function PDV() {
           emoji: produto.emoji,
           imagem: produto.imagem,
           max: produto.estoque,
+          hasDbId: true,
         },
       ];
     });
@@ -455,7 +538,7 @@ function PDV() {
       // Itens
       const itensToInsert = cart.map((i) => ({
         venda_id: vendaId,
-        produto_id: i.hasDbId ? i.id : null,
+        produto_id: i.hasDbId !== false ? i.id : null,
         quantidade: i.q,
         valor_unitario: i.u,
         subtotal: i.t,

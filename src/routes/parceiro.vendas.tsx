@@ -909,17 +909,9 @@ function VendasParceiro() {
 
                   <button
                     type="button"
-                    onClick={async (e) => {
+                    onClick={(e) => {
                       e.stopPropagation();
-                      try {
-                        const { data } = await supabase.from("vendas_itens").select("produto_id, quantidade").eq("venda_id", v.id);
-                        if (data && data.length > 0) {
-                          const itemsMagic = data.map((i) => `${i.produto_id}:${i.quantidade}`).join(",");
-                          window.location.href = `/parceiro/pdv?c=${itemsMagic}`;
-                        }
-                      } catch (err) {
-                        console.error("Erro ao clonar:", err);
-                      }
+                      window.location.href = `/parceiro/pdv?draft_id=${v.id}`;
                     }}
                     className="w-full min-w-0 h-9 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs flex items-center justify-center gap-1 transition-colors active:scale-95 border border-blue-200/60 shadow-xs px-1"
                     title="Clonar Pedido (Refazer a mesma venda)"
@@ -1502,6 +1494,10 @@ function VendasParceiro() {
                     variant="secondary"
                     className="w-full h-10 font-bold border border-slate-200 rounded-xl flex items-center justify-center gap-1.5 text-xs text-slate-700"
                     onClick={() => {
+                      if (selectedVenda?.id) {
+                        window.location.href = `/parceiro/pdv?draft_id=${selectedVenda.id}`;
+                        return;
+                      }
                       const itemsMagic = vendaItens
                         .map((i) => `${i.produto_id}:${i.quantidade}`)
                         .join(",");

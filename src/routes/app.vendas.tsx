@@ -1677,6 +1677,10 @@ function Vendas() {
                 variant="secondary"
                 className="w-full font-bold border border-slate-200"
                 onClick={() => {
+                  if (selectedVenda?.id) {
+                    window.location.href = `/app/pdv?clone_id=${selectedVenda.id}`;
+                    return;
+                  }
                   const itemsMagic = vendaItens
                     .map((i) => `${i.produto_id}:${i.quantidade}`)
                     .join(",");
