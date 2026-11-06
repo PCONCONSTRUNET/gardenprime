@@ -898,7 +898,7 @@ function VendasParceiro() {
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      openOrderPdf(v.id);
+                      openOrderPdf(v);
                     }}
                     className="w-full min-w-0 h-9 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs flex items-center justify-center gap-1 transition-colors active:scale-95 border border-slate-200 px-1"
                     title="Visualizar e Imprimir PDF"

@@ -313,6 +313,7 @@ function ParceiroPDV() {
             }
           }
         } else {
+          sessionStorage.setItem("parceiro_redirect", window.location.href);
           navigate({ to: "/parceiro/login" });
           return;
         }
@@ -332,7 +333,7 @@ function ParceiroPDV() {
 
         const { data } = await supabase
           .from("produtos")
-          .select("id, nome, codigo, categoria, valor, estoque, status, emoji, unidade")
+          .select("id, nome, codigo, categoria, valor, estoque, status, emoji, unidade, imagem")
           .eq("status", "Ativo")
           .order("nome");
         if (data) {
@@ -349,22 +350,35 @@ function ParceiroPDV() {
           });
           setProdutos(produtosComPreco);
 
-          // Verifica se veio um produto mágico pela URL (formato antigo)
+          // Verifica se veio um produto mágico pela URL (formato curto ?p= ou formato antigo ?c=)
           const dataForMagic = produtosComPreco;
           const params = new URLSearchParams(window.location.search);
 
-          const eParam = params.get("e");
-          const cnjParam = params.get("cnpj");
-          const cepParam = params.get("cep");
-          const endParam = params.get("end");
-          const numParam = params.get("num");
-          const bairroParam = params.get("bairro");
-          const cidParam = params.get("cid");
-          const ufParam = params.get("uf");
-          const telParam = params.get("tel");
+          let shortData: any = null;
+          const shortCodeParam = params.get("p");
+          if (shortCodeParam) {
+            const { data: linkRow } = await supabase
+              .from("links_curtos")
+              .select("dados")
+              .ilike("codigo", shortCodeParam.trim())
+              .maybeSingle();
+            if (linkRow?.dados) {
+              shortData = linkRow.dados;
+            }
+          }
 
-          const pagParam = params.get("pag");
-          const prazoParam = params.get("prazo");
+          const eParam = shortData?.e ?? params.get("e");
+          const cnjParam = shortData?.cnpj ?? params.get("cnpj");
+          const cepParam = shortData?.cep ?? params.get("cep");
+          const endParam = shortData?.end ?? params.get("end");
+          const numParam = shortData?.num ?? params.get("num");
+          const bairroParam = shortData?.bairro ?? params.get("bairro");
+          const cidParam = shortData?.cid ?? params.get("cid");
+          const ufParam = shortData?.uf ?? params.get("uf");
+          const telParam = shortData?.tel ?? params.get("tel");
+
+          const pagParam = shortData?.pag ?? params.get("pag");
+          const prazoParam = shortData?.prazo ?? params.get("prazo");
 
           if (eParam || cnjParam || pagParam) {
             setClientForm((prev: any) => ({
@@ -411,19 +425,25 @@ function ParceiroPDV() {
             }
           }
 
-          // Novo formato do Carrinho via Catálogo
-          const cartMagic = params.get("c");
+          // Novo formato do Carrinho via Catálogo (?p= curto ou ?c= direto)
+          const cartMagic = shortData?.c ?? params.get("c");
           if (cartMagic) {
             const parsedCart: any[] = [];
-            const items = cartMagic.split(",");
+            const items = String(cartMagic).split(",");
             items.forEach((item) => {
               const [id, qStr] = item.split(":");
               const qty = parseInt(qStr) || 1;
-              const prod = dataForMagic.find((p: any) => p.id === id);
+              const idClean = String(id || "").trim().toLowerCase();
+              const prod = dataForMagic.find(
+                (p: any) =>
+                  String(p.id || "").toLowerCase() === idClean ||
+                  (p.codigo && String(p.codigo).trim().toLowerCase() === idClean)
+              );
               if (prod) {
                 parsedCart.push({
                   id: prod.id,
                   p: prod.nome,
+                  c: prod.codigo,
                   q: qty,
                   u: Number(prod.valor),
                   t: qty * Number(prod.valor),
@@ -1349,7 +1369,7 @@ function ParceiroPDV() {
                     type="button"
                     variant="outline"
                     className="h-10 border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5"
-                    onClick={() => openOrderPdf(davGeradoId)}
+                    onClick={() => openOrderPdf(String(davGeradoNumero || davGeradoId || ""))}
                   >
                     <FileText className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                     <span>Ver / Imprimir PDF</span>
@@ -1393,7 +1413,7 @@ function ParceiroPDV() {
                         };
                       });
                       if (orderObj && orderObj.id) {
-                        openOrderPdf(orderObj.id);
+                        openOrderPdf(orderObj);
                       }
                     }}
                   >

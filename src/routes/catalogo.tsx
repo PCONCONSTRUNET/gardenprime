@@ -277,22 +277,24 @@ function PublicCatalogo() {
       let partnerData = null;
 
       if (identifier) {
-        // Busca o parceiro pelo ID (formato antigo) ou pelo Nome (novo formato)
-        let query = supabase
+        const { data: todosParceiros } = await supabase
           .from("vendedores")
           .select("id, nome, telefone, acrescimo_catalogo, acrescimo_catalogo_percentual")
           .eq("status", "Ativo");
 
-        if (identifier.length === 8 && /^[0-9a-fA-F-]+$/.test(identifier)) {
-          query = query.ilike("id", `${identifier}%`);
-        } else {
-          query = query.ilike("nome", `${identifier}%`);
-        }
-
-        const { data: parceiros } = await query.limit(1);
-        if (parceiros && parceiros.length > 0) {
-          partnerData = parceiros[0];
-          setPartner(partnerData);
+        if (todosParceiros && todosParceiros.length > 0) {
+          const idLower = identifier.trim().toLowerCase();
+          const match = todosParceiros.find(
+            (v: any) =>
+              String(v.id || "").toLowerCase() === idLower ||
+              String(v.id || "").toLowerCase().startsWith(idLower) ||
+              String(v.nome || "").trim().toLowerCase() === idLower ||
+              String(v.nome || "").trim().toLowerCase().startsWith(idLower)
+          );
+          if (match) {
+            partnerData = match;
+            setPartner(partnerData);
+          }
         }
       }
 
@@ -377,7 +379,7 @@ function PublicCatalogo() {
     setModalOpen(true);
   };
 
-  const finalizeOrder = (e: React.FormEvent) => {
+  const finalizeOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cart.length === 0) return;
     if (!empresaData.nome || !empresaData.cnpj) {
@@ -422,21 +424,62 @@ function PublicCatalogo() {
 
     let telefoneDestino = "5519997141112"; // Telefone padrão do dono
     const pagParamValue = empresaData.pagamento === "Boleto a Prazo" ? descBoleto : empresaData.pagamento;
+
+    // Gera código curto de 6 caracteres e salva no banco (links_curtos) para deixar o link super curto
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let shortCode = "";
+    for (let i = 0; i < 6; i++) {
+      shortCode += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    let savedShort = false;
+    try {
+      const payload = {
+        c: cart.map((c) => `${c.produto.id}:${c.qtd}`).join(","),
+        e: empresaData.nome,
+        cnpj: empresaData.cnpj,
+        email: empresaData.email,
+        cep: empresaData.cep,
+        end: empresaData.endereco,
+        num: empresaData.numero,
+        bairro: empresaData.bairro,
+        cid: empresaData.cidade,
+        uf: empresaData.uf,
+        tel: empresaData.telefone,
+        pag: pagParamValue,
+        prazo: prazoBoleto,
+        partner_id: partner?.id || null,
+      };
+      const { error } = await supabase.from("links_curtos").insert([{ codigo: shortCode, dados: payload }]);
+      if (!error) savedShort = true;
+    } catch (err) {
+      console.warn("Erro ao gerar link curto:", err);
+    }
+
     const companyParams = `&e=${encodeURIComponent(empresaData.nome)}&cnpj=${encodeURIComponent(empresaData.cnpj)}&cep=${encodeURIComponent(empresaData.cep)}&end=${encodeURIComponent(empresaData.endereco)}&num=${encodeURIComponent(empresaData.numero)}&bairro=${encodeURIComponent(empresaData.bairro)}&cid=${encodeURIComponent(empresaData.cidade)}&uf=${encodeURIComponent(empresaData.uf)}&tel=${encodeURIComponent(empresaData.telefone)}&pag=${encodeURIComponent(pagParamValue)}&prazo=${encodeURIComponent(prazoBoleto)}`;
+    const magicParams = cart.map((c) => `${c.produto.codigo || c.produto.id}:${c.qtd}`).join(",");
 
     if (partner && partner.telefone) {
       const numLimpo = partner.telefone.replace(/\D/g, "");
       if (numLimpo.length >= 10) telefoneDestino = `55${numLimpo}`;
 
-      const magicParams = cart.map((c) => `${c.produto.id}:${c.qtd}`).join(",");
-      mensagem += `\n\n_Link do Pedido (Apenas Vendedor):_\n${window.location.origin}/parceiro/pdv?c=${magicParams}${companyParams}`;
+      const linkUrl = savedShort
+        ? `${window.location.origin}/parceiro/pdv?p=${shortCode}`
+        : `${window.location.origin}/parceiro/pdv?c=${magicParams}${companyParams}`;
+      mensagem += `\n\n_Link do Pedido (Apenas Vendedor):_\n${linkUrl}`;
     } else {
-      const magicParams = cart.map((c) => `${c.produto.id}:${c.qtd}`).join(",");
-      mensagem += `\n\n_Link do Pedido (Administrador):_\n${window.location.origin}/app/dav-novo?c=${magicParams}${companyParams}`;
+      const linkUrl = savedShort
+        ? `${window.location.origin}/app/dav-novo?p=${shortCode}`
+        : `${window.location.origin}/app/dav-novo?c=${magicParams}${companyParams}`;
+      mensagem += `\n\n_Link do Pedido (Administrador):_\n${linkUrl}`;
     }
 
     const text = encodeURIComponent(mensagem);
-    window.open(`https://wa.me/${telefoneDestino}?text=${text}`, "_blank");
+    const waUrl = `https://wa.me/${telefoneDestino}?text=${text}`;
+    const win = window.open(waUrl, "_blank");
+    if (!win) {
+      window.location.href = waUrl;
+    }
     setModalOpen(false);
   };
 

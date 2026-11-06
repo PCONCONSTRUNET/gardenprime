@@ -23,7 +23,49 @@ function ImprimirDAV() {
       const { data: conf } = await supabase.from("configuracoes").select("*").eq("id", 1).single();
       if (conf) setConfig(conf);
 
-      let { data: d } = await supabase.from("davs").select("*").eq("id", id).single();
+      const rawParam = String(id || "").trim();
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawParam);
+      const isDavNum = /^[dD]\d+$/.test(rawParam);
+      const isVendaNum = /^(?:[vV])?\d+$/.test(rawParam);
+      const numericVal = parseInt(rawParam.replace(/^[dDvV]/, ""), 10);
+
+      let d: any = null;
+      let v: any = null;
+
+      if (isUuid) {
+        const resDav = await supabase.from("davs").select("*").eq("id", rawParam).maybeSingle();
+        d = resDav.data;
+        if (!d) {
+          const resVenda = await supabase
+            .from("vendas")
+            .select("*, cliente:clientes(*), vendedor:vendedores(nome)")
+            .eq("id", rawParam)
+            .maybeSingle();
+          v = resVenda.data;
+        }
+      } else if (isDavNum && !isNaN(numericVal)) {
+        const resDav = await supabase.from("davs").select("*").eq("numero", numericVal).maybeSingle();
+        d = resDav.data;
+        if (!d) {
+          const resVenda = await supabase
+            .from("vendas")
+            .select("*, cliente:clientes(*), vendedor:vendedores(nome)")
+            .eq("numero_venda", numericVal)
+            .maybeSingle();
+          v = resVenda.data;
+        }
+      } else if (isVendaNum && !isNaN(numericVal)) {
+        const resVenda = await supabase
+          .from("vendas")
+          .select("*, cliente:clientes(*), vendedor:vendedores(nome)")
+          .eq("numero_venda", numericVal)
+          .maybeSingle();
+        v = resVenda.data;
+        if (!v) {
+          const resDav = await supabase.from("davs").select("*").eq("numero", numericVal).maybeSingle();
+          d = resDav.data;
+        }
+      }
 
       let itemsData: any[] = [];
 
@@ -52,7 +94,7 @@ function ImprimirDAV() {
         const { data: i } = await supabase
           .from("dav_items")
           .select("*, produto:produtos(nome, codigo, imagem)")
-          .eq("dav_id", id);
+          .eq("dav_id", d.id);
         if (i) {
           itemsData = i.map((item) => ({
             codigo: item.codigo || item.produto?.codigo,
@@ -63,71 +105,62 @@ function ImprimirDAV() {
             total: item.total || item.subtotal,
           }));
         }
-      } else {
-        // Tenta buscar na tabela de vendas (Vendas ou DAVs antigos)
-        const { data: v } = await supabase
-          .from("vendas")
-          .select("*, cliente:clientes(*), vendedor:vendedores(nome)")
-          .eq("id", id)
-          .single();
+      } else if (v) {
+        const cli = v.cliente;
+        const enderecoPartes = [
+          cli?.endereco,
+          cli?.numero ? `Nº ${cli.numero}` : null,
+          cli?.bairro,
+          cli?.cidade && cli?.uf ? `${cli.cidade}/${cli.uf}` : cli?.cidade || cli?.uf || null,
+          cli?.cep ? `CEP: ${cli.cep}` : null,
+        ]
+          .filter(Boolean)
+          .join(", ");
 
-        if (v) {
-          const cli = v.cliente;
-          const enderecoPartes = [
-            cli?.endereco,
-            cli?.numero ? `Nº ${cli.numero}` : null,
-            cli?.bairro,
-            cli?.cidade && cli?.uf ? `${cli.cidade}/${cli.uf}` : cli?.cidade || cli?.uf || null,
-            cli?.cep ? `CEP: ${cli.cep}` : null,
-          ]
-            .filter(Boolean)
-            .join(", ");
+        d = {
+          id: v.id,
+          numero: v.numero_venda || v.numero,
+          created_at: v.created_at,
+          cliente_nome: cli?.nome,
+          cliente_cnpj: cli?.cpf_cnpj,
+          cliente_telefone: cli?.telefone,
+          cliente_endereco: enderecoPartes || null,
+          bairro: cli?.bairro || null,
+          cidade: cli?.cidade || null,
+          uf: cli?.uf || null,
+          email: cli?.email || null,
+          condicao_pagamento: v.condicao_pagamento || v.metodo_pagamento,
+          vencimentos: v.vencimentos || null,
+          subtotal: v.subtotal || v.valor_total,
+          desconto_valor: v.desconto_valor || 0,
+          desconto_percentual: v.desconto_percentual || 0,
+          frete_valor: v.frete_valor || 0,
+          total: v.valor_total,
+          vendedor: v.vendedor?.nome || "",
+          emissor_nome: "GARDEN PLUS LTDA",
+          isVenda: v.tipo !== "DAV",
+          rawVenda: v,
+        };
+        setDav(d);
 
-          d = {
-            id: v.id,
-            numero: v.numero_venda || v.numero,
-            created_at: v.created_at,
-            cliente_nome: cli?.nome,
-            cliente_cnpj: cli?.cpf_cnpj,
-            cliente_telefone: cli?.telefone,
-            cliente_endereco: enderecoPartes || null,
-            bairro: cli?.bairro || null,
-            cidade: cli?.cidade || null,
-            uf: cli?.uf || null,
-            email: cli?.email || null,
-            condicao_pagamento: v.condicao_pagamento || v.metodo_pagamento,
-            vencimentos: v.vencimentos || null,
-            subtotal: v.subtotal || v.valor_total,
-            desconto_valor: v.desconto_valor || 0,
-            desconto_percentual: v.desconto_percentual || 0,
-            frete_valor: v.frete_valor || 0,
-            total: v.valor_total,
-            vendedor: v.vendedor?.nome || "",
-            emissor_nome: "GARDEN PLUS LTDA",
-            isVenda: v.tipo !== "DAV",
-            rawVenda: v,
-          };
-          setDav(d);
+        const { data: vi } = await supabase
+          .from("vendas_itens")
+          .select("*, produto:produtos(nome, codigo, imagem)")
+          .eq("venda_id", v.id);
 
-          const { data: vi } = await supabase
-            .from("vendas_itens")
-            .select("*, produto:produtos(nome, codigo, imagem)")
-            .eq("venda_id", id);
-
-          if (vi) {
-            itemsData = vi.map((item) => ({
-              codigo: item.produto?.codigo || item.codigo,
-              produto: item.produto?.nome || item.produto_nome || "Produto sem nome",
-              imagem: item.produto?.imagem,
-              qtd: item.quantidade,
-              valor_unitario: item.valor_unitario,
-              total: item.subtotal,
-            }));
-            const sumItens = itemsData.reduce((acc, it) => acc + Number(it.total || 0), 0);
-            if (sumItens > 0 && (!d.subtotal || Number(d.subtotal) === 0)) {
-              d.subtotal = sumItens;
-              setDav({ ...d });
-            }
+        if (vi) {
+          itemsData = vi.map((item) => ({
+            codigo: item.produto?.codigo || item.codigo,
+            produto: item.produto?.nome || item.produto_nome || "Produto sem nome",
+            imagem: item.produto?.imagem,
+            qtd: item.quantidade,
+            valor_unitario: item.valor_unitario,
+            total: item.subtotal,
+          }));
+          const sumItens = itemsData.reduce((acc, it) => acc + Number(it.total || 0), 0);
+          if (sumItens > 0 && (!d.subtotal || Number(d.subtotal) === 0)) {
+            d.subtotal = sumItens;
+            setDav({ ...d });
           }
         }
       }

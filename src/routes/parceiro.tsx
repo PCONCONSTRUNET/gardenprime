@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet, redirect, Link, useRouterState } from "@tanstack/react-router";
-import { supabaseParceiro as supabase } from "@/lib/supabase";
+import { supabase as supabaseAdmin, supabaseParceiro as supabase } from "@/lib/supabase";
 import { GardenPrimeLogo } from "@/components/garden-prime-logo";
 import { Home, Calculator, LogOut, Package, Menu, X, Wallet, ClipboardList, Grid, ShoppingCart, Plus, MoreHorizontal, Settings, Users, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,17 @@ export const Route = createFileRoute("/parceiro")({
         data: { session },
       } = await supabase.auth.getSession();
       if (!session) {
+        // Se for um link de pedido (/parceiro/pdv?p=... ou ?c=...) e o usuário estiver logado como Admin no cliente principal,
+        // redireciona direto para /app/dav-novo mantendo os parâmetros!
+        if (location.pathname === "/parceiro/pdv" && window.location.search) {
+          const {
+            data: { session: adminSession },
+          } = await supabaseAdmin.auth.getSession();
+          if (adminSession) {
+            window.location.replace(`/app/dav-novo${window.location.search}`);
+            return;
+          }
+        }
         // Salva a URL destino para redirecionar após o login
         sessionStorage.setItem("parceiro_redirect", window.location.href);
         throw redirect({ to: "/parceiro/login" });
@@ -34,6 +45,10 @@ export const Route = createFileRoute("/parceiro")({
       if (session.user.email && ADMIN_EMAILS.includes(session.user.email.toLowerCase())) {
         // Desloga o admin do cliente do parceiro para limpar o storage fantasma
         await supabase.auth.signOut();
+        if (location.pathname === "/parceiro/pdv" && window.location.search) {
+          window.location.replace(`/app/dav-novo${window.location.search}`);
+          return;
+        }
         throw redirect({ to: "/app/dashboard" });
       }
 

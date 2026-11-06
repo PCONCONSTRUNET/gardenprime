@@ -721,7 +721,7 @@ function Logistica() {
                   <TableCell className="text-right">
                     <div className="flex justify-end items-center gap-2">
                       <Button asChild size="sm" variant="outline" className="text-slate-600">
-                        <a href={`/declaracao/${v.id}`} target="_blank" rel="noopener noreferrer">
+                        <a href={`/declaracao/${v.numero_venda || v.id}`} target="_blank" rel="noopener noreferrer">
                           <FileText className="h-4 w-4 mr-2" /> Etiqueta
                         </a>
                       </Button>

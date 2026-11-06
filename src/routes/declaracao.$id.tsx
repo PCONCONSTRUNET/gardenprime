@@ -19,20 +19,36 @@ function DeclaracaoConteudo() {
       const { data: conf } = await supabase.from("configuracoes").select("*").eq("id", 1).single();
       if (conf) setConfig(conf);
 
-      const { data: v } = await supabase
-        .from("vendas")
-        .select("*, clientes(*)")
-        .eq("id", id)
-        .single();
-      if (v) setVenda(v);
+      const rawParam = String(id || "").trim();
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawParam);
+      const numericVal = parseInt(rawParam.replace(/^[vVdD]/, ""), 10);
 
-      const { data: i } = await supabase
-        .from("vendas_itens")
-        .select("*, produtos(nome)")
-        .eq("venda_id", id);
-      if (i) setItens(i);
+      let v: any = null;
+      if (isUuid) {
+        const res = await supabase
+          .from("vendas")
+          .select("*, clientes(*)")
+          .eq("id", rawParam)
+          .maybeSingle();
+        v = res.data;
+      } else if (!isNaN(numericVal)) {
+        const res = await supabase
+          .from("vendas")
+          .select("*, clientes(*)")
+          .eq("numero_venda", numericVal)
+          .maybeSingle();
+        v = res.data;
+      }
 
       if (v) {
+        setVenda(v);
+
+        const { data: i } = await supabase
+          .from("vendas_itens")
+          .select("*, produtos(nome)")
+          .eq("venda_id", v.id);
+        if (i) setItens(i);
+
         setTimeout(() => window.print(), 800);
       }
     }

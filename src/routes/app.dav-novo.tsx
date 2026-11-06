@@ -307,19 +307,33 @@ function NovoDAV() {
 
     const loadCartFromURL = async () => {
       const params = new URLSearchParams(window.location.search);
-      const cartMagic = params.get("c");
 
-      const eParam = params.get("e");
-      const cnjParam = params.get("cnpj");
-      const cepParam = params.get("cep");
-      const endParam = params.get("end");
-      const numParam = params.get("num");
-      const bairroParam = params.get("bairro");
-      const cidParam = params.get("cid");
-      const ufParam = params.get("uf");
-      const telParam = params.get("tel");
-      const pagParam = params.get("pag");
-      const prazoParam = params.get("prazo");
+      let shortData: any = null;
+      const shortCodeParam = params.get("p");
+      if (shortCodeParam) {
+        const { data: linkRow } = await supabase
+          .from("links_curtos")
+          .select("dados")
+          .ilike("codigo", shortCodeParam.trim())
+          .maybeSingle();
+        if (linkRow?.dados) {
+          shortData = linkRow.dados;
+        }
+      }
+
+      const cartMagic = shortData?.c ?? params.get("c");
+
+      const eParam = shortData?.e ?? params.get("e");
+      const cnjParam = shortData?.cnpj ?? params.get("cnpj");
+      const cepParam = shortData?.cep ?? params.get("cep");
+      const endParam = shortData?.end ?? params.get("end");
+      const numParam = shortData?.num ?? params.get("num");
+      const bairroParam = shortData?.bairro ?? params.get("bairro");
+      const cidParam = shortData?.cid ?? params.get("cid");
+      const ufParam = shortData?.uf ?? params.get("uf");
+      const telParam = shortData?.tel ?? params.get("tel");
+      const pagParam = shortData?.pag ?? params.get("pag");
+      const prazoParam = shortData?.prazo ?? params.get("prazo");
 
       if (eParam || cnjParam) {
         setCliente((prev) => ({
@@ -338,7 +352,7 @@ function NovoDAV() {
 
       if (pagParam) {
         let formaPagamento = pagParam;
-        if (pagParam === "Boleto a Prazo") {
+        if (pagParam === "Boleto a Prazo" || pagParam.toLowerCase().includes("boleto")) {
           formaPagamento = prazoParam ? `Boleto (${prazoParam})` : "Boleto (28, 35, 42 dias)";
         }
         setCondicoes((prev) => ({
@@ -358,17 +372,22 @@ function NovoDAV() {
 
       const { data: produtosData } = await supabase
         .from("produtos")
-        .select("id, nome, codigo, categoria, valor, estoque, status, descricao, descricao_complementar")
+        .select("id, nome, codigo, categoria, valor, estoque, status, descricao, descricao_complementar, imagem")
         .eq("status", "Ativo")
         .order("nome");
       if (produtosData) {
         setProdutos(produtosData);
         const parsedItens: any[] = [];
-        const items = cartMagic.split(",");
+        const items = String(cartMagic).split(",");
         items.forEach((item, index) => {
           const [id, qStr] = item.split(":");
           const qty = parseInt(qStr) || 1;
-          const prod = produtosData.find((p) => p.id === id);
+          const idClean = String(id || "").trim().toLowerCase();
+          const prod = produtosData.find(
+            (p) =>
+              String(p.id || "").toLowerCase() === idClean ||
+              (p.codigo && String(p.codigo).trim().toLowerCase() === idClean)
+          );
           if (prod) {
             parsedItens.push({
               id: Date.now() + index,

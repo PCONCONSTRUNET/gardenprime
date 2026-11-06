@@ -152,6 +152,17 @@ export function isOrderDav(order: OrderData): boolean {
   return order.tipo === "DAV";
 }
 
+export function getShortOrderParam(order: OrderData): string {
+  const numVenda = order.numero_venda ?? (order as any).rawVenda?.numero_venda;
+  if (numVenda !== undefined && numVenda !== null && String(numVenda).trim() !== "") {
+    return String(numVenda);
+  }
+  if (order.numero !== undefined && order.numero !== null && String(order.numero).trim() !== "") {
+    return (order as any).isVenda ? String(order.numero) : `D${order.numero}`;
+  }
+  return String(order.id || "");
+}
+
 /**
  * Constrói texto da mensagem do WhatsApp formatado
  */
@@ -178,8 +189,9 @@ export function buildWhatsAppMessage(order: OrderData, items: OrderItem[], inclu
   const vTot = Number(order.valor_total || order.total || 0).toFixed(2).replace(".", ",");
   msg += `\n*TOTAL: R$ ${vTot}*\n`;
 
-  if (includeLink && typeof window !== "undefined" && order.id) {
-    const linkPdf = `${window.location.origin}/orcamento/${order.id}`;
+  const shortParam = getShortOrderParam(order);
+  if (includeLink && typeof window !== "undefined" && shortParam) {
+    const linkPdf = `${window.location.origin}/orcamento/${shortParam}`;
     msg += `\n📄 *Acesse o documento formal em PDF aqui:*\n${linkPdf}`;
   }
 
@@ -971,9 +983,14 @@ export async function shareOrderWhatsApp(rawOrder: OrderData, rawItems?: OrderIt
  * Abre a tela de visualização e impressão oficial do pedido em nova aba com o modal de impressão
  */
 export function openOrderPdf(rawOrderOrId: string | OrderData, rawItems?: OrderItem[]): void {
-  const id = typeof rawOrderOrId === "string" ? rawOrderOrId : rawOrderOrId?.id;
-  if (!id) return;
-  const url = `/orcamento/${id}`;
+  const param =
+    typeof rawOrderOrId === "string"
+      ? rawOrderOrId
+      : rawOrderOrId
+        ? getShortOrderParam(rawOrderOrId)
+        : "";
+  if (!param) return;
+  const url = `/orcamento/${param}`;
   window.open(url, "_blank");
 }
 
@@ -991,7 +1008,7 @@ export async function downloadOrderPdf(rawOrder: OrderData, rawItems?: OrderItem
   } catch (err: any) {
     console.error("Erro ao baixar PDF:", err);
     // Fallback: abre a rota de visualização
-    openOrderPdf(rawOrder.id);
+    openOrderPdf(rawOrder);
   }
 }
 

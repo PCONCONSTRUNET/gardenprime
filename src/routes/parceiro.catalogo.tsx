@@ -320,8 +320,10 @@ function ParceiroCatalogoPage() {
   // Compartilhar link público do catálogo com o cliente
   const linkPublico = useMemo(() => {
     if (typeof window === "undefined") return "";
-    const ident = vendedor?.id || "";
-    return `${window.location.origin}/catalogo?v=${ident}`;
+    const primeiroNome = vendedor?.nome
+      ? encodeURIComponent(vendedor.nome.trim().split(" ")[0].toLowerCase())
+      : vendedor?.id || "";
+    return `${window.location.origin}/catalogo?v=${primeiroNome}`;
   }, [vendedor]);
 
   const handleCopiarLink = () => {

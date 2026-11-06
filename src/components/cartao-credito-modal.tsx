@@ -329,7 +329,7 @@ export function CartaoCreditoModal({
       if (limpo.length >= 10) telefoneDestino = `55${limpo}`;
     }
 
-    const linkGuia = `${window.location.origin}/orcamento/${sucesso.vendaId}`;
+    const linkGuia = `${window.location.origin}/orcamento/${sucesso.numeroVenda || sucesso.vendaId}`;
 
     let msg = `🎉 *PAGAMENTO APROVADO NO CARTÃO DE CRÉDITO!*\n\n`;
     msg += `Olá! Acabei de fazer um pedido pelo Catálogo Online e o pagamento foi aprovado com sucesso via Asaas.\n\n`;
@@ -412,7 +412,7 @@ export function CartaoCreditoModal({
             <div className="space-y-2.5 pt-2">
               <Button
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11"
-                onClick={() => openOrderPdf(sucesso.vendaId)}
+                onClick={() => openOrderPdf(String(sucesso.numeroVenda || sucesso.vendaId))}
               >
                 <Printer className="mr-2 h-4 w-4" />
                 Visualizar / Imprimir Guia do Pedido
