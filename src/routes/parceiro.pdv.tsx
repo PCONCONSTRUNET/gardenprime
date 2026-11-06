@@ -74,6 +74,7 @@ function ParceiroPDV() {
   const [loading, setLoading] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [isCartSheetOpen, setIsCartSheetOpen] = useState(false);
   const [clientForm, setClientForm] = useState(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("pdv_client_parceiro");
@@ -333,7 +334,7 @@ function ParceiroPDV() {
 
         const { data } = await supabase
           .from("produtos")
-          .select("id, nome, codigo, categoria, valor, estoque, status, emoji, unidade, imagem")
+          .select("id, nome, codigo, categoria, valor, estoque, status, emoji, unidade_medida, imagem")
           .eq("status", "Ativo")
           .order("nome");
         if (data) {
@@ -454,6 +455,7 @@ function ParceiroPDV() {
             });
             if (parsedCart.length > 0) {
               setCart(parsedCart);
+              setIsCartSheetOpen(true);
               window.history.replaceState({}, "", "/parceiro/pdv");
             }
           }
@@ -1197,7 +1199,7 @@ function ParceiroPDV() {
       <div className="fixed bottom-[100px] lg:bottom-10 left-0 right-0 px-4 z-40 pointer-events-none pb-safe max-w-4xl lg:max-w-md mx-auto w-full">
         <div className="pointer-events-auto">
             <div className="animate-in slide-in-from-bottom-5 fade-in duration-300">
-              <Sheet>
+              <Sheet open={isCartSheetOpen} onOpenChange={setIsCartSheetOpen}>
                 <SheetTrigger asChild>
                   <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-2xl border border-black/20 p-3 pl-6 pr-3 flex items-center justify-between cursor-pointer ring-1 ring-black/10">
                     <div>
@@ -1321,7 +1323,7 @@ function ParceiroPDV() {
                     </div>
                     <Button
                       onClick={() => {
-                        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+                        setIsCartSheetOpen(false);
                         handleOpenClientModal();
                       }}
                       className="w-full h-14 bg-gradient-brand text-white font-bold text-base shadow-lg shadow-brand/25 rounded-2xl"

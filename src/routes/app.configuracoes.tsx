@@ -238,7 +238,7 @@ function Configuracoes() {
 
       for (const table of tables) {
         // Excluir campo imagem (base64 pesado) da tabela produtos para economizar egress
-        const selectCols = table === "produtos" ? "id, nome, codigo, categoria, valor, estoque, status, emoji, unidade, custo, descricao, created_at" : "*";
+        const selectCols = table === "produtos" ? "id, nome, codigo, categoria, valor, estoque, status, emoji, unidade_medida, custo_compra, descricao, created_at" : "*";
         const { data, error } = await supabase.from(table).select(selectCols);
         if (!error && data) {
           backupData[table] = data;
