@@ -243,8 +243,8 @@ function PublicCatalogo() {
       await loadCategoryOrderFromDb();
       
       // Cache de 5 minutos no sessionStorage para economizar Egress
-      const CACHE_KEY = "gp_catalogo_prod_v2";
-      const CACHE_TIME = "gp_catalogo_time_v2";
+      const CACHE_KEY = "gp_catalogo_prod_v3";
+      const CACHE_TIME = "gp_catalogo_time_v3";
       let data: any[] | null = null;
       try {
         const cached = sessionStorage.getItem(CACHE_KEY);

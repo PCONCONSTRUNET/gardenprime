@@ -125,8 +125,8 @@ function ParceiroCatalogoPage() {
         await loadCategoryOrderFromDb();
 
         // 3. Produtos ativos (com cache de 5 minutos no sessionStorage para economizar Egress)
-        const CACHE_KEY = "gp_parceiro_catalogo_prod_v2";
-        const CACHE_TIME = "gp_parceiro_catalogo_time_v2";
+        const CACHE_KEY = "gp_parceiro_catalogo_prod_v3";
+        const CACHE_TIME = "gp_parceiro_catalogo_time_v3";
         let prods: any[] | null = null;
         try {
           const cached = sessionStorage.getItem(CACHE_KEY);
