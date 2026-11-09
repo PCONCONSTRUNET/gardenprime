@@ -852,30 +852,20 @@ export async function generateOrderPdfDoc(
 
   y = (doc as any).lastAutoTable.finalY + 10;
 
-  // 5. SUBTOTAL E TOTAL
+  // 5. TOTAL
   const totW = 60;
   const totX = pageWidth - margin - totW;
-  
-  doc.setFillColor(colorGray[0], colorGray[1], colorGray[2]);
-  doc.rect(totX, y, totW, 8, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.5);
-  doc.setTextColor(0, 0, 0);
-  doc.text("Subtotal", totX + 2, y + 5);
-  const vSub = `R$ ${Number(order.subtotal || order.valor_total || 0).toFixed(2).replace(".", ",")}`;
-  doc.text(vSub, totX + totW - 2, y + 5, { align: "right" });
-  
-  y += 8;
+
   doc.setFillColor(colorGold[0], colorGold[1], colorGold[2]);
-  doc.rect(totX, y, totW, 8, "F");
+  doc.rect(totX, y, totW, 9, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.5);
   doc.setTextColor(255, 255, 255);
-  doc.text("Total", totX + 2, y + 5.5);
-  const vTot = `R$ ${Number(order.valor_total || order.total || 0).toFixed(2).replace(".", ",")}`;
-  doc.text(vTot, totX + totW - 2, y + 5.5, { align: "right" });
+  doc.text("Total", totX + 2, y + 6);
+  const vTot = `R$ ${Number(order.valor_total || order.total || order.subtotal || 0).toFixed(2).replace(".", ",")}`;
+  doc.text(vTot, totX + totW - 2, y + 6, { align: "right" });
 
-  y += 25;
+  y += 22;
 
   // 6. ASSINATURAS
   doc.setLineWidth(0.4);

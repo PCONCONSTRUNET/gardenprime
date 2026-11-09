@@ -532,25 +532,19 @@ function ImprimirDAV() {
           </div>
         </div>
 
-        {/* 5. SUBTOTAL / TOTAL */}
+        {/* 5. TOTAL */}
         <div className="flex justify-end mb-8">
           <div className="bg-[#FAF7EE] border-2 border-[#EBE4D5] rounded-xl p-3 flex items-center gap-3 min-w-[270px] shadow-xs">
             {/* Ícone de Moeda/Cifrão à esquerda */}
             <div className="w-8 h-8 rounded-full border-2 border-[#1B382F] flex items-center justify-center text-[#1B382F] shrink-0 ml-1">
               <span className="font-black text-sm leading-none">$</span>
             </div>
-            {/* Linhas de Valores à direita */}
-            <div className="flex-1 flex flex-col gap-1.5">
-              <div className="flex justify-between items-center px-1 text-xs">
-                <span className="text-black font-black">Subtotal</span>
-                <span className="text-black font-black text-sm">
-                  R$ {Number(dav.subtotal || dav.total || 0).toFixed(2).replace(".", ",")}
-                </span>
-              </div>
+            {/* Linha de Valor Total à direita */}
+            <div className="flex-1 flex flex-col">
               <div className="bg-[#A37E36] text-white rounded-lg px-3.5 py-2 flex justify-between items-center">
                 <span className="text-xs font-black uppercase tracking-wider">Total</span>
                 <span className="text-base font-black">
-                  R$ {Number(dav.total || 0).toFixed(2).replace(".", ",")}
+                  R$ {Number(dav.total || dav.subtotal || 0).toFixed(2).replace(".", ",")}
                 </span>
               </div>
             </div>

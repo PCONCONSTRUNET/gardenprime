@@ -638,7 +638,7 @@ function Vendas() {
         0
       );
 
-      await supabase.from("vendas").update({ valor_total: novoTotal }).eq("id", vendaId);
+      await supabase.from("vendas").update({ valor_total: novoTotal, subtotal: novoTotal }).eq("id", vendaId);
 
       // Atualizar contas_receber se existir
       await supabase
@@ -653,9 +653,9 @@ function Vendas() {
         .eq("venda_id", vendaId);
 
       setVendaItens(updatedItens || []);
-      setSelectedVenda((prev: any) => ({ ...prev, valor_total: novoTotal }));
+      setSelectedVenda((prev: any) => ({ ...prev, valor_total: novoTotal, subtotal: novoTotal }));
       setVendas((prev) =>
-        prev.map((v) => (v.id === vendaId ? { ...v, valor_total: novoTotal } : v))
+        prev.map((v) => (v.id === vendaId ? { ...v, valor_total: novoTotal, subtotal: novoTotal } : v))
       );
 
       setIsEditingItems(false);
@@ -800,7 +800,7 @@ function Vendas() {
     try {
       const { error: err1 } = await supabase
         .from("vendas")
-        .update({ valor_total: val })
+        .update({ valor_total: val, subtotal: val })
         .eq("id", selectedVenda.id);
       if (err1) throw err1;
 
@@ -810,9 +810,9 @@ function Vendas() {
         .eq("venda_id", selectedVenda.id);
       if (err2) throw err2;
 
-      setSelectedVenda((prev: any) => ({ ...prev, valor_total: val }));
+      setSelectedVenda((prev: any) => ({ ...prev, valor_total: val, subtotal: val }));
       setVendas((prev) =>
-        prev.map((v) => (v.id === selectedVenda.id ? { ...v, valor_total: val } : v)),
+        prev.map((v) => (v.id === selectedVenda.id ? { ...v, valor_total: val, subtotal: val } : v)),
       );
       setIsEditingTotal(false);
     } catch (err: any) {
