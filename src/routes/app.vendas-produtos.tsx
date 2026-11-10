@@ -33,6 +33,7 @@ function VendasProdutos() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
+  const [buscaCodigo, setBuscaCodigo] = useState("");
   const [categoriaFilter, setCategoriaFilter] = useState<string>("Todas");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<number>(0);
@@ -110,10 +111,18 @@ function VendasProdutos() {
     }
   };
 
+  const codeQuery = buscaCodigo.trim().toLowerCase();
+  const hasExactCodeMatch =
+    codeQuery.length > 0 &&
+    products.some((p) => {
+      const pCode = p.codigo !== undefined && p.codigo !== null ? String(p.codigo).trim().toLowerCase() : "";
+      return pCode === codeQuery || (/^\d+$/.test(codeQuery) && /^\d+$/.test(pCode) && Number(pCode) === Number(codeQuery));
+    });
+
   const filteredProducts = products.filter((p) => {
     const search = busca.toLowerCase().trim();
     const nome = p.nome ? String(p.nome).toLowerCase() : "";
-    const codigo = p.codigo ? String(p.codigo).toLowerCase() : "";
+    const codigo = p.codigo !== undefined && p.codigo !== null ? String(p.codigo).trim().toLowerCase() : "";
     
     const normalize = (str: string) => 
       str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -130,8 +139,19 @@ function VendasProdutos() {
         nomeNormalized.includes(term) || codigoNormalized.includes(term)
       );
 
+    let matchCodigo = true;
+    if (codeQuery.length > 0) {
+      if (hasExactCodeMatch) {
+        matchCodigo =
+          codigo === codeQuery ||
+          (/^\d+$/.test(codeQuery) && /^\d+$/.test(codigo) && Number(codigo) === Number(codeQuery));
+      } else {
+        matchCodigo = codigo.startsWith(codeQuery) || nomeNormalized.includes(`codigo ${codeQuery}`);
+      }
+    }
+
     const matchCat = categoriaFilter === "Todas" || p.categoria === categoriaFilter;
-    return matchBusca && matchCat;
+    return matchBusca && matchCodigo && matchCat;
   });
 
   const totalVendasGlobais = products.reduce((acc, p) => acc + (p.total_calculado || 0), 0);
@@ -186,9 +206,18 @@ function VendasProdutos() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Buscar por código ou nome…"
-              className="pl-9"
+              className="pl-9 font-bold"
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
+            />
+          </div>
+          <div className="relative w-full sm:w-[240px]">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary stroke-[2.5]" />
+            <Input
+              placeholder="Buscar por código…"
+              className="pl-9 font-bold placeholder:font-bold border-2 border-primary/40 focus-visible:ring-primary"
+              value={buscaCodigo}
+              onChange={(e) => setBuscaCodigo(e.target.value)}
             />
           </div>
           <Select value={categoriaFilter} onValueChange={setCategoriaFilter}>
@@ -223,8 +252,8 @@ function VendasProdutos() {
                     title="Selecionar todos"
                   />
                 </TableHead>
-                <TableHead>Código</TableHead>
-                <TableHead>Produto</TableHead>
+                <TableHead className="font-bold">Código</TableHead>
+                <TableHead className="font-bold">Produto</TableHead>
                 <TableHead className="print:hidden">Categoria</TableHead>
                 <TableHead className="text-right print:hidden">Valor</TableHead>
                 <TableHead className="text-right print:hidden">Sistema</TableHead>
@@ -264,7 +293,7 @@ function VendasProdutos() {
                         onChange={() => toggleSelection(p.id)}
                       />
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{p.codigo}</TableCell>
+                    <TableCell className="font-mono text-sm font-bold text-foreground">{p.codigo}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="grid h-10 w-10 overflow-hidden place-items-center rounded-lg bg-accent text-lg border">
@@ -281,8 +310,8 @@ function VendasProdutos() {
                           )}
                         </div>
                         <div>
-                          <p className="font-semibold">{p.nome}</p>
-                          <p className="text-xs text-muted-foreground">SKU interno</p>
+                          <p className="font-bold">{p.nome}</p>
+                          <p className="text-xs font-semibold text-muted-foreground">SKU interno</p>
                         </div>
                       </div>
                     </TableCell>

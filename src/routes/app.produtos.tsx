@@ -58,6 +58,7 @@ function Produtos() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
+  const [buscaCodigo, setBuscaCodigo] = useState("");
   const [categoriaFilter, setCategoriaFilter] = useState("Todas");
   const [statusFilter, setStatusFilter] = useState("Ativo");
 
@@ -217,6 +218,14 @@ function Produtos() {
   };
 
   const filteredProducts = useMemo(() => {
+    const codeQuery = buscaCodigo.trim().toLowerCase();
+    const hasExactCodeMatch =
+      codeQuery.length > 0 &&
+      products.some((p) => {
+        const pCode = p.codigo !== undefined && p.codigo !== null ? String(p.codigo).trim().toLowerCase() : "";
+        return pCode === codeQuery || (/^\d+$/.test(codeQuery) && /^\d+$/.test(pCode) && Number(pCode) === Number(codeQuery));
+      });
+
     let result = products.filter((p) => {
       const searchStr = busca.trim().toLowerCase();
       const isNumericSearch = /^\d+$/.test(searchStr);
@@ -225,6 +234,19 @@ function Produtos() {
         ? p.codigo && String(p.codigo).toLowerCase() === searchStr
         : p.nome.toLowerCase().includes(searchStr) ||
           (p.codigo && String(p.codigo).toLowerCase().includes(searchStr));
+
+      const codigo = p.codigo !== undefined && p.codigo !== null ? String(p.codigo).trim().toLowerCase() : "";
+      const nomeLower = p.nome ? String(p.nome).toLowerCase() : "";
+      let matchCodigo = true;
+      if (codeQuery.length > 0) {
+        if (hasExactCodeMatch) {
+          matchCodigo =
+            codigo === codeQuery ||
+            (/^\d+$/.test(codeQuery) && /^\d+$/.test(codigo) && Number(codigo) === Number(codeQuery));
+        } else {
+          matchCodigo = codigo.startsWith(codeQuery) || nomeLower.includes(`codigo ${codeQuery}`);
+        }
+      }
 
       const matchCat = categoriaFilter === "Todas" || p.categoria === categoriaFilter;
 
@@ -240,7 +262,7 @@ function Produtos() {
           ? pStatus === "Crítico"
           : true;
 
-      return matchBusca && matchCat && matchStatus;
+      return matchBusca && matchCodigo && matchCat && matchStatus;
     });
 
     result.sort((a, b) => {
@@ -294,7 +316,7 @@ function Produtos() {
     });
 
     return result;
-  }, [products, busca, categoriaFilter, statusFilter, sortColumn, sortDirection]);
+  }, [products, busca, buscaCodigo, categoriaFilter, statusFilter, sortColumn, sortDirection]);
 
   const SortIcon = ({ column }: { column: SortColumn }) => {
     if (sortColumn !== column)
@@ -363,9 +385,18 @@ function Produtos() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Buscar por código ou nome…"
-              className="pl-9"
+              className="pl-9 font-bold"
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
+            />
+          </div>
+          <div className="relative w-full sm:w-[240px]">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary stroke-[2.5]" />
+            <Input
+              placeholder="Buscar por código…"
+              className="pl-9 font-bold placeholder:font-bold border-2 border-primary/40 focus-visible:ring-primary"
+              value={buscaCodigo}
+              onChange={(e) => setBuscaCodigo(e.target.value)}
             />
           </div>
           <Select value={categoriaFilter} onValueChange={setCategoriaFilter}>
@@ -506,13 +537,13 @@ function Produtos() {
             <TableHeader>
               <TableRow>
                 <TableHead
-                  className="cursor-pointer select-none hover:bg-muted/50"
+                  className="cursor-pointer select-none hover:bg-muted/50 font-bold"
                   onClick={() => handleSort("codigo")}
                 >
                   Código <SortIcon column="codigo" />
                 </TableHead>
                 <TableHead
-                  className="cursor-pointer select-none hover:bg-muted/50"
+                  className="cursor-pointer select-none hover:bg-muted/50 font-bold"
                   onClick={() => handleSort("nome")}
                 >
                   Produto <SortIcon column="nome" />
@@ -560,7 +591,7 @@ function Produtos() {
               ) : (
                 filteredProducts.map((p) => (
                   <TableRow key={p.id}>
-                    <TableCell className="font-mono text-xs">{p.codigo}</TableCell>
+                    <TableCell className="font-mono text-sm font-bold text-foreground">{p.codigo}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="grid h-10 w-10 overflow-hidden place-items-center rounded-lg bg-accent text-lg border">
@@ -577,8 +608,8 @@ function Produtos() {
                           )}
                         </div>
                         <div>
-                          <p className="font-semibold">{p.nome}</p>
-                          <p className="text-xs text-muted-foreground">SKU interno</p>
+                          <p className="font-bold">{p.nome}</p>
+                          <p className="text-xs font-semibold text-muted-foreground">SKU interno</p>
                         </div>
                       </div>
                     </TableCell>
