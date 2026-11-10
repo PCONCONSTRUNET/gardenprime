@@ -746,7 +746,7 @@ function NovoDAV() {
                 placeholder="Ex: Pix, Dinheiro, Cartão"
               />
               <div className="flex flex-wrap gap-1.5 mt-1">
-                {["Dinheiro / Pix", "Boleto (28, 35, 42 dias)", "Boleto 30 dias", "Boleto 30/60 dias", "Cartão de Crédito", "2x sem juros", "3x sem juros"].map((c) => (
+                {["Dinheiro / Pix", "Boleto (28, 35, 42 dias)", "Boleto (30, 45, 60 dias)", "Boleto 30 dias", "Boleto 30/60 dias", "Cartão de Crédito", "2x sem juros", "3x sem juros"].map((c) => (
                   <button
                     key={c}
                     type="button"

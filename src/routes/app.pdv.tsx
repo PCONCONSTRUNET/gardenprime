@@ -523,7 +523,9 @@ function PDV() {
             metodo_pagamento: metodoPagamento,
             condicao_pagamento:
               metodoPagamento === "Boleto"
-                ? getDescricaoBoleto(totalPagamento)
+                ? condicaoPagamento.includes("30, 45, 60") || condicaoPagamento.includes("30 - 45 - 60")
+                  ? "Boleto a Prazo (30, 45, 60 dias)"
+                  : getDescricaoBoleto(totalPagamento)
                 : condicaoPagamento,
             desconto_valor: descontoValor,
             numero: nextNumero,
@@ -851,7 +853,9 @@ function PDV() {
                 <Button
                   onClick={() => {
                     setMetodoPagamento("Boleto");
-                    setCondicaoPagamento(getDescricaoBoleto(totalPagamento));
+                    if (!condicaoPagamento.includes("30, 45, 60")) {
+                      setCondicaoPagamento(getDescricaoBoleto(totalPagamento));
+                    }
                   }}
                   variant="outline"
                   className={`h-16 flex-col gap-1 ${metodoPagamento === "Boleto" ? "ring-2 ring-primary" : ""}`}
@@ -861,33 +865,62 @@ function PDV() {
                     alt="Boleto"
                     className="h-5 w-5 object-contain"
                   />
-                  <span className="text-xs">Boleto ({getPrazoBoleto(totalPagamento)})</span>
+                  <span className="text-xs">
+                    Boleto ({condicaoPagamento.includes("30, 45, 60") ? "30, 45, 60 dias" : getPrazoBoleto(totalPagamento)})
+                  </span>
                 </Button>
               </div>
-              {metodoPagamento === "Boleto" && (
-                <div className="mt-3 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-slate-700">Prazo do Boleto:</span>
-                    <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
-                      {getPrazoBoleto(totalPagamento)}
-                    </span>
+              {metodoPagamento === "Boleto" && (() => {
+                const is304560 = condicaoPagamento.includes("30, 45, 60");
+                const prazoExibido = is304560 ? "30, 45, 60 dias" : getPrazoBoleto(totalPagamento);
+                return (
+                  <div className="mt-3 bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-slate-700">Selecione o Prazo do Boleto:</span>
+                      <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
+                        {prazoExibido}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCondicaoPagamento(getDescricaoBoleto(totalPagamento))}
+                        className={`px-2.5 py-2 rounded-lg text-xs font-bold border transition-all text-left ${
+                          !is304560
+                            ? "bg-emerald-700 text-white border-emerald-700 shadow-sm"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-emerald-50"
+                        }`}
+                      >
+                        <div className="text-[10px] opacity-80 font-semibold">Opção 1</div>
+                        <div>{getPrazoBoleto(totalPagamento)}</div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCondicaoPagamento("Boleto a Prazo (30, 45, 60 dias)")}
+                        className={`px-2.5 py-2 rounded-lg text-xs font-bold border transition-all text-left ${
+                          is304560
+                            ? "bg-emerald-700 text-white border-emerald-700 shadow-sm"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-emerald-50"
+                        }`}
+                      >
+                        <div className="text-[10px] opacity-80 font-semibold">Opção 2</div>
+                        <div>30 - 45 - 60 dias</div>
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground space-y-0.5 pt-1 border-t border-slate-200/60">
+                      <p className={!is304560 && totalPagamento <= 1000 ? "font-bold text-emerald-700" : ""}>
+                        • Até R$ 1.000,00: <strong>28 dias</strong>
+                      </p>
+                      <p className={!is304560 && totalPagamento > 1000 ? "font-bold text-emerald-700" : ""}>
+                        • Acima de R$ 1.000,00: <strong>28, 35, 42 dias</strong>
+                      </p>
+                      <p className={is304560 ? "font-bold text-emerald-700" : ""}>
+                        • Opção especial: <strong>Boleto 30 - 45 - 60 dias</strong>
+                      </p>
+                    </div>
                   </div>
-                  <Input
-                    value={getRotuloFaixaBoleto(totalPagamento)}
-                    readOnly
-                    disabled
-                    className="mt-1.5 h-9 bg-white font-bold text-slate-800 text-xs cursor-not-allowed select-none"
-                  />
-                  <div className="text-[11px] text-muted-foreground space-y-0.5 mt-1.5 pt-1 border-t border-slate-200/60">
-                    <p className={totalPagamento <= 1000 ? "font-bold text-emerald-700" : ""}>
-                      • Até R$ 1.000,00: <strong>28 dias</strong>
-                    </p>
-                    <p className={totalPagamento > 1000 ? "font-bold text-emerald-700" : ""}>
-                      • Acima de R$ 1.000,00: <strong>28, 35, 42 dias</strong>
-                    </p>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
               {(metodoPagamento === "Dinheiro" || metodoPagamento === "Pix") && (
                 <div className="mt-3 flex items-center justify-between bg-emerald-50 p-3 rounded-md border border-emerald-100">
                   <span className="font-medium text-emerald-800 text-sm">Aplicar Desconto (%)</span>

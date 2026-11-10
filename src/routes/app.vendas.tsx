@@ -1439,6 +1439,7 @@ function Vendas() {
                           "À Vista",
                           "Boleto a Prazo",
                           "Boleto (28, 35, 42 dias)",
+                          "Boleto (30, 45, 60 dias)",
                           "Boleto 30 dias",
                           "Boleto 30/60 dias",
                           "Entrada + 30 dias",

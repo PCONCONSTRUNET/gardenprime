@@ -388,8 +388,12 @@ function PublicCatalogo() {
     }
 
     const total = cart.reduce((acc, item) => acc + item.qtd * Number(item.produto.valor), 0);
-    const prazoBoleto = getPrazoBoleto(total);
-    const descBoleto = getDescricaoBoleto(total);
+    const isBoleto304560 =
+      empresaData.pagamento === "Boleto a Prazo (30, 45, 60 dias)" ||
+      (empresaData.pagamento.startsWith("Boleto") && empresaData.condicaoBoleto === "30, 45, 60 dias");
+    const isAnyBoleto = empresaData.pagamento.startsWith("Boleto");
+    const prazoBoleto = isBoleto304560 ? "30, 45, 60 dias" : getPrazoBoleto(total);
+    const descBoleto = isBoleto304560 ? "Boleto a Prazo (30, 45, 60 dias)" : getDescricaoBoleto(total);
 
     let mensagem = `Olá! Gostaria de fazer o pedido dos seguintes itens do catálogo:\n\n`;
 
@@ -403,8 +407,8 @@ function PublicCatalogo() {
     if (empresaData.cidade) mensagem += `Cidade/UF: ${empresaData.cidade}/${empresaData.uf}\n`;
     if (empresaData.telefone) mensagem += `Telefone: ${empresaData.telefone}\n`;
     if (empresaData.email) mensagem += `E-mail: ${empresaData.email}\n`;
-    mensagem += `*FORMA DE PAGAMENTO:* ${empresaData.pagamento === "Boleto a Prazo" ? descBoleto : empresaData.pagamento}\n`;
-    if (empresaData.pagamento === "Boleto a Prazo") {
+    mensagem += `*FORMA DE PAGAMENTO:* ${isAnyBoleto ? descBoleto : empresaData.pagamento}\n`;
+    if (isAnyBoleto) {
       mensagem += `*PRAZO DO BOLETO:* ${prazoBoleto}\n`;
     }
     mensagem += `\n`;
@@ -423,7 +427,7 @@ function PublicCatalogo() {
     mensagem += `Qual o procedimento para finalização e pagamento?`;
 
     let telefoneDestino = "5519997141112"; // Telefone padrão do dono
-    const pagParamValue = empresaData.pagamento === "Boleto a Prazo" ? descBoleto : empresaData.pagamento;
+    const pagParamValue = isAnyBoleto ? descBoleto : empresaData.pagamento;
 
     // Gera código curto de 6 caracteres e salva no banco (links_curtos) para deixar o link super curto
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -1049,34 +1053,93 @@ function PublicCatalogo() {
                     (acc, item) => acc + item.qtd * Number(item.produto.valor),
                     0
                   );
-                  const prazoAtual = getPrazoBoleto(totalModal);
+                  const prazoPadrao = getPrazoBoleto(totalModal);
+                  const isBoletoSelected = empresaData.pagamento.startsWith("Boleto");
+                  const is304560 =
+                    empresaData.pagamento === "Boleto a Prazo (30, 45, 60 dias)" ||
+                    empresaData.condicaoBoleto === "30, 45, 60 dias";
+                  const prazoExibido = is304560 ? "30, 45, 60 dias" : prazoPadrao;
                   return (
                     <>
                       <label className="text-sm font-medium">Forma de Pagamento</label>
                       <select
                         className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 font-medium"
                         value={empresaData.pagamento}
-                        onChange={(e) => setEmpresaData({ ...empresaData, pagamento: e.target.value })}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEmpresaData({
+                            ...empresaData,
+                            pagamento: val,
+                            condicaoBoleto:
+                              val === "Boleto a Prazo (30, 45, 60 dias)"
+                                ? "30, 45, 60 dias"
+                                : val === "Boleto a Prazo"
+                                  ? prazoPadrao
+                                  : empresaData.condicaoBoleto,
+                          });
+                        }}
                       >
-                        <option value="Boleto a Prazo">Boleto a Prazo ({prazoAtual})</option>
+                        <option value="Boleto a Prazo">Boleto a Prazo ({prazoPadrao})</option>
+                        <option value="Boleto a Prazo (30, 45, 60 dias)">Boleto a Prazo (30 - 45 - 60 dias)</option>
                         <option value="Dinheiro / Pix">Dinheiro / Pix (via WhatsApp)</option>
                         <option value="Cartão de Crédito">💳 Cartão de Crédito (Pagamento Online)</option>
                       </select>
 
-                      {empresaData.pagamento === "Boleto a Prazo" && (
-                        <div className="p-3 bg-emerald-50/80 border border-emerald-200/80 rounded-xl space-y-1.5">
+                      {isBoletoSelected && (
+                        <div className="p-3 bg-emerald-50/80 border border-emerald-200/80 rounded-xl space-y-2">
                           <div className="flex items-center justify-between text-xs">
-                            <span className="font-semibold text-slate-700">Prazo do Boleto:</span>
+                            <span className="font-semibold text-slate-700">Selecione o Prazo do Boleto:</span>
                             <span className="font-black text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-md">
-                              {prazoAtual}
+                              {prazoExibido}
                             </span>
                           </div>
+                          <div className="grid grid-cols-2 gap-2 pt-0.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEmpresaData({
+                                  ...empresaData,
+                                  pagamento: "Boleto a Prazo",
+                                  condicaoBoleto: prazoPadrao,
+                                })
+                              }
+                              className={`px-2.5 py-2 rounded-lg text-xs font-bold border transition-all text-left ${
+                                !is304560
+                                  ? "bg-emerald-700 text-white border-emerald-700 shadow-sm"
+                                  : "bg-white text-slate-700 border-emerald-200 hover:bg-emerald-100/50"
+                              }`}
+                            >
+                              <div className="text-[10px] opacity-80 font-semibold">Opção 1</div>
+                              <div>{prazoPadrao}</div>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEmpresaData({
+                                  ...empresaData,
+                                  pagamento: "Boleto a Prazo (30, 45, 60 dias)",
+                                  condicaoBoleto: "30, 45, 60 dias",
+                                })
+                              }
+                              className={`px-2.5 py-2 rounded-lg text-xs font-bold border transition-all text-left ${
+                                is304560
+                                  ? "bg-emerald-700 text-white border-emerald-700 shadow-sm"
+                                  : "bg-white text-slate-700 border-emerald-200 hover:bg-emerald-100/50"
+                              }`}
+                            >
+                              <div className="text-[10px] opacity-80 font-semibold">Opção 2</div>
+                              <div>30 - 45 - 60 dias</div>
+                            </button>
+                          </div>
                           <div className="text-[11px] text-slate-600 space-y-0.5 pt-1 border-t border-emerald-200/60">
-                            <p className={totalModal <= 1000 ? "font-bold text-emerald-800" : ""}>
+                            <p className={!is304560 && totalModal <= 1000 ? "font-bold text-emerald-800" : ""}>
                               • Pedidos até R$ 1.000: <strong>28 dias</strong>
                             </p>
-                            <p className={totalModal > 1000 ? "font-bold text-emerald-800" : ""}>
+                            <p className={!is304560 && totalModal > 1000 ? "font-bold text-emerald-800" : ""}>
                               • Pedidos acima de R$ 1.000: <strong>28, 35, 42 dias</strong>
+                            </p>
+                            <p className={is304560 ? "font-bold text-emerald-800" : ""}>
+                              • Opção especial: <strong>Boleto 30 - 45 - 60 dias</strong>
                             </p>
                           </div>
                         </div>
