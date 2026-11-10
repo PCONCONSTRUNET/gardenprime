@@ -308,28 +308,28 @@ function ImprimirDAV() {
         </div>
 
         {/* 2. BLOCO ESCURO (TÍTULO) */}
-        <div className="bg-[#112321] text-white rounded-xl px-4 py-3 sm:px-5 sm:py-3.5 flex items-center justify-between gap-3 sm:gap-4 mb-6 shadow-sm">
+        <div className="bg-[#112321] text-white rounded-xl px-4 py-3 sm:px-5 sm:py-3.5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 sm:gap-4 mb-6 shadow-sm overflow-hidden">
           {/* Título e DAV */}
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
             <div className="p-2 border-2 border-[#C5A059] rounded-lg text-[#C5A059] flex items-center justify-center shrink-0">
-              <FileText className="w-6 h-6 stroke-[2.5]" />
+              <FileText className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.5]" />
             </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-black tracking-wider uppercase text-white leading-tight">
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-black tracking-wider uppercase text-white leading-tight">
                 {dav.isVenda ? "PEDIDO DE VENDA" : "ORÇAMENTO"}
               </h1>
-              <p className="text-xs text-white font-black leading-tight">
+              <p className="text-xs text-white font-black leading-tight mt-0.5">
                 DAV Nº: {dav.numero !== undefined && dav.numero !== null ? String(dav.numero).padStart(3, "0") : (dav.id ? dav.id.substring(0, 6) : "001")}
               </p>
             </div>
           </div>
 
           {/* Divisor */}
-          <div className="w-px h-8 bg-white/20 shrink-0 hidden sm:block"></div>
+          <div className="w-px h-10 bg-white/20 shrink-0 hidden sm:block"></div>
 
           {/* Emissão */}
-          <div className="flex items-center gap-2.5 shrink-0">
-            <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-[#C5A059] shrink-0 stroke-[2.5]" />
+          <div className="flex items-center gap-2 shrink-0">
+            <Calendar className="w-5 h-5 text-[#C5A059] shrink-0 stroke-[2.5]" />
             <div className="text-xs leading-tight">
               <p className="text-[10px] text-[#E5C378] font-black leading-none mb-1">Emissão</p>
               <p className="text-[11px] sm:text-xs text-white font-black whitespace-nowrap leading-none">
@@ -338,30 +338,16 @@ function ImprimirDAV() {
             </div>
           </div>
 
-          {/* Divisor */}
-          <div className="w-px h-8 bg-white/20 shrink-0 hidden sm:block"></div>
-
-          {/* Validade */}
-          <div className="flex items-center gap-2.5 shrink-0">
-            <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-[#C5A059] shrink-0 stroke-[2.5]" />
-            <div className="text-xs leading-tight">
-              <p className="text-[10px] text-[#E5C378] font-black leading-none mb-1">Validade</p>
-              <p className="text-[11px] sm:text-xs text-white font-black whitespace-nowrap leading-none">
-                {validadeStr}
-              </p>
-            </div>
-          </div>
-
           {/* Condições Comerciais */}
-          <div className="bg-black text-white rounded-lg px-3.5 py-2 sm:px-4 sm:py-2.5 text-xs flex flex-col justify-center shrink-0 ml-auto sm:ml-0 min-w-[210px]">
-            <p className="font-black text-[10px] sm:text-[11px] tracking-wider uppercase mb-1 leading-none text-white">
+          <div className="bg-black text-white rounded-lg px-3.5 py-2.5 text-xs flex flex-col justify-center shrink-0 w-full sm:w-[280px] print:w-[275px] box-border">
+            <p className="font-black text-[10px] sm:text-[11px] tracking-wider uppercase mb-1 leading-none text-[#E5C378]">
               CONDIÇÕES COMERCIAIS
             </p>
-            <p className="text-[10px] sm:text-[11px] text-white font-black leading-tight">
+            <p className="text-[10px] sm:text-[11px] text-white font-black leading-snug break-words whitespace-normal">
               Pagamento: {dav.condicao_pagamento || "Dinheiro / Pix"}
             </p>
             {dav.vendedor && (
-              <p className="text-[10px] sm:text-[11px] text-[#E5C378] font-black leading-tight mt-0.5">
+              <p className="text-[10px] sm:text-[11px] text-[#E5C378] font-black leading-tight mt-0.5 break-words whitespace-normal">
                 Vendedor: {dav.vendedor}
               </p>
             )}
@@ -375,15 +361,15 @@ function ImprimirDAV() {
 
               if (vencList.length > 1) {
                 return (
-                  <div className="text-xs text-white font-black leading-tight my-1">
-                    <span className="block mb-1 text-[11px] text-slate-300">Vencimentos:</span>
-                    <div className="bg-white text-slate-900 font-bold px-2.5 py-1.5 rounded-md border border-slate-300 shadow-2xs space-y-1">
+                  <div className="text-xs text-white font-black leading-tight my-1.5 w-full">
+                    <span className="block mb-1 text-[10px] text-slate-300">Vencimentos:</span>
+                    <div className="bg-white text-slate-900 font-bold px-2.5 py-1.5 rounded-md border border-slate-300 shadow-2xs space-y-1 w-full box-border">
                       {vencList.map((v: any, idx: number) => {
                         const d = typeof v === "object" && v !== null ? v.data : v;
                         const valParcela = calcularValorParcela(v, idx, vencList.length, totalDoc);
                         return (
-                          <div key={idx} className="flex items-center justify-between gap-2 text-[11px] sm:text-xs font-black">
-                            <span className="text-slate-700 font-bold whitespace-nowrap">
+                          <div key={idx} className="flex items-center justify-between gap-2 text-[11px] font-black">
+                            <span className="text-slate-800 font-black whitespace-nowrap">
                               {idx + 1}ª: {formatarDataBr(d)}
                             </span>
                             {valParcela > 0 && (
@@ -403,26 +389,34 @@ function ImprimirDAV() {
                 const d = typeof vencList[0] === "object" && vencList[0] !== null ? vencList[0].data : vencList[0];
                 const valParcela = calcularValorParcela(vencList[0], 0, 1, totalDoc);
                 return (
-                  <div className="text-xs sm:text-[12px] text-white font-black leading-tight flex items-center gap-2 my-1">
-                    <span className="text-slate-300 text-[11px]">Vencimento:</span>
-                    <span className="bg-white text-black font-black px-2.5 py-0.5 rounded text-xs sm:text-[12px] border border-slate-300 shadow-2xs whitespace-nowrap">
-                      {formatarDataBr(d)}
-                      {valParcela > 0 ? ` — R$ ${valParcela.toFixed(2).replace(".", ",")}` : ""}
-                    </span>
+                  <div className="text-xs text-white font-black leading-tight my-1.5 w-full">
+                    <span className="block mb-1 text-[10px] text-slate-300">Vencimento:</span>
+                    <div className="bg-white text-black font-black px-2.5 py-1 rounded-md text-[11px] border border-slate-300 shadow-2xs flex items-center justify-between gap-2 w-full box-border">
+                      <span className="whitespace-nowrap">{formatarDataBr(d)}</span>
+                      {valParcela > 0 && (
+                        <span className="whitespace-nowrap">
+                          R$ {valParcela.toFixed(2).replace(".", ",")}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 );
               }
 
               return (
-                <div className="text-xs sm:text-[12px] text-white font-black leading-tight flex items-center gap-2 my-1">
-                  <span className="text-slate-300 text-[11px]">Vencimento:</span>
-                  <span className="bg-white text-slate-700 font-black px-2.5 py-0.5 rounded text-xs sm:text-[12px] tracking-widest font-mono border border-slate-300 shadow-2xs">
+                <div className="text-xs text-white font-black leading-tight flex items-center gap-2 my-1.5">
+                  <span className="text-slate-300 text-[10px]">Vencimento:</span>
+                  <span className="bg-white text-slate-700 font-black px-2.5 py-0.5 rounded text-[11px] tracking-widest font-mono border border-slate-300 shadow-2xs">
                     ___ / ___ / ______
                   </span>
                 </div>
               );
             })()}
-            <p className="text-[10px] sm:text-[11px] text-white font-black leading-tight">
+            <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-[#E5C378] font-black leading-tight mt-0.5">
+              <Clock className="w-3.5 h-3.5 text-[#C5A059] shrink-0 stroke-[2.5]" />
+              <span>Validade: {validadeStr}</span>
+            </div>
+            <p className="text-[10px] sm:text-[11px] text-white font-black leading-tight mt-0.5">
               Frete: Retirada | Prazo: Imediato
             </p>
           </div>

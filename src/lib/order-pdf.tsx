@@ -619,19 +619,19 @@ export async function generateOrderPdfDoc(
   }
   const hasVencList = Array.isArray(orderVenc) && orderVenc.length > 0;
   const numVenc = hasVencList ? orderVenc.length : 1;
-  const extraHeight = numVenc > 1 ? (numVenc - 1) * 3.8 : 0;
+  const extraHeight = (numVenc > 1 ? (numVenc - 1) * 3.8 : 0) + 4.2;
 
   // 2. BLOCO ESCURO (TÍTULO)
   doc.setFillColor(colorDark[0], colorDark[1], colorDark[2]);
-  doc.roundedRect(margin, y, pageWidth - margin * 2, 23.5 + extraHeight, 2, 2, "F");
+  doc.roundedRect(margin, y, pageWidth - margin * 2, 24.5 + extraHeight, 2, 2, "F");
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
   doc.setTextColor(255, 255, 255);
-  doc.text(docType, margin + 6, y + 9.5);
+  doc.text(docType, margin + 6, y + 10.5);
   doc.setFontSize(9.5);
   doc.setFont("helvetica", "bold");
-  doc.text(`DAV Nº: ${num}`, margin + 6, y + 15.5);
+  doc.text(`DAV Nº: ${num}`, margin + 6, y + 16.5);
 
   const dataEmissao = new Date(order.created_at).toLocaleDateString("pt-BR");
   const horaEmissao = new Date(order.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -640,13 +640,13 @@ export async function generateOrderPdfDoc(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(6.5);
   doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
-  doc.text("Emissão", margin + 54, y + 8);
-  doc.setFontSize(7.5);
+  doc.text("Emissão", margin + 64, y + 9);
+  doc.setFontSize(8);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(255, 255, 255);
-  doc.text(`${dataEmissao} às ${horaEmissao}`, margin + 54, y + 13.5);
+  doc.text(`${dataEmissao} às ${horaEmissao}`, margin + 64, y + 14.5);
 
-  // Validade – padrão: 30 dias a partir da emissão
+  // Validade – padrão: 30 dias a partir da emissão (exibida embaixo das parcelas no mesmo modal)
   let validadeStr: string;
   if ((order as any).validade) {
     validadeStr = new Date((order as any).validade).toLocaleDateString("pt-BR");
@@ -655,39 +655,33 @@ export async function generateOrderPdfDoc(
     base.setDate(base.getDate() + 30);
     validadeStr = base.toLocaleDateString("pt-BR");
   }
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.5);
-  doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
-  doc.text("Validade", margin + 91, y + 8);
-  doc.setFontSize(7.5);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(255, 255, 255);
-  doc.text(validadeStr, margin + 91, y + 13.5);
 
-  // Box Preto de Condições Comerciais com campo de Vencimento e Valor da Parcela
-  const boxW = 77;
+  // Box Preto de Condições Comerciais com campo de Vencimento, Valor da Parcela e Validade
+  const boxW = 82;
   const boxX = pageWidth - margin - boxW;
   doc.setFillColor(0, 0, 0);
-  doc.roundedRect(boxX, y + 1.2, boxW - 1, 21 + extraHeight, 1, 1, "F");
+  doc.roundedRect(boxX, y + 1.2, boxW - 1, 22 + extraHeight, 1, 1, "F");
   
   doc.setFont("helvetica", "bold");
   doc.setFontSize(6.5);
+  doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
+  doc.text("CONDIÇÕES COMERCIAIS", boxX + 3, y + 5.2);
   doc.setTextColor(255, 255, 255);
-  doc.text("CONDIÇÕES COMERCIAIS", boxX + 3, y + 5.5);
-  doc.text(`Pagamento: ${order.condicao_pagamento || "Não informado"}`, boxX + 3, y + 9.5);
+  const pagTrunc = doc.splitTextToSize(`Pagamento: ${order.condicao_pagamento || "Não informado"}`, boxW - 6)[0];
+  doc.text(pagTrunc, boxX + 3, y + 9.2);
 
-  let freteY = y + 18.2;
+  let validadeY = y + 18.0;
 
   if (hasVencList && numVenc > 1) {
     // Múltiplos vencimentos organizados 1 EM BAIXO DO OUTRO com valor de cada parcela
-    doc.text("Vencimentos:", boxX + 3, y + 13.8);
+    doc.text("Vencimentos:", boxX + 3, y + 13.5);
     const vBoxX = boxX + 20;
-    const vBoxW = 54;
+    const vBoxW = 58;
     const vBoxH = numVenc * 3.6 + 0.8;
     doc.setFillColor(255, 255, 255);
-    doc.roundedRect(vBoxX, y + 11.0, vBoxW, vBoxH, 0.6, 0.6, "F");
+    doc.roundedRect(vBoxX, y + 10.7, vBoxW, vBoxH, 0.6, 0.6, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.4);
+    doc.setFontSize(6.5);
     doc.setTextColor(10, 10, 10);
 
     orderVenc.forEach((v: any, idx: number) => {
@@ -695,45 +689,58 @@ export async function generateOrderPdfDoc(
       const clean = (d || "").split("T")[0].split("-");
       const dtBr = clean.length === 3 ? `${clean[2]}/${clean[1]}/${clean[0]}` : d;
       const valParcela = calcularValorParcela(v, idx, numVenc, orderTotalNum);
-      const valStr = valParcela > 0 ? ` - R$ ${valParcela.toFixed(2).replace(".", ",")}` : "";
-      const lineY = y + 13.8 + (idx * 3.6);
-      doc.text(`${idx + 1}ª: ${dtBr}${valStr}`, vBoxX + vBoxW / 2, lineY, { align: "center" });
+      const valStr = valParcela > 0 ? `R$ ${valParcela.toFixed(2).replace(".", ",")}` : "";
+      const lineY = y + 13.5 + (idx * 3.6);
+      doc.text(`${idx + 1}ª: ${dtBr}`, vBoxX + 2, lineY);
+      if (valStr) {
+        doc.text(valStr, vBoxX + vBoxW - 2, lineY, { align: "right" });
+      }
     });
 
-    freteY = y + 11.0 + vBoxH + 3.4;
+    validadeY = y + 10.7 + vBoxH + 3.3;
   } else {
     // 1 Vencimento ou campo para preenchimento a mão
-    doc.text("Vencimento:", boxX + 3, y + 13.8);
+    doc.text("Vencimento:", boxX + 3, y + 13.5);
     const vBoxX = boxX + 20;
-    const vBoxW = 54;
+    const vBoxW = 58;
     doc.setFillColor(255, 255, 255);
-    doc.roundedRect(vBoxX, y + 11.2, vBoxW, 3.8, 0.5, 0.5, "F");
+    doc.roundedRect(vBoxX, y + 10.9, vBoxW, 3.8, 0.5, 0.5, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.4);
+    doc.setFontSize(6.5);
     doc.setTextColor(20, 20, 20);
 
-    let vencTexto = "___ / ___ / ______";
     if (hasVencList && numVenc === 1) {
       const d = typeof orderVenc[0] === "object" && orderVenc[0] !== null ? orderVenc[0].data : orderVenc[0];
       const clean = (d || "").split("T")[0].split("-");
       const dtBr = clean.length === 3 ? `${clean[2]}/${clean[1]}/${clean[0]}` : d;
       const valParcela = calcularValorParcela(orderVenc[0], 0, 1, orderTotalNum);
-      const valStr = valParcela > 0 ? ` - R$ ${valParcela.toFixed(2).replace(".", ",")}` : "";
-      vencTexto = `${dtBr}${valStr}`;
+      const valStr = valParcela > 0 ? `R$ ${valParcela.toFixed(2).replace(".", ",")}` : "";
+      doc.text(dtBr, vBoxX + 2, y + 13.6);
+      if (valStr) {
+        doc.text(valStr, vBoxX + vBoxW - 2, y + 13.6, { align: "right" });
+      }
+    } else {
+      doc.text("___ / ___ / ______", vBoxX + vBoxW / 2, y + 13.6, { align: "center" });
     }
-    doc.text(vencTexto, vBoxX + vBoxW / 2, y + 13.9, { align: "center" });
-    freteY = y + 18.2;
+    validadeY = y + 18.0;
   }
 
+  // Validade embaixo das parcelas no mesmo modal
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.5);
+  doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
+  doc.text(`Validade: ${validadeStr}`, boxX + 3, validadeY);
+
   // Frete e Prazo
+  const freteY = validadeY + 3.6;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(6.5);
   doc.setTextColor(255, 255, 255);
   const freteInfo = order.frete_tipo || (order as any).frete || "Retirada";
   const prazoInfo = order.prazo_entrega || (order as any).prazo || "Imediato";
-  doc.text(`Frete: ${freteInfo} | Prazo: ${prazoInfo}`, boxX + 3.5, freteY);
+  doc.text(`Frete: ${freteInfo} | Prazo: ${prazoInfo}`, boxX + 3, freteY);
 
-  y += (29 + extraHeight);
+  y += (29.5 + extraHeight);
 
   // 3. DADOS DO CLIENTE
   doc.setFillColor(colorGray[0], colorGray[1], colorGray[2]);
