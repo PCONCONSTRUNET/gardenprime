@@ -388,12 +388,19 @@ function PublicCatalogo() {
     }
 
     const total = cart.reduce((acc, item) => acc + item.qtd * Number(item.produto.valor), 0);
-    const isBoleto304560 =
-      empresaData.pagamento === "Boleto a Prazo (30, 45, 60 dias)" ||
-      (empresaData.pagamento.startsWith("Boleto") && empresaData.condicaoBoleto === "30, 45, 60 dias");
     const isAnyBoleto = empresaData.pagamento.startsWith("Boleto");
-    const prazoBoleto = isBoleto304560 ? "30, 45, 60 dias" : getPrazoBoleto(total);
-    const descBoleto = isBoleto304560 ? "Boleto a Prazo (30, 45, 60 dias)" : getDescricaoBoleto(total);
+    const prazoSelecionado =
+      empresaData.pagamento === "Boleto a Prazo (28 dias)" || empresaData.condicaoBoleto === "28 dias"
+        ? "28 dias"
+        : empresaData.pagamento === "Boleto a Prazo (35 dias)" || empresaData.condicaoBoleto === "35 dias"
+          ? "35 dias"
+          : empresaData.pagamento === "Boleto a Prazo (28, 35, 42 dias)" || empresaData.condicaoBoleto === "28, 35, 42 dias"
+            ? "28, 35, 42 dias"
+            : empresaData.pagamento === "Boleto a Prazo (30, 45, 60 dias)" || empresaData.condicaoBoleto === "30, 45, 60 dias"
+              ? "30, 45, 60 dias"
+              : getPrazoBoleto(total);
+    const prazoBoleto = prazoSelecionado;
+    const descBoleto = `Boleto a Prazo (${prazoBoleto})`;
 
     let mensagem = `Olá! Gostaria de fazer o pedido dos seguintes itens do catálogo:\n\n`;
 
@@ -1055,10 +1062,24 @@ function PublicCatalogo() {
                   );
                   const prazoPadrao = getPrazoBoleto(totalModal);
                   const isBoletoSelected = empresaData.pagamento.startsWith("Boleto");
-                  const is304560 =
-                    empresaData.pagamento === "Boleto a Prazo (30, 45, 60 dias)" ||
-                    empresaData.condicaoBoleto === "30, 45, 60 dias";
-                  const prazoExibido = is304560 ? "30, 45, 60 dias" : prazoPadrao;
+                  const prazoExibido =
+                    empresaData.pagamento === "Boleto a Prazo (28 dias)" || empresaData.condicaoBoleto === "28 dias"
+                      ? "28 dias"
+                      : empresaData.pagamento === "Boleto a Prazo (35 dias)" || empresaData.condicaoBoleto === "35 dias"
+                        ? "35 dias"
+                        : empresaData.pagamento === "Boleto a Prazo (28, 35, 42 dias)" || empresaData.condicaoBoleto === "28, 35, 42 dias"
+                          ? "28, 35, 42 dias"
+                          : empresaData.pagamento === "Boleto a Prazo (30, 45, 60 dias)" || empresaData.condicaoBoleto === "30, 45, 60 dias"
+                            ? "30, 45, 60 dias"
+                            : prazoPadrao;
+
+                  const opcoesPrazo = [
+                    { label: "28 dias (Solo)", value: "28 dias", pag: "Boleto a Prazo (28 dias)", sub: "Parcela única" },
+                    { label: "35 dias (Solo)", value: "35 dias", pag: "Boleto a Prazo (35 dias)", sub: "Parcela única" },
+                    { label: "28 - 35 - 42 dias", value: "28, 35, 42 dias", pag: "Boleto a Prazo (28, 35, 42 dias)", sub: "3 parcelas" },
+                    { label: "30 - 45 - 60 dias", value: "30, 45, 60 dias", pag: "Boleto a Prazo (30, 45, 60 dias)", sub: "3 parcelas" },
+                  ];
+
                   return (
                     <>
                       <label className="text-sm font-medium">Forma de Pagamento</label>
@@ -1067,19 +1088,22 @@ function PublicCatalogo() {
                         value={empresaData.pagamento}
                         onChange={(e) => {
                           const val = e.target.value;
+                          const matched = opcoesPrazo.find((o) => o.pag === val);
                           setEmpresaData({
                             ...empresaData,
                             pagamento: val,
-                            condicaoBoleto:
-                              val === "Boleto a Prazo (30, 45, 60 dias)"
-                                ? "30, 45, 60 dias"
-                                : val === "Boleto a Prazo"
-                                  ? prazoPadrao
-                                  : empresaData.condicaoBoleto,
+                            condicaoBoleto: matched
+                              ? matched.value
+                              : val === "Boleto a Prazo"
+                                ? prazoPadrao
+                                : empresaData.condicaoBoleto,
                           });
                         }}
                       >
-                        <option value="Boleto a Prazo">Boleto a Prazo ({prazoPadrao})</option>
+                        <option value="Boleto a Prazo">Boleto a Prazo ({prazoExibido})</option>
+                        <option value="Boleto a Prazo (28 dias)">Boleto a Prazo (28 dias Solo)</option>
+                        <option value="Boleto a Prazo (35 dias)">Boleto a Prazo (35 dias Solo)</option>
+                        <option value="Boleto a Prazo (28, 35, 42 dias)">Boleto a Prazo (28 - 35 - 42 dias)</option>
                         <option value="Boleto a Prazo (30, 45, 60 dias)">Boleto a Prazo (30 - 45 - 60 dias)</option>
                         <option value="Dinheiro / Pix">Dinheiro / Pix (via WhatsApp)</option>
                         <option value="Cartão de Crédito">💳 Cartão de Crédito (Pagamento Online)</option>
@@ -1094,53 +1118,30 @@ function PublicCatalogo() {
                             </span>
                           </div>
                           <div className="grid grid-cols-2 gap-2 pt-0.5">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setEmpresaData({
-                                  ...empresaData,
-                                  pagamento: "Boleto a Prazo",
-                                  condicaoBoleto: prazoPadrao,
-                                })
-                              }
-                              className={`px-2.5 py-2 rounded-lg text-xs font-bold border transition-all text-left ${
-                                !is304560
-                                  ? "bg-emerald-700 text-white border-emerald-700 shadow-sm"
-                                  : "bg-white text-slate-700 border-emerald-200 hover:bg-emerald-100/50"
-                              }`}
-                            >
-                              <div className="text-[10px] opacity-80 font-semibold">Opção 1</div>
-                              <div>{prazoPadrao}</div>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setEmpresaData({
-                                  ...empresaData,
-                                  pagamento: "Boleto a Prazo (30, 45, 60 dias)",
-                                  condicaoBoleto: "30, 45, 60 dias",
-                                })
-                              }
-                              className={`px-2.5 py-2 rounded-lg text-xs font-bold border transition-all text-left ${
-                                is304560
-                                  ? "bg-emerald-700 text-white border-emerald-700 shadow-sm"
-                                  : "bg-white text-slate-700 border-emerald-200 hover:bg-emerald-100/50"
-                              }`}
-                            >
-                              <div className="text-[10px] opacity-80 font-semibold">Opção 2</div>
-                              <div>30 - 45 - 60 dias</div>
-                            </button>
-                          </div>
-                          <div className="text-[11px] text-slate-600 space-y-0.5 pt-1 border-t border-emerald-200/60">
-                            <p className={!is304560 && totalModal <= 1000 ? "font-bold text-emerald-800" : ""}>
-                              • Pedidos até R$ 1.000: <strong>28 dias</strong>
-                            </p>
-                            <p className={!is304560 && totalModal > 1000 ? "font-bold text-emerald-800" : ""}>
-                              • Pedidos acima de R$ 1.000: <strong>28, 35, 42 dias</strong>
-                            </p>
-                            <p className={is304560 ? "font-bold text-emerald-800" : ""}>
-                              • Opção especial: <strong>Boleto 30 - 45 - 60 dias</strong>
-                            </p>
+                            {opcoesPrazo.map((op) => {
+                              const active = prazoExibido === op.value;
+                              return (
+                                <button
+                                  key={op.value}
+                                  type="button"
+                                  onClick={() =>
+                                    setEmpresaData({
+                                      ...empresaData,
+                                      pagamento: op.pag,
+                                      condicaoBoleto: op.value,
+                                    })
+                                  }
+                                  className={`px-2.5 py-2 rounded-lg text-xs font-bold border transition-all text-left ${
+                                    active
+                                      ? "bg-emerald-700 text-white border-emerald-700 shadow-sm"
+                                      : "bg-white text-slate-700 border-emerald-200 hover:bg-emerald-100/50"
+                                  }`}
+                                >
+                                  <div className="text-[10px] opacity-80 font-semibold">{op.sub}</div>
+                                  <div>{op.label}</div>
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
                       )}

@@ -523,8 +523,8 @@ function PDV() {
             metodo_pagamento: metodoPagamento,
             condicao_pagamento:
               metodoPagamento === "Boleto"
-                ? condicaoPagamento.includes("30, 45, 60") || condicaoPagamento.includes("30 - 45 - 60")
-                  ? "Boleto a Prazo (30, 45, 60 dias)"
+                ? condicaoPagamento.startsWith("Boleto")
+                  ? condicaoPagamento
                   : getDescricaoBoleto(totalPagamento)
                 : condicaoPagamento,
             desconto_valor: descontoValor,
@@ -853,7 +853,7 @@ function PDV() {
                 <Button
                   onClick={() => {
                     setMetodoPagamento("Boleto");
-                    if (!condicaoPagamento.includes("30, 45, 60")) {
+                    if (!condicaoPagamento.startsWith("Boleto")) {
                       setCondicaoPagamento(getDescricaoBoleto(totalPagamento));
                     }
                   }}
@@ -866,13 +866,21 @@ function PDV() {
                     className="h-5 w-5 object-contain"
                   />
                   <span className="text-xs">
-                    Boleto ({condicaoPagamento.includes("30, 45, 60") ? "30, 45, 60 dias" : getPrazoBoleto(totalPagamento)})
+                    {condicaoPagamento.startsWith("Boleto")
+                      ? condicaoPagamento.replace("Boleto a Prazo ", "Boleto ")
+                      : `Boleto (${getPrazoBoleto(totalPagamento)})`}
                   </span>
                 </Button>
               </div>
               {metodoPagamento === "Boleto" && (() => {
-                const is304560 = condicaoPagamento.includes("30, 45, 60");
-                const prazoExibido = is304560 ? "30, 45, 60 dias" : getPrazoBoleto(totalPagamento);
+                const opcoesPrazo = [
+                  { label: "28 dias (Solo)", value: "28 dias", pag: "Boleto a Prazo (28 dias)", sub: "Parcela única" },
+                  { label: "35 dias (Solo)", value: "35 dias", pag: "Boleto a Prazo (35 dias)", sub: "Parcela única" },
+                  { label: "28 - 35 - 42 dias", value: "28, 35, 42 dias", pag: "Boleto a Prazo (28, 35, 42 dias)", sub: "3 parcelas" },
+                  { label: "30 - 45 - 60 dias", value: "30, 45, 60 dias", pag: "Boleto a Prazo (30, 45, 60 dias)", sub: "3 parcelas" },
+                ];
+                const matched = opcoesPrazo.find((o) => o.pag === condicaoPagamento);
+                const prazoExibido = matched ? matched.value : getPrazoBoleto(totalPagamento);
                 return (
                   <div className="mt-3 bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-2">
                     <div className="flex items-center justify-between text-xs">
@@ -882,41 +890,24 @@ function PDV() {
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setCondicaoPagamento(getDescricaoBoleto(totalPagamento))}
-                        className={`px-2.5 py-2 rounded-lg text-xs font-bold border transition-all text-left ${
-                          !is304560
-                            ? "bg-emerald-700 text-white border-emerald-700 shadow-sm"
-                            : "bg-white text-slate-700 border-slate-200 hover:bg-emerald-50"
-                        }`}
-                      >
-                        <div className="text-[10px] opacity-80 font-semibold">Opção 1</div>
-                        <div>{getPrazoBoleto(totalPagamento)}</div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCondicaoPagamento("Boleto a Prazo (30, 45, 60 dias)")}
-                        className={`px-2.5 py-2 rounded-lg text-xs font-bold border transition-all text-left ${
-                          is304560
-                            ? "bg-emerald-700 text-white border-emerald-700 shadow-sm"
-                            : "bg-white text-slate-700 border-slate-200 hover:bg-emerald-50"
-                        }`}
-                      >
-                        <div className="text-[10px] opacity-80 font-semibold">Opção 2</div>
-                        <div>30 - 45 - 60 dias</div>
-                      </button>
-                    </div>
-                    <div className="text-[11px] text-muted-foreground space-y-0.5 pt-1 border-t border-slate-200/60">
-                      <p className={!is304560 && totalPagamento <= 1000 ? "font-bold text-emerald-700" : ""}>
-                        • Até R$ 1.000,00: <strong>28 dias</strong>
-                      </p>
-                      <p className={!is304560 && totalPagamento > 1000 ? "font-bold text-emerald-700" : ""}>
-                        • Acima de R$ 1.000,00: <strong>28, 35, 42 dias</strong>
-                      </p>
-                      <p className={is304560 ? "font-bold text-emerald-700" : ""}>
-                        • Opção especial: <strong>Boleto 30 - 45 - 60 dias</strong>
-                      </p>
+                      {opcoesPrazo.map((op) => {
+                        const active = prazoExibido === op.value;
+                        return (
+                          <button
+                            key={op.value}
+                            type="button"
+                            onClick={() => setCondicaoPagamento(op.pag)}
+                            className={`px-2.5 py-2 rounded-lg text-xs font-bold border transition-all text-left ${
+                              active
+                                ? "bg-emerald-700 text-white border-emerald-700 shadow-sm"
+                                : "bg-white text-slate-700 border-slate-200 hover:bg-emerald-50"
+                            }`}
+                          >
+                            <div className="text-[10px] opacity-80 font-semibold">{op.sub}</div>
+                            <div>{op.label}</div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 );

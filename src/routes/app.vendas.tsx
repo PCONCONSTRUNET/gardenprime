@@ -1437,7 +1437,8 @@ function Vendas() {
                       <div className="flex flex-wrap gap-1">
                         {[
                           "À Vista",
-                          "Boleto a Prazo",
+                          "Boleto (28 dias)",
+                          "Boleto (35 dias)",
                           "Boleto (28, 35, 42 dias)",
                           "Boleto (30, 45, 60 dias)",
                           "Boleto 30 dias",

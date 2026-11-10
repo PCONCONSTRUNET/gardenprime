@@ -402,16 +402,29 @@ function ParceiroPDV() {
                     pagamento:
                       pagParam.includes("30") && pagParam.includes("45") && pagParam.includes("60")
                         ? "Boleto a Prazo (30, 45, 60 dias)"
-                        : pagParam.toLowerCase().includes("boleto")
-                          ? "Boleto a Prazo"
-                          : pagParam,
+                        : pagParam.includes("28") && pagParam.includes("35") && pagParam.includes("42")
+                          ? "Boleto a Prazo (28, 35, 42 dias)"
+                          : pagParam.includes("35 dias") || prazoParam === "35 dias"
+                            ? "Boleto a Prazo (35 dias)"
+                            : pagParam.includes("28 dias") || prazoParam === "28 dias"
+                              ? "Boleto a Prazo (28 dias)"
+                              : pagParam.toLowerCase().includes("boleto")
+                                ? "Boleto a Prazo"
+                                : pagParam,
                     condicaoBoleto:
                       (prazoParam && prazoParam.includes("30") && prazoParam.includes("45")) ||
                       (pagParam.includes("30") && pagParam.includes("45"))
                         ? "30, 45, 60 dias"
-                        : pagParam.toLowerCase().includes("boleto")
-                          ? (prazoParam || "28, 35, 42 dias")
-                          : prev.condicaoBoleto,
+                        : (prazoParam && prazoParam.includes("28") && prazoParam.includes("35")) ||
+                            (pagParam.includes("28") && pagParam.includes("35"))
+                          ? "28, 35, 42 dias"
+                          : prazoParam === "35 dias" || pagParam.includes("35 dias")
+                            ? "35 dias"
+                            : prazoParam === "28 dias" || pagParam.includes("28 dias")
+                              ? "28 dias"
+                              : pagParam.toLowerCase().includes("boleto")
+                                ? (prazoParam || "28, 35, 42 dias")
+                                : prev.condicaoBoleto,
                   }
                 : {}),
             }));
@@ -725,12 +738,13 @@ function ParceiroPDV() {
           desconto_valor: descontoAplicado,
           desconto_percentual: descontoPercentual,
           condicao_pagamento:
-            clientForm.pagamento === "Boleto a Prazo (30, 45, 60 dias)" ||
-            (clientForm.pagamento.startsWith("Boleto") && clientForm.condicaoBoleto === "30, 45, 60 dias")
-              ? "Boleto a Prazo (30, 45, 60 dias)"
-              : clientForm.pagamento === "Boleto a Prazo"
+            clientForm.pagamento.startsWith("Boleto")
+              ? clientForm.pagamento === "Boleto a Prazo" && !clientForm.condicaoBoleto
                 ? getDescricaoBoleto(subtotal)
-                : clientForm.pagamento,
+                : clientForm.pagamento.includes("(")
+                  ? clientForm.pagamento
+                  : `Boleto a Prazo (${clientForm.condicaoBoleto || getPrazoBoleto(subtotal)})`
+              : clientForm.pagamento,
         }])
         .select()
         .single();
@@ -850,12 +864,13 @@ function ParceiroPDV() {
             desconto_valor: descontoAplicado,
             desconto_percentual: descontoPercentual,
             condicao_pagamento:
-              clientForm.pagamento === "Boleto a Prazo (30, 45, 60 dias)" ||
-              (clientForm.pagamento.startsWith("Boleto") && clientForm.condicaoBoleto === "30, 45, 60 dias")
-                ? "Boleto a Prazo (30, 45, 60 dias)"
-                : clientForm.pagamento === "Boleto a Prazo"
+              clientForm.pagamento.startsWith("Boleto")
+                ? clientForm.pagamento === "Boleto a Prazo" && !clientForm.condicaoBoleto
                   ? getDescricaoBoleto(subtotal)
-                  : clientForm.pagamento,
+                  : clientForm.pagamento.includes("(")
+                    ? clientForm.pagamento
+                    : `Boleto a Prazo (${clientForm.condicaoBoleto || getPrazoBoleto(subtotal)})`
+                : clientForm.pagamento,
           },
         ])
         .select()
@@ -944,12 +959,13 @@ function ParceiroPDV() {
           endereco: `${clientForm.endereco || ""}${clientForm.numero ? `, ${clientForm.numero}` : ""}`,
         },
         condicao_pagamento:
-          clientForm.pagamento === "Boleto a Prazo (30, 45, 60 dias)" ||
-          (clientForm.pagamento.startsWith("Boleto") && clientForm.condicaoBoleto === "30, 45, 60 dias")
-            ? "Boleto a Prazo (30, 45, 60 dias)"
-            : clientForm.pagamento === "Boleto a Prazo"
+          clientForm.pagamento.startsWith("Boleto")
+            ? clientForm.pagamento === "Boleto a Prazo" && !clientForm.condicaoBoleto
               ? getDescricaoBoleto(subtotal)
-              : clientForm.pagamento,
+              : clientForm.pagamento.includes("(")
+                ? clientForm.pagamento
+                : `Boleto a Prazo (${clientForm.condicaoBoleto || getPrazoBoleto(subtotal)})`
+            : clientForm.pagamento,
         vendedor_nome: vendedorInfo?.nome,
       };
 
@@ -1419,12 +1435,13 @@ function ParceiroPDV() {
                           endereco: `${clientForm.endereco || ""}${clientForm.numero ? `, ${clientForm.numero}` : ""}`,
                         },
                         condicao_pagamento:
-                          clientForm.pagamento === "Boleto a Prazo (30, 45, 60 dias)" ||
-                          (clientForm.pagamento.startsWith("Boleto") && clientForm.condicaoBoleto === "30, 45, 60 dias")
-                            ? "Boleto a Prazo (30, 45, 60 dias)"
-                            : clientForm.pagamento === "Boleto a Prazo"
+                          clientForm.pagamento.startsWith("Boleto")
+                            ? clientForm.pagamento === "Boleto a Prazo" && !clientForm.condicaoBoleto
                               ? getDescricaoBoleto(subtotal)
-                              : clientForm.pagamento,
+                              : clientForm.pagamento.includes("(")
+                                ? clientForm.pagamento
+                                : `Boleto a Prazo (${clientForm.condicaoBoleto || getPrazoBoleto(subtotal)})`
+                            : clientForm.pagamento,
                         vendedor_nome: vendedorInfo?.nome,
                       };
                       const itemsList = cart.map((i) => {
@@ -1640,15 +1657,18 @@ function ParceiroPDV() {
                     value={clientForm.pagamento}
                     onChange={(e) => {
                       const novoPagamento = e.target.value;
+                      const mapPrazo: Record<string, string> = {
+                        "Boleto a Prazo (28 dias)": "28 dias",
+                        "Boleto a Prazo (35 dias)": "35 dias",
+                        "Boleto a Prazo (28, 35, 42 dias)": "28, 35, 42 dias",
+                        "Boleto a Prazo (30, 45, 60 dias)": "30, 45, 60 dias",
+                      };
                       setClientForm({
                         ...clientForm,
                         pagamento: novoPagamento,
                         condicaoBoleto:
-                          novoPagamento === "Boleto a Prazo (30, 45, 60 dias)"
-                            ? "30, 45, 60 dias"
-                            : novoPagamento === "Boleto a Prazo"
-                              ? getPrazoBoleto(subtotal)
-                              : clientForm.condicaoBoleto,
+                          mapPrazo[novoPagamento] ||
+                          (novoPagamento === "Boleto a Prazo" ? getPrazoBoleto(subtotal) : clientForm.condicaoBoleto),
                       });
                     }}
                   >
@@ -1656,17 +1676,29 @@ function ParceiroPDV() {
                     <option>Cartão de Crédito</option>
                     <option>Cartão de Débito</option>
                     <option value="Boleto a Prazo">
-                      Boleto a Prazo ({getPrazoBoleto(subtotal)})
+                      Boleto a Prazo ({clientForm.condicaoBoleto || getPrazoBoleto(subtotal)})
+                    </option>
+                    <option value="Boleto a Prazo (28 dias)">
+                      Boleto a Prazo (28 dias Solo)
+                    </option>
+                    <option value="Boleto a Prazo (35 dias)">
+                      Boleto a Prazo (35 dias Solo)
+                    </option>
+                    <option value="Boleto a Prazo (28, 35, 42 dias)">
+                      Boleto a Prazo (28 - 35 - 42 dias)
                     </option>
                     <option value="Boleto a Prazo (30, 45, 60 dias)">
                       Boleto a Prazo (30 - 45 - 60 dias)
                     </option>
                   </select>
                   {clientForm.pagamento.startsWith("Boleto") && (() => {
-                    const is304560 =
-                      clientForm.pagamento === "Boleto a Prazo (30, 45, 60 dias)" ||
-                      clientForm.condicaoBoleto === "30, 45, 60 dias";
-                    const prazoExibido = is304560 ? "30, 45, 60 dias" : getPrazoBoleto(subtotal);
+                    const opcoesPrazo = [
+                      { label: "28 dias (Solo)", value: "28 dias", pag: "Boleto a Prazo (28 dias)", sub: "Parcela única" },
+                      { label: "35 dias (Solo)", value: "35 dias", pag: "Boleto a Prazo (35 dias)", sub: "Parcela única" },
+                      { label: "28 - 35 - 42 dias", value: "28, 35, 42 dias", pag: "Boleto a Prazo (28, 35, 42 dias)", sub: "3 parcelas" },
+                      { label: "30 - 45 - 60 dias", value: "30, 45, 60 dias", pag: "Boleto a Prazo (30, 45, 60 dias)", sub: "3 parcelas" },
+                    ];
+                    const prazoExibido = clientForm.condicaoBoleto || getPrazoBoleto(subtotal);
                     return (
                       <div className="space-y-2 mt-2 bg-slate-50 p-3 rounded-2xl border border-slate-200">
                         <div className="flex items-center justify-between text-xs">
@@ -1676,53 +1708,30 @@ function ParceiroPDV() {
                           </span>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setClientForm({
-                                ...clientForm,
-                                pagamento: "Boleto a Prazo",
-                                condicaoBoleto: getPrazoBoleto(subtotal),
-                              })
-                            }
-                            className={`px-2.5 py-2 rounded-lg text-xs font-bold border transition-all text-left ${
-                              !is304560
-                                ? "bg-emerald-700 text-white border-emerald-700 shadow-sm"
-                                : "bg-white text-slate-700 border-slate-200 hover:bg-emerald-50"
-                            }`}
-                          >
-                            <div className="text-[10px] opacity-80 font-semibold">Opção 1</div>
-                            <div>{getPrazoBoleto(subtotal)}</div>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setClientForm({
-                                ...clientForm,
-                                pagamento: "Boleto a Prazo (30, 45, 60 dias)",
-                                condicaoBoleto: "30, 45, 60 dias",
-                              })
-                            }
-                            className={`px-2.5 py-2 rounded-lg text-xs font-bold border transition-all text-left ${
-                              is304560
-                                ? "bg-emerald-700 text-white border-emerald-700 shadow-sm"
-                                : "bg-white text-slate-700 border-slate-200 hover:bg-emerald-50"
-                            }`}
-                          >
-                            <div className="text-[10px] opacity-80 font-semibold">Opção 2</div>
-                            <div>30 - 45 - 60 dias</div>
-                          </button>
-                        </div>
-                        <div className="text-[11px] text-slate-500 space-y-0.5 pt-1 border-t border-slate-200/60">
-                          <p className={!is304560 && subtotal <= 1000 ? "font-bold text-emerald-700" : ""}>
-                            • Até R$ 1.000,00: <strong>28 dias</strong>
-                          </p>
-                          <p className={!is304560 && subtotal > 1000 ? "font-bold text-emerald-700" : ""}>
-                            • Acima de R$ 1.000,00: <strong>28, 35, 42 dias</strong>
-                          </p>
-                          <p className={is304560 ? "font-bold text-emerald-700" : ""}>
-                            • Opção especial: <strong>Boleto 30 - 45 - 60 dias</strong>
-                          </p>
+                          {opcoesPrazo.map((op) => {
+                            const active = prazoExibido === op.value;
+                            return (
+                              <button
+                                key={op.value}
+                                type="button"
+                                onClick={() =>
+                                  setClientForm({
+                                    ...clientForm,
+                                    pagamento: op.pag,
+                                    condicaoBoleto: op.value,
+                                  })
+                                }
+                                className={`px-2.5 py-2 rounded-lg text-xs font-bold border transition-all text-left ${
+                                  active
+                                    ? "bg-emerald-700 text-white border-emerald-700 shadow-sm"
+                                    : "bg-white text-slate-700 border-slate-200 hover:bg-emerald-50"
+                                }`}
+                              >
+                                <div className="text-[10px] opacity-80 font-semibold">{op.sub}</div>
+                                <div>{op.label}</div>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     );
