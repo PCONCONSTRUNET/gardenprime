@@ -288,7 +288,7 @@ function NovoDAV() {
     const fetchProdutos = async () => {
       const { data } = await supabase
         .from("produtos")
-        .select("id, nome, codigo, categoria, valor, estoque, status, descricao, descricao_complementar")
+        .select("id, nome, codigo, categoria, valor, estoque, status, descricao, descricao_complementar, imagem")
         .eq("status", "Ativo")
         .order("nome");
       if (data) setProdutos(data);

@@ -212,7 +212,7 @@ function VendasParceiro() {
     if (produtos.length > 0) return;
     const { data } = await supabase
       .from("produtos")
-      .select("id, nome, codigo, valor, estoque")
+      .select("id, nome, codigo, valor, estoque, imagem")
       .eq("status", "Ativo")
       .order("nome");
     if (data) setProdutos(data);

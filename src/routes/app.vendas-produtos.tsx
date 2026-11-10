@@ -42,7 +42,7 @@ function VendasProdutos() {
     try {
       const { data: prods, error: pError } = await supabase
         .from("produtos")
-        .select("id, nome, codigo, categoria, estoque, valor, status, created_at, emoji, quantidade_vendas")
+        .select("id, nome, codigo, categoria, estoque, valor, status, created_at, emoji, quantidade_vendas, imagem")
         .order("created_at", { ascending: false });
       if (pError) throw pError;
 
@@ -272,6 +272,8 @@ function VendasProdutos() {
                             <img
                               src={p.imagem}
                               alt={p.nome}
+                              loading="lazy"
+                              decoding="async"
                               className="w-full h-full object-cover"
                             />
                           ) : (

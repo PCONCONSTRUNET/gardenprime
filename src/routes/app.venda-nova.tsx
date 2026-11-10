@@ -88,7 +88,7 @@ function NovaVenda() {
       const { data: c } = await supabase.from("clientes").select("*").order("nome");
       const { data: p } = await supabase
         .from("produtos")
-        .select("id, nome, codigo, categoria, valor, estoque, status")
+        .select("id, nome, codigo, categoria, valor, estoque, status, imagem")
         .eq("status", "Ativo")
         .order("nome");
       const { data: v } = await supabase

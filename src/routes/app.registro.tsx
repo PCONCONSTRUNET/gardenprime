@@ -85,7 +85,7 @@ function RegistroRapido() {
   useEffect(() => {
     supabase
       .from("produtos")
-      .select("id, nome, codigo, categoria, valor, estoque, status")
+      .select("id, nome, codigo, categoria, valor, estoque, status, imagem")
       .eq("status", "Ativo")
       .then(({ data }) => {
         if (data) setProdutos(data);
