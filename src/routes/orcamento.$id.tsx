@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { GardenPrimeLogo } from "@/components/garden-prime-logo";
 import { Printer, ArrowLeft, Loader2, FileText, Calendar, Clock, Handshake, Package, User } from "lucide-react";
 import { WhatsAppIcon, shareOrderWhatsApp } from "@/lib/order-pdf";
-import { formatarVencimentosResumo, formatarDataBr, calcularVencimentosPadrao } from "@/lib/utils";
+import { formatarVencimentosResumo, formatarDataBr, calcularVencimentosPadrao, calcularValorParcela } from "@/lib/utils";
 
 export const Route = createFileRoute("/orcamento/$id")({
   head: () => ({ meta: [{ title: "Orçamento (DAV) - Impressão" }] }),
@@ -366,23 +366,31 @@ function ImprimirDAV() {
               </p>
             )}
             {(() => {
+              const totalDoc = Number(dav.total || dav.valor_total || dav.subtotal || 0);
               const vencList = Array.isArray(dav.vencimentos) && dav.vencimentos.length > 0
                 ? dav.vencimentos
                 : (dav.condicao_pagamento && dav.condicao_pagamento.trim() !== ""
-                    ? calcularVencimentosPadrao(dav.condicao_pagamento, dav.emissao || dav.created_at, dav.total || dav.valor_total)
+                    ? calcularVencimentosPadrao(dav.condicao_pagamento, dav.emissao || dav.created_at, totalDoc)
                     : []);
 
               if (vencList.length > 1) {
                 return (
                   <div className="text-xs text-white font-black leading-tight my-1">
                     <span className="block mb-1 text-[11px] text-slate-300">Vencimentos:</span>
-                    <div className="bg-white text-slate-900 font-bold px-3 py-1.5 rounded-md border border-slate-300 shadow-2xs space-y-1">
+                    <div className="bg-white text-slate-900 font-bold px-2.5 py-1.5 rounded-md border border-slate-300 shadow-2xs space-y-1">
                       {vencList.map((v: any, idx: number) => {
                         const d = typeof v === "object" && v !== null ? v.data : v;
+                        const valParcela = calcularValorParcela(v, idx, vencList.length, totalDoc);
                         return (
-                          <div key={idx} className="flex items-center gap-2.5 text-xs sm:text-[12px] font-black">
-                            <span className="text-slate-600 font-bold whitespace-nowrap">{idx + 1}ª Parcela:</span>
-                            <span className="font-black text-black whitespace-nowrap">{formatarDataBr(d)}</span>
+                          <div key={idx} className="flex items-center justify-between gap-2 text-[11px] sm:text-xs font-black">
+                            <span className="text-slate-700 font-bold whitespace-nowrap">
+                              {idx + 1}ª: {formatarDataBr(d)}
+                            </span>
+                            {valParcela > 0 && (
+                              <span className="font-black text-black whitespace-nowrap">
+                                R$ {valParcela.toFixed(2).replace(".", ",")}
+                              </span>
+                            )}
                           </div>
                         );
                       })}
@@ -393,11 +401,13 @@ function ImprimirDAV() {
 
               if (vencList.length === 1) {
                 const d = typeof vencList[0] === "object" && vencList[0] !== null ? vencList[0].data : vencList[0];
+                const valParcela = calcularValorParcela(vencList[0], 0, 1, totalDoc);
                 return (
                   <div className="text-xs sm:text-[12px] text-white font-black leading-tight flex items-center gap-2 my-1">
                     <span className="text-slate-300 text-[11px]">Vencimento:</span>
-                    <span className="bg-white text-black font-black px-2.5 py-0.5 rounded text-xs sm:text-[12px] border border-slate-300 shadow-2xs">
+                    <span className="bg-white text-black font-black px-2.5 py-0.5 rounded text-xs sm:text-[12px] border border-slate-300 shadow-2xs whitespace-nowrap">
                       {formatarDataBr(d)}
+                      {valParcela > 0 ? ` — R$ ${valParcela.toFixed(2).replace(".", ",")}` : ""}
                     </span>
                   </div>
                 );

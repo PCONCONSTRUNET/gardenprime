@@ -1,7 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase, supabaseParceiro } from "@/lib/supabase";
-import { calcularVencimentosPadrao } from "@/lib/utils";
+import { calcularVencimentosPadrao, calcularValorParcela } from "@/lib/utils";
 import React from "react";
 
 export const WhatsAppIcon = ({ className }: { className?: string }) => (
@@ -606,13 +606,14 @@ export async function generateOrderPdfDoc(
 
   y += 33;
 
+  const orderTotalNum = Number(order.valor_total || order.total || order.subtotal || 0);
   let orderVenc = (order as any).vencimentos;
   if (!Array.isArray(orderVenc) || orderVenc.length === 0) {
     if (order.condicao_pagamento && order.condicao_pagamento.trim() !== "") {
       orderVenc = calcularVencimentosPadrao(
         order.condicao_pagamento,
         order.created_at,
-        order.valor_total || order.total
+        orderTotalNum
       );
     }
   }
@@ -625,12 +626,12 @@ export async function generateOrderPdfDoc(
   doc.roundedRect(margin, y, pageWidth - margin * 2, 23.5 + extraHeight, 2, 2, "F");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
+  doc.setFontSize(15);
   doc.setTextColor(255, 255, 255);
-  doc.text(docType, margin + 18, y + 9.5);
-  doc.setFontSize(10);
+  doc.text(docType, margin + 6, y + 9.5);
+  doc.setFontSize(9.5);
   doc.setFont("helvetica", "bold");
-  doc.text(`DAV Nº: ${num}`, margin + 18, y + 15.5);
+  doc.text(`DAV Nº: ${num}`, margin + 6, y + 15.5);
 
   const dataEmissao = new Date(order.created_at).toLocaleDateString("pt-BR");
   const horaEmissao = new Date(order.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -639,11 +640,11 @@ export async function generateOrderPdfDoc(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(6.5);
   doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
-  doc.text("Emissão", margin + 74, y + 8);
-  doc.setFontSize(8);
+  doc.text("Emissão", margin + 54, y + 8);
+  doc.setFontSize(7.5);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(255, 255, 255);
-  doc.text(`${dataEmissao} às ${horaEmissao}`, margin + 74, y + 13.5);
+  doc.text(`${dataEmissao} às ${horaEmissao}`, margin + 54, y + 13.5);
 
   // Validade – padrão: 30 dias a partir da emissão
   let validadeStr: string;
@@ -657,14 +658,14 @@ export async function generateOrderPdfDoc(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(6.5);
   doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
-  doc.text("Validade", margin + 114, y + 8);
-  doc.setFontSize(8);
+  doc.text("Validade", margin + 91, y + 8);
+  doc.setFontSize(7.5);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(255, 255, 255);
-  doc.text(validadeStr, margin + 114, y + 13.5);
+  doc.text(validadeStr, margin + 91, y + 13.5);
 
-  // Box Preto de Condições Comerciais com campo de Vencimento
-  const boxW = 66;
+  // Box Preto de Condições Comerciais com campo de Vencimento e Valor da Parcela
+  const boxW = 77;
   const boxX = pageWidth - margin - boxW;
   doc.setFillColor(0, 0, 0);
   doc.roundedRect(boxX, y + 1.2, boxW - 1, 21 + extraHeight, 1, 1, "F");
@@ -672,48 +673,53 @@ export async function generateOrderPdfDoc(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(6.5);
   doc.setTextColor(255, 255, 255);
-  doc.text("CONDIÇÕES COMERCIAIS", boxX + 3.5, y + 5.5);
-  doc.text(`Pagamento: ${order.condicao_pagamento || "Não informado"}`, boxX + 3.5, y + 9.5);
+  doc.text("CONDIÇÕES COMERCIAIS", boxX + 3, y + 5.5);
+  doc.text(`Pagamento: ${order.condicao_pagamento || "Não informado"}`, boxX + 3, y + 9.5);
 
   let freteY = y + 18.2;
 
   if (hasVencList && numVenc > 1) {
-    // Múltiplos vencimentos organizados 1 EM BAIXO DO OUTRO
-    doc.text("Vencimentos:", boxX + 3.5, y + 13.8);
-    const vBoxX = boxX + 21;
-    const vBoxW = 40;
-    const vBoxH = numVenc * 3.6 + 0.6;
+    // Múltiplos vencimentos organizados 1 EM BAIXO DO OUTRO com valor de cada parcela
+    doc.text("Vencimentos:", boxX + 3, y + 13.8);
+    const vBoxX = boxX + 20;
+    const vBoxW = 54;
+    const vBoxH = numVenc * 3.6 + 0.8;
     doc.setFillColor(255, 255, 255);
     doc.roundedRect(vBoxX, y + 11.0, vBoxW, vBoxH, 0.6, 0.6, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.8);
+    doc.setFontSize(6.4);
     doc.setTextColor(10, 10, 10);
 
     orderVenc.forEach((v: any, idx: number) => {
       const d = typeof v === "object" && v !== null ? v.data : v;
       const clean = (d || "").split("T")[0].split("-");
       const dtBr = clean.length === 3 ? `${clean[2]}/${clean[1]}/${clean[0]}` : d;
+      const valParcela = calcularValorParcela(v, idx, numVenc, orderTotalNum);
+      const valStr = valParcela > 0 ? ` - R$ ${valParcela.toFixed(2).replace(".", ",")}` : "";
       const lineY = y + 13.8 + (idx * 3.6);
-      doc.text(`${idx + 1}ª:  ${dtBr}`, vBoxX + vBoxW / 2, lineY, { align: "center" });
+      doc.text(`${idx + 1}ª: ${dtBr}${valStr}`, vBoxX + vBoxW / 2, lineY, { align: "center" });
     });
 
     freteY = y + 11.0 + vBoxH + 3.4;
   } else {
     // 1 Vencimento ou campo para preenchimento a mão
-    doc.text("Vencimento:", boxX + 3.5, y + 13.8);
-    const vBoxX = boxX + 21;
-    const vBoxW = 40;
+    doc.text("Vencimento:", boxX + 3, y + 13.8);
+    const vBoxX = boxX + 20;
+    const vBoxW = 54;
     doc.setFillColor(255, 255, 255);
     doc.roundedRect(vBoxX, y + 11.2, vBoxW, 3.8, 0.5, 0.5, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.5);
-    doc.setTextColor(40, 40, 40);
+    doc.setFontSize(6.4);
+    doc.setTextColor(20, 20, 20);
 
     let vencTexto = "___ / ___ / ______";
     if (hasVencList && numVenc === 1) {
       const d = typeof orderVenc[0] === "object" && orderVenc[0] !== null ? orderVenc[0].data : orderVenc[0];
       const clean = (d || "").split("T")[0].split("-");
-      vencTexto = clean.length === 3 ? `${clean[2]}/${clean[1]}/${clean[0]}` : d;
+      const dtBr = clean.length === 3 ? `${clean[2]}/${clean[1]}/${clean[0]}` : d;
+      const valParcela = calcularValorParcela(orderVenc[0], 0, 1, orderTotalNum);
+      const valStr = valParcela > 0 ? ` - R$ ${valParcela.toFixed(2).replace(".", ",")}` : "";
+      vencTexto = `${dtBr}${valStr}`;
     }
     doc.text(vencTexto, vBoxX + vBoxW / 2, y + 13.9, { align: "center" });
     freteY = y + 18.2;
@@ -755,7 +761,9 @@ export async function generateOrderPdfDoc(
   const valX2 = margin + 105;
 
   let cy = y + 14;
-  doc.text("Nome:", labelX1, cy); doc.text(String(c.nome || "-"), valX1, cy);
+  const nomeTrunc = doc.splitTextToSize(String(c.nome || "-"), 57)[0] || "-";
+  const endTrunc = doc.splitTextToSize(String(c.endereco || "-"), 57)[0] || "-";
+  doc.text("Nome:", labelX1, cy); doc.text(nomeTrunc, valX1, cy);
   doc.text("Bairro:", labelX2, cy); doc.text(String(c.bairro || "-"), valX2, cy);
   cy += 5;
   doc.text("CNPJ/CPF:", labelX1, cy); doc.text(String(c.cpf_cnpj || "-"), valX1, cy);
@@ -764,7 +772,7 @@ export async function generateOrderPdfDoc(
   doc.text("Telefone:", labelX1, cy); doc.text(String(c.telefone || "-"), valX1, cy);
   doc.text("UF:", labelX2, cy); doc.text(String(c.uf || "-"), valX2, cy);
   cy += 5;
-  doc.text("Endereço:", labelX1, cy); doc.text(String(c.endereco || "-"), valX1, cy);
+  doc.text("Endereço:", labelX1, cy); doc.text(endTrunc, valX1, cy);
   doc.text("E-mail:", labelX2, cy); doc.text(String(c.email || "-"), valX2, cy);
 
   // Obrigado box

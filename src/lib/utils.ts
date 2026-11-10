@@ -210,17 +210,37 @@ export function formatarDataBr(dataStr?: string | null): string {
   return dataStr;
 }
 
+export function calcularValorParcela(
+  venc: any,
+  idx: number,
+  totalParcelas: number,
+  valorTotalPedido?: number
+): number {
+  if (venc && typeof venc === "object" && typeof venc.valor === "number" && venc.valor > 0) {
+    return venc.valor;
+  }
+  const total = Number(valorTotalPedido || 0);
+  if (total <= 0 || totalParcelas <= 0) return 0;
+  const totalCents = Math.round(total * 100);
+  const baseCents = Math.floor(totalCents / totalParcelas);
+  const restoCents = totalCents - baseCents * totalParcelas;
+  const parcelaCents = idx < restoCents ? baseCents + 1 : baseCents;
+  return parcelaCents / 100;
+}
+
 /**
  * Retorna resumo legível dos vencimentos para impressão ou badges
- * Ex: 28/11/2026 | 05/12/2026 | 12/12/2026
+ * Ex: 1ª: 28/11/2026 (R$ 500,00) | 2ª: 05/12/2026 (R$ 500,00)
  */
-export function formatarVencimentosResumo(vencimentos?: any[] | null): string {
+export function formatarVencimentosResumo(vencimentos?: any[] | null, valorTotalPedido?: number): string {
   if (!Array.isArray(vencimentos) || vencimentos.length === 0) return "";
   return vencimentos
     .map((v, i) => {
       const d = typeof v === "object" && v !== null ? v.data : v;
       const dataBr = formatarDataBr(d);
-      return vencimentos.length > 1 ? `${i + 1}ª: ${dataBr}` : dataBr;
+      const valParcela = calcularValorParcela(v, i, vencimentos.length, valorTotalPedido);
+      const strVal = valParcela > 0 ? ` - R$ ${valParcela.toFixed(2).replace(".", ",")}` : "";
+      return vencimentos.length > 1 ? `${i + 1}ª: ${dataBr}${strVal}` : `${dataBr}${strVal}`;
     })
     .join(" | ");
 }
@@ -242,6 +262,14 @@ export function calcularVencimentosPadrao(
     return copy.toISOString().split("T")[0];
   };
 
+  const withValores = (lista: ParcelaVencimento[]): ParcelaVencimento[] => {
+    if (!valorTotal || Number(valorTotal) <= 0) return lista;
+    return lista.map((item, idx) => ({
+      ...item,
+      valor: calcularValorParcela(null, idx, lista.length, Number(valorTotal)),
+    }));
+  };
+
   const c = (condicao || "").toLowerCase().trim();
 
   // 1. Detectar padrões com entrada + dias (ex: "Entrada + 30 dias")
@@ -258,55 +286,57 @@ export function calcularVencimentosPadrao(
         label: `${idx + 2}ª Parcela (${num} dias)`,
       });
     });
-    return res;
+    return withValores(res);
   }
 
   // 2. Múltiplos prazos (ex: "28, 35, 42 dias" ou "30/60/90" ou "30/60")
   if (numeros.length > 1) {
-    return numeros.map((dias, idx) => ({
-      parcela: idx + 1,
-      data: addDays(validBase, dias),
-      label: `${idx + 1}º Vencimento (${dias} dias)`,
-    }));
+    return withValores(
+      numeros.map((dias, idx) => ({
+        parcela: idx + 1,
+        data: addDays(validBase, dias),
+        label: `${idx + 1}º Vencimento (${dias} dias)`,
+      }))
+    );
   }
 
   // 3. Apenas um número (ex: "30 dias", "28 dias")
   if (numeros.length === 1) {
     if (c.includes("2x") || c.includes("2 x")) {
-      return [
+      return withValores([
         { parcela: 1, data: addDays(validBase, 30), label: "1º Vencimento (30 dias)" },
         { parcela: 2, data: addDays(validBase, 60), label: "2º Vencimento (60 dias)" },
-      ];
+      ]);
     }
     if (c.includes("3x") || c.includes("3 x")) {
-      return [
+      return withValores([
         { parcela: 1, data: addDays(validBase, 30), label: "1º Vencimento (30 dias)" },
         { parcela: 2, data: addDays(validBase, 60), label: "2º Vencimento (60 dias)" },
         { parcela: 3, data: addDays(validBase, 90), label: "3º Vencimento (90 dias)" },
-      ];
+      ]);
     }
-    return [
+    return withValores([
       { parcela: 1, data: addDays(validBase, numeros[0]), label: `1º Vencimento (${numeros[0]} dias)` },
-    ];
+    ]);
   }
 
   // 4. Cartão parcelado sem número de dias especificado (ex: "2x sem juros", "3x sem juros")
   if (c.includes("2x") || c.includes("2 x")) {
-    return [
+    return withValores([
       { parcela: 1, data: addDays(validBase, 30), label: "1ª Parcela (30 dias)" },
       { parcela: 2, data: addDays(validBase, 60), label: "2ª Parcela (60 dias)" },
-    ];
+    ]);
   }
   if (c.includes("3x") || c.includes("3 x")) {
-    return [
+    return withValores([
       { parcela: 1, data: addDays(validBase, 30), label: "1ª Parcela (30 dias)" },
       { parcela: 2, data: addDays(validBase, 60), label: "2ª Parcela (60 dias)" },
       { parcela: 3, data: addDays(validBase, 90), label: "3ª Parcela (90 dias)" },
-    ];
+    ]);
   }
 
   // 5. Padrão à vista / Pix / Dinheiro / Boleto à vista
-  return [
+  return withValores([
     { parcela: 1, data: validBase.toISOString().split("T")[0], label: "1º Vencimento" },
-  ];
+  ]);
 }

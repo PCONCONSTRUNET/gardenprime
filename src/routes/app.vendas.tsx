@@ -63,7 +63,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { cn, calcularVencimentosPadrao, formatarDataBr, type ParcelaVencimento } from "@/lib/utils";
+import { cn, calcularVencimentosPadrao, calcularValorParcela, formatarDataBr, type ParcelaVencimento } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/vendas")({
   head: () => ({ meta: [{ title: "Vendas — GARDEN PRIME ERP" }] }),
@@ -1577,16 +1577,25 @@ function Vendas() {
                             <span className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1">
                               <Calendar className="h-3.5 w-3.5 text-primary" /> Vencimento(s):
                             </span>
-                            {selectedVenda.vencimentos.map((v: any, i: number) => (
-                              <Badge
-                                key={i}
-                                variant="outline"
-                                className="text-[11px] bg-background font-medium border-primary/40 text-primary px-2 py-0.5"
-                              >
-                                {selectedVenda.vencimentos.length > 1 ? `${i + 1}ª: ` : ""}
-                                {formatarDataBr(v.data || v)}
-                              </Badge>
-                            ))}
+                            {selectedVenda.vencimentos.map((v: any, i: number) => {
+                              const valParcela = calcularValorParcela(
+                                v,
+                                i,
+                                selectedVenda.vencimentos.length,
+                                selectedVenda?.valor_total
+                              );
+                              return (
+                                <Badge
+                                  key={i}
+                                  variant="outline"
+                                  className="text-[11px] bg-background font-medium border-primary/40 text-primary px-2 py-0.5"
+                                >
+                                  {selectedVenda.vencimentos.length > 1 ? `${i + 1}ª: ` : ""}
+                                  {formatarDataBr(v.data || v)}
+                                  {valParcela > 0 ? ` - R$ ${valParcela.toFixed(2).replace(".", ",")}` : ""}
+                                </Badge>
+                              );
+                            })}
                           </div>
                         )}
                     </div>
