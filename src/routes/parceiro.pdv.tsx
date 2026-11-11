@@ -83,6 +83,7 @@ function ParceiroPDV() {
     return {
       nome: "",
       documento: "",
+      email: "",
       telefone: "",
       cep: "",
       endereco: "",
@@ -139,6 +140,7 @@ function ParceiroPDV() {
       ...prev,
       nome: client.nome || "",
       documento: client.cpf_cnpj || "",
+      email: client.email || "",
       telefone: client.telefone || "",
       cep: client.cep || "",
       endereco: client.endereco || "",
@@ -151,7 +153,7 @@ function ParceiroPDV() {
   };
 
   const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false);
-  const [newClientForm, setNewClientForm] = useState({ nome: "", cpf_cnpj: "", telefone: "", cep: "", endereco: "", numero: "", bairro: "", cidade: "", uf: "", status: "Ativo" });
+  const [newClientForm, setNewClientForm] = useState({ nome: "", cpf_cnpj: "", email: "", telefone: "", cep: "", endereco: "", numero: "", bairro: "", cidade: "", uf: "", status: "Ativo" });
   const [savingNewClient, setSavingNewClient] = useState(false);
   const [newClientCnpjLoading, setNewClientCnpjLoading] = useState(false);
   const [newClientCnpjErro, setNewClientCnpjErro] = useState("");
@@ -162,14 +164,23 @@ function ParceiroPDV() {
     setNewClientCnpjErro("");
     setNewClientCnpjLoading(true);
     try {
-      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
-      if (!res.ok) { setNewClientCnpjErro("CNPJ não encontrado na Receita Federal."); return; }
-      const data = await res.json();
+      let data: any = null;
+      try {
+        const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
+        if (res.ok) data = await res.json();
+      } catch {}
+      if (!data) {
+        try {
+          const resFallback = await fetch(`https://minhareceita.org/${cnpjLimpo}`);
+          if (resFallback.ok) data = await resFallback.json();
+        } catch {}
+      }
+      if (!data) { setNewClientCnpjErro("CNPJ não encontrado na Receita Federal."); return; }
       
       const tel = data.ddd_telefone_1
         ? data.ddd_telefone_1.replace(/(\d{2})(\d{4,5})(\d{4})/, "($1) $2-$3")
         : newClientForm.telefone;
-      const cepFmt = data.cep ? data.cep.replace(/\D/g, "").replace(/(\d{5})(\d{3})/, "$1-$2") : "";
+      const cepFmt = data.cep ? String(data.cep).replace(/\D/g, "").replace(/(\d{5})(\d{3})/, "$1-$2") : "";
       const tipoLogradouro = data.descricao_tipo_de_logradouro
         ? data.descricao_tipo_de_logradouro + " "
         : "";
@@ -179,7 +190,8 @@ function ParceiroPDV() {
         
       setNewClientForm((prev: any) => ({
         ...prev,
-        nome: data.razao_social || prev.nome,
+        nome: data.razao_social || data.nome_fantasia || prev.nome,
+        email: data.email || prev.email || "",
         telefone: tel,
         cep: cepFmt,
         endereco: tipoLogradouro + (data.logradouro || ""),
@@ -200,43 +212,87 @@ function ParceiroPDV() {
     if (!newClientForm.nome.trim()) { alert("Preencha o nome do cliente."); return; }
     setSavingNewClient(true);
     try {
-      const { data, error } = await supabase.from("clientes").insert([{
-        nome: newClientForm.nome,
-        cpf_cnpj: newClientForm.cpf_cnpj || null,
-        telefone: newClientForm.telefone || null,
-        cep: newClientForm.cep || null,
-        endereco: newClientForm.endereco || null,
-        numero: newClientForm.numero || null,
-        bairro: newClientForm.bairro || null,
-        cidade: newClientForm.cidade || null,
-        uf: newClientForm.uf || null,
-        status: "Ativo"
-      }]).select().single();
-      if (error) throw error;
-      
-      if (vendedorInfo?.id) {
+      const payload: any = {
+        nome: newClientForm.nome.trim(),
+        cpf_cnpj: newClientForm.cpf_cnpj?.trim() || null,
+        email: newClientForm.email?.trim() || null,
+        telefone: newClientForm.telefone?.trim() || null,
+        cep: newClientForm.cep?.trim() || null,
+        endereco: newClientForm.endereco?.trim() || null,
+        numero: newClientForm.numero?.trim() || null,
+        bairro: newClientForm.bairro?.trim() || null,
+        cidade: newClientForm.cidade?.trim() || null,
+        uf: newClientForm.uf?.trim() || null,
+        status: "Ativo",
+      };
+
+      let savedClient: any = null;
+
+      if (payload.cpf_cnpj) {
+        const { data: existing } = await supabase
+          .from("clientes")
+          .select("id")
+          .eq("cpf_cnpj", payload.cpf_cnpj)
+          .maybeSingle();
+        if (existing?.id) {
+          const { data: updated, error: updErr } = await supabase
+            .from("clientes")
+            .update(payload)
+            .eq("id", existing.id)
+            .select()
+            .single();
+          if (!updErr && updated) {
+            savedClient = updated;
+          }
+        }
+      }
+
+      if (!savedClient) {
+        const { data, error } = await supabase
+          .from("clientes")
+          .insert([payload])
+          .select()
+          .single();
+        if (error) {
+          const missingMatch = error.message?.match(/Could not find the '(.*?)' column/);
+          if (missingMatch?.[1]) {
+            const fallbackPayload = { ...payload };
+            delete fallbackPayload[missingMatch[1]];
+            const retry = await supabase.from("clientes").insert([fallbackPayload]).select().single();
+            if (retry.error) throw retry.error;
+            savedClient = retry.data;
+          } else {
+            throw error;
+          }
+        } else {
+          savedClient = data;
+        }
+      }
+
+      if (vendedorInfo?.id && savedClient?.id) {
         const savedStr = localStorage.getItem(`novos_clientes_${vendedorInfo.id}`);
         let savedIds = [];
         try { savedIds = savedStr ? JSON.parse(savedStr) : []; } catch(e){}
-        savedIds.push(data.id);
+        savedIds.push(savedClient.id);
         localStorage.setItem(`novos_clientes_${vendedorInfo.id}`, JSON.stringify([...new Set(savedIds)]));
       }
-      
+
       setClientForm((prev: any) => ({
         ...prev,
-        nome: data.nome || "",
-        documento: data.cpf_cnpj || "",
-        telefone: data.telefone || "",
-        cep: data.cep || "",
-        endereco: data.endereco || "",
-        numero: data.numero || "",
-        bairro: data.bairro || "",
-        cidade: data.cidade || "",
-        uf: data.uf || "",
+        nome: savedClient?.nome || newClientForm.nome || "",
+        documento: savedClient?.cpf_cnpj || newClientForm.cpf_cnpj || "",
+        email: savedClient?.email || newClientForm.email || "",
+        telefone: savedClient?.telefone || newClientForm.telefone || "",
+        cep: savedClient?.cep || newClientForm.cep || "",
+        endereco: savedClient?.endereco || newClientForm.endereco || "",
+        numero: savedClient?.numero || newClientForm.numero || "",
+        bairro: savedClient?.bairro || newClientForm.bairro || "",
+        cidade: savedClient?.cidade || newClientForm.cidade || "",
+        uf: savedClient?.uf || newClientForm.uf || "",
       }));
-      
+
       setIsNewClientModalOpen(false);
-      setNewClientForm({ nome: "", cpf_cnpj: "", telefone: "", cep: "", endereco: "", numero: "", bairro: "", cidade: "", uf: "", status: "Ativo" });
+      setNewClientForm({ nome: "", cpf_cnpj: "", email: "", telefone: "", cep: "", endereco: "", numero: "", bairro: "", cidade: "", uf: "", status: "Ativo" });
     } catch (err: any) {
       alert("Erro ao cadastrar cliente: " + err.message);
     } finally {
@@ -370,6 +426,7 @@ function ParceiroPDV() {
 
           const eParam = shortData?.e ?? params.get("e");
           const cnjParam = shortData?.cnpj ?? params.get("cnpj");
+          const emailParam = shortData?.email ?? params.get("email");
           const cepParam = shortData?.cep ?? params.get("cep");
           const endParam = shortData?.end ?? params.get("end");
           const numParam = shortData?.num ?? params.get("num");
@@ -388,6 +445,7 @@ function ParceiroPDV() {
                 ? {
                     nome: eParam || "",
                     documento: cnjParam || "",
+                    email: emailParam || prev.email || "",
                     cep: cepParam || "",
                     endereco: endParam || "",
                     numero: numParam || "",
@@ -498,6 +556,7 @@ function ParceiroPDV() {
                   ...prev,
                   nome: vendaDraft.clientes.nome || "",
                   documento: vendaDraft.clientes.cpf_cnpj || "",
+                  email: vendaDraft.clientes.email || "",
                   telefone: vendaDraft.clientes.telefone || "",
                   cep: vendaDraft.clientes.cep || "",
                   endereco: vendaDraft.clientes.endereco || "",
@@ -633,16 +692,25 @@ function ParceiroPDV() {
     setCnpjErro("");
     setCnpjLoading(true);
     try {
-      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
-      if (!res.ok) {
+      let data: any = null;
+      try {
+        const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
+        if (res.ok) data = await res.json();
+      } catch {}
+      if (!data) {
+        try {
+          const resFallback = await fetch(`https://minhareceita.org/${cnpjLimpo}`);
+          if (resFallback.ok) data = await resFallback.json();
+        } catch {}
+      }
+      if (!data) {
         setCnpjErro("CNPJ não encontrado na Receita Federal.");
         return;
       }
-      const data = await res.json();
       const tel = data.ddd_telefone_1
         ? data.ddd_telefone_1.replace(/(\d{2})(\d{4,5})(\d{4})/, "($1) $2-$3")
         : clientForm.telefone;
-      const cepFmt = data.cep ? data.cep.replace(/\D/g, "").replace(/(\d{5})(\d{3})/, "$1-$2") : "";
+      const cepFmt = data.cep ? String(data.cep).replace(/\D/g, "").replace(/(\d{5})(\d{3})/, "$1-$2") : "";
       const tipoLogradouro = data.descricao_tipo_de_logradouro
         ? data.descricao_tipo_de_logradouro + " "
         : "";
@@ -651,7 +719,8 @@ function ParceiroPDV() {
         : clientForm.cidade;
       setClientForm((prev: any) => ({
         ...prev,
-        nome: data.razao_social || prev.nome,
+        nome: data.razao_social || data.nome_fantasia || prev.nome,
+        email: data.email || prev.email || "",
         telefone: tel,
         cep: cepFmt,
         endereco: tipoLogradouro + (data.logradouro || ""),
@@ -694,12 +763,21 @@ function ParceiroPDV() {
           .select("id")
           .eq("cpf_cnpj", clientForm.documento.trim())
           .maybeSingle();
-        if (existingClient) finalClienteId = existingClient.id;
+        if (existingClient) {
+          finalClienteId = existingClient.id;
+          if (clientForm.email?.trim() || clientForm.telefone?.trim()) {
+            const updatePayload: any = {};
+            if (clientForm.email?.trim()) updatePayload.email = clientForm.email.trim();
+            if (clientForm.telefone?.trim()) updatePayload.telefone = clientForm.telefone.trim();
+            await supabase.from("clientes").update(updatePayload).eq("id", finalClienteId);
+          }
+        }
       }
 
       if (!finalClienteId) {
         const payload: any = { nome: clientForm.nome };
         if (clientForm.documento?.trim()) payload.cpf_cnpj = clientForm.documento.trim();
+        if (clientForm.email?.trim()) payload.email = clientForm.email.trim();
         if (clientForm.telefone?.trim()) payload.telefone = clientForm.telefone.trim();
         if (clientForm.cep?.trim()) payload.cep = clientForm.cep.trim();
         if (clientForm.endereco?.trim()) payload.endereco = clientForm.endereco.trim();
@@ -802,6 +880,12 @@ function ParceiroPDV() {
 
         if (existingClient) {
           finalClienteId = existingClient.id;
+          if (clientForm.email?.trim() || clientForm.telefone?.trim()) {
+            const updatePayload: any = {};
+            if (clientForm.email?.trim()) updatePayload.email = clientForm.email.trim();
+            if (clientForm.telefone?.trim()) updatePayload.telefone = clientForm.telefone.trim();
+            await supabase.from("clientes").update(updatePayload).eq("id", finalClienteId);
+          }
         }
       }
 
@@ -809,6 +893,9 @@ function ParceiroPDV() {
         const payload: any = { nome: clientForm.nome };
         if (clientForm.documento && clientForm.documento.trim() !== "") {
           payload.cpf_cnpj = clientForm.documento.trim();
+        }
+        if (clientForm.email && clientForm.email.trim() !== "") {
+          payload.email = clientForm.email.trim();
         }
         if (clientForm.telefone && clientForm.telefone.trim() !== "") {
           payload.telefone = clientForm.telefone.trim();
@@ -1587,13 +1674,24 @@ function ParceiroPDV() {
                   <p className="text-[11px] text-red-500 font-medium -mt-1">Aperte na lupa para puxar os dados</p>
                   {cnpjErro && <p className="text-xs text-destructive">{cnpjErro}</p>}
                 </div>
-                <div className="grid gap-2">
-                  <label className="text-sm font-medium">Telefone / WhatsApp</label>
-                  <Input
-                    placeholder="(00) 00000-0000"
-                    value={clientForm.telefone}
-                    onChange={(e) => setClientForm({ ...clientForm, telefone: e.target.value })}
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium">Telefone / WhatsApp</label>
+                    <Input
+                      placeholder="(00) 00000-0000"
+                      value={clientForm.telefone || ""}
+                      onChange={(e) => setClientForm({ ...clientForm, telefone: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium">E-mail</label>
+                    <Input
+                      type="email"
+                      placeholder="cliente@email.com"
+                      value={clientForm.email || ""}
+                      onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })}
+                    />
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
@@ -1844,9 +1942,15 @@ function ParceiroPDV() {
                 <p className="text-[11px] text-red-500 font-medium -mt-1">Aperte na lupa para puxar os dados</p>
                 {newClientCnpjErro && <p className="text-xs text-destructive">{newClientCnpjErro}</p>}
               </div>
-              <div className="grid gap-2">
-                <label className="text-sm font-medium">Telefone / WhatsApp</label>
-                <Input placeholder="(00) 00000-0000" value={newClientForm.telefone} onChange={e => setNewClientForm({...newClientForm, telefone: e.target.value})} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">Telefone / WhatsApp</label>
+                  <Input placeholder="(00) 00000-0000" value={newClientForm.telefone || ""} onChange={e => setNewClientForm({...newClientForm, telefone: e.target.value})} />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">E-mail</label>
+                  <Input type="email" placeholder="cliente@email.com" value={newClientForm.email || ""} onChange={e => setNewClientForm({...newClientForm, email: e.target.value})} />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">

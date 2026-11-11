@@ -33,6 +33,7 @@ function NovoCliente() {
   const [cliente, setCliente] = useState({
     nome: "",
     cpf_cnpj: "",
+    email: "",
     telefone: "",
     cep: "",
     endereco: "",
@@ -87,6 +88,7 @@ function NovoCliente() {
             setCliente({
               nome: data.nome || "",
               cpf_cnpj: data.cpf_cnpj || "",
+              email: data.email || "",
               telefone: data.telefone || "",
               cep: parsedCep,
               endereco: parsedEndereco,
@@ -132,20 +134,30 @@ function NovoCliente() {
     setCnpjErro("");
     setCnpjLoading(true);
     try {
-      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
-      if (!res.ok) {
+      let data: any = null;
+      try {
+        const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
+        if (res.ok) data = await res.json();
+      } catch {}
+      if (!data) {
+        try {
+          const resFallback = await fetch(`https://minhareceita.org/${cnpjLimpo}`);
+          if (resFallback.ok) data = await resFallback.json();
+        } catch {}
+      }
+      if (!data) {
         setCnpjErro("CNPJ não encontrado na Receita Federal.");
         return;
       }
-      const data = await res.json();
       const telefone = data.ddd_telefone_1 ? formatTelefone(data.ddd_telefone_1) : cliente.telefone;
-      const cepLimpo = data.cep ? data.cep.replace(/\D/g, "") : "";
+      const cepLimpo = data.cep ? String(data.cep).replace(/\D/g, "") : "";
       const tipoLogradouro = data.descricao_tipo_de_logradouro
         ? data.descricao_tipo_de_logradouro + " "
         : "";
       setCliente((prev) => ({
         ...prev,
-        nome: data.razao_social || prev.nome,
+        nome: data.razao_social || data.nome_fantasia || prev.nome,
+        email: data.email || prev.email || "",
         telefone,
         cep: formatCep(cepLimpo),
         endereco: tipoLogradouro + (data.logradouro || ""),
@@ -169,57 +181,43 @@ function NovoCliente() {
   };
 
   const handleSalvar = async () => {
-    if (!cliente.nome) {
+    if (!cliente.nome.trim()) {
       alert("Preencha o nome do cliente.");
       return;
     }
 
     setLoading(true);
     try {
-      // Verificação de duplicidade
-      let query = supabase.from("clientes").select("id").limit(1);
-      
-      if (cliente.cpf_cnpj) {
-        query = query.eq("cpf_cnpj", cliente.cpf_cnpj);
-      } else {
-        query = query.eq("nome", cliente.nome);
-      }
-
-      // Se for edição, exclui o próprio ID da busca
-      if (isEditing) {
-        query = query.neq("id", id);
-      }
-
-      const { data: existingClient, error: searchError } = await query;
-      if (searchError) throw searchError;
-
-      if (existingClient && existingClient.length > 0) {
-        alert(
-          `Já existe um cliente cadastrado com este ${
-            cliente.cpf_cnpj ? "CNPJ/CPF" : "Nome"
-          }.`
-        );
-        setLoading(false);
-        return;
-      }
-
-      // Envia apenas as colunas conhecidas da tabela clientes
       const payload: any = {
-        nome: cliente.nome,
-        cpf_cnpj: cliente.cpf_cnpj || null,
-        telefone: cliente.telefone || null,
-        cidade: cliente.cidade || null,
-        uf: cliente.uf || null,
-        status: cliente.status,
-        endereco: cliente.endereco || null,
-        numero: cliente.numero || null,
-        bairro: cliente.bairro || null,
-        cep: cliente.cep || null,
+        nome: cliente.nome.trim(),
+        cpf_cnpj: cliente.cpf_cnpj?.trim() || null,
+        email: cliente.email?.trim() || null,
+        telefone: cliente.telefone?.trim() || null,
+        cidade: cliente.cidade?.trim() || null,
+        uf: cliente.uf?.trim() || null,
+        status: cliente.status || "Ativo",
+        endereco: cliente.endereco?.trim() || null,
+        numero: cliente.numero?.trim() || null,
+        bairro: cliente.bairro?.trim() || null,
+        cep: cliente.cep?.trim() || null,
       };
 
+      let targetId = isEditing ? id : undefined;
+
+      if (!targetId && payload.cpf_cnpj) {
+        const { data: existingClient } = await supabase
+          .from("clientes")
+          .select("id")
+          .eq("cpf_cnpj", payload.cpf_cnpj)
+          .limit(1);
+        if (existingClient && existingClient.length > 0) {
+          targetId = existingClient[0].id;
+        }
+      }
+
       let error;
-      if (isEditing) {
-        const res = await supabase.from("clientes").update(payload).eq("id", id);
+      if (targetId) {
+        const res = await supabase.from("clientes").update(payload).eq("id", targetId);
         error = res.error;
       } else {
         const res = await supabase.from("clientes").insert([payload]);
@@ -306,7 +304,7 @@ function NovoCliente() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label>Telefone</Label>
               <Input
@@ -315,6 +313,15 @@ function NovoCliente() {
                   setCliente({ ...cliente, telefone: formatTelefone(e.target.value) })
                 }
                 placeholder="(00) 00000-0000"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>E-mail</Label>
+              <Input
+                type="email"
+                value={cliente.email || ""}
+                onChange={(e) => setCliente({ ...cliente, email: e.target.value })}
+                placeholder="contato@empresa.com.br"
               />
             </div>
             <div className="space-y-2">

@@ -287,6 +287,10 @@ function Clientes() {
                 </span>
               </div>
               <div className="col-span-2">
+                <span className="text-muted-foreground block">E-mail</span>
+                <span className="font-medium break-all">{selectedCliente?.email || "-"}</span>
+              </div>
+              <div className="col-span-2">
                 <span className="text-muted-foreground block">Endereço</span>
                 <span className="font-medium">{selectedCliente?.endereco || "-"}</span>
               </div>

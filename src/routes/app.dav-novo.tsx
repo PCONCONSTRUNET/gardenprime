@@ -59,6 +59,7 @@ function NovoDAV() {
   const [cliente, setCliente] = useState({
     nome: "",
     cnpj: "",
+    email: "",
     cep: "",
     endereco: "",
     numero: "",
@@ -114,7 +115,7 @@ function NovoDAV() {
     }
     const { data } = await supabase
       .from("clientes")
-      .select("id, nome, cpf_cnpj, telefone, endereco, numero, bairro, cidade, uf, cep")
+      .select("id, nome, cpf_cnpj, email, telefone, endereco, numero, bairro, cidade, uf, cep")
       .ilike("nome", `%${q}%`)
       .limit(10);
     setClientesBuscaLista(data || []);
@@ -129,15 +130,25 @@ function NovoDAV() {
 
     setLoadingCNPJ(true);
     try {
-      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjNumeros}`);
-      if (!response.ok) {
+      let data: any = null;
+      try {
+        const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjNumeros}`);
+        if (response.ok) data = await response.json();
+      } catch {}
+      if (!data) {
+        try {
+          const resFallback = await fetch(`https://minhareceita.org/${cnpjNumeros}`);
+          if (resFallback.ok) data = await resFallback.json();
+        } catch {}
+      }
+      if (!data) {
         throw new Error("CNPJ não encontrado ou erro na API");
       }
-      const data = await response.json();
 
       setCliente((prev) => ({
         ...prev,
         nome: data.razao_social || data.nome_fantasia || prev.nome,
+        email: data.email || prev.email || "",
         cep: data.cep ? data.cep.toString().replace(/^(\d{5})(\d{3})$/, "$1-$2") : prev.cep,
         endereco: data.logradouro || prev.endereco,
         numero: data.numero || prev.numero,
@@ -210,6 +221,7 @@ function NovoDAV() {
             setCliente({
               nome: dav.cliente_nome || "",
               cnpj: dav.cliente_cnpj || "",
+              email: dav.cliente_email || "",
               cep: "",
               endereco: dav.cliente_endereco || "",
               numero: "",
@@ -325,6 +337,7 @@ function NovoDAV() {
 
       const eParam = shortData?.e ?? params.get("e");
       const cnjParam = shortData?.cnpj ?? params.get("cnpj");
+      const emailParam = shortData?.email ?? params.get("email");
       const cepParam = shortData?.cep ?? params.get("cep");
       const endParam = shortData?.end ?? params.get("end");
       const numParam = shortData?.num ?? params.get("num");
@@ -340,6 +353,7 @@ function NovoDAV() {
           ...prev,
           nome: eParam || "",
           cnpj: cnjParam || "",
+          email: emailParam || "",
           cep: cepParam || "",
           endereco: endParam || "",
           numero: numParam || "",
@@ -446,19 +460,26 @@ function NovoDAV() {
         const { data: existingClient } = await query;
         if (existingClient && existingClient.length > 0) {
           cliente_id = existingClient[0].id;
+          if (cliente.email?.trim() || cliente.telefone?.trim()) {
+            const upd: any = {};
+            if (cliente.email?.trim()) upd.email = cliente.email.trim();
+            if (cliente.telefone?.trim()) upd.telefone = cliente.telefone.trim();
+            await supabase.from("clientes").update(upd).eq("id", cliente_id);
+          }
         } else {
           const { data: newClient } = await supabase
             .from("clientes")
             .insert({
               nome: cliente.nome,
-              cpf_cnpj: cliente.cnpj,
-              telefone: cliente.telefone,
-              cep: cliente.cep,
-              endereco: cliente.endereco,
-              numero: cliente.numero,
-              bairro: cliente.bairro,
-              cidade: cliente.cidade,
-              uf: cliente.uf,
+              cpf_cnpj: cliente.cnpj || null,
+              email: cliente.email || null,
+              telefone: cliente.telefone || null,
+              cep: cliente.cep || null,
+              endereco: cliente.endereco || null,
+              numero: cliente.numero || null,
+              bairro: cliente.bairro || null,
+              cidade: cliente.cidade || null,
+              uf: cliente.uf || null,
               status: "Ativo",
             })
             .select("id")
@@ -471,6 +492,7 @@ function NovoDAV() {
         cliente_id: cliente_id,
         cliente_nome: cliente.nome,
         cliente_cnpj: cliente.cnpj,
+        cliente_email: cliente.email || null,
         cliente_endereco: cliente.endereco,
         cliente_telefone: cliente.telefone,
         emissor_nome: emissor.nome,
@@ -660,13 +682,24 @@ function NovoDAV() {
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Telefone</Label>
-              <Input
-                value={cliente.telefone}
-                onChange={(e) => setCliente({ ...cliente, telefone: e.target.value })}
-                placeholder="(00) 00000-0000"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <Label>Telefone</Label>
+                <Input
+                  value={cliente.telefone}
+                  onChange={(e) => setCliente({ ...cliente, telefone: e.target.value })}
+                  placeholder="(00) 00000-0000"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>E-mail</Label>
+                <Input
+                  type="email"
+                  value={cliente.email || ""}
+                  onChange={(e) => setCliente({ ...cliente, email: e.target.value })}
+                  placeholder="cliente@email.com"
+                />
+              </div>
             </div>
           </div>
 
@@ -1062,6 +1095,7 @@ function NovoDAV() {
                     setCliente({
                       nome: c.nome,
                       cnpj: c.cpf_cnpj || "",
+                      email: c.email || "",
                       cep: c.cep || "",
                       endereco: c.endereco || "",
                       numero: c.numero || "",

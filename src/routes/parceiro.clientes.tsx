@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabaseParceiro as supabase } from "@/lib/supabase";
 import {
-  Users, Plus, Search, X, Save, ArrowLeft, Loader2, Phone, MapPin, ChevronRight, Edit,
+  Users, Plus, Search, X, Save, ArrowLeft, Loader2, Phone, Mail, MapPin, ChevronRight, Edit,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,7 @@ function ParceiroClientes() {
   const [vendedorId, setVendedorId] = useState<string | null>(null);
 
   const emptyForm = {
-    nome: "", cpf_cnpj: "", telefone: "", cep: "", endereco: "",
+    nome: "", cpf_cnpj: "", email: "", telefone: "", cep: "", endereco: "",
     numero: "", bairro: "", cidade: "", uf: "", status: "Ativo", id: undefined as string | undefined
   };
   const [form, setForm] = useState(emptyForm);
@@ -96,15 +96,25 @@ function ParceiroClientes() {
     setCnpjErro("");
     setCnpjLoading(true);
     try {
-      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
-      if (!res.ok) { setCnpjErro("CNPJ não encontrado na Receita Federal."); return; }
-      const data = await res.json();
+      let data: any = null;
+      try {
+        const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
+        if (res.ok) data = await res.json();
+      } catch {}
+      if (!data) {
+        try {
+          const resFallback = await fetch(`https://minhareceita.org/${cnpjLimpo}`);
+          if (resFallback.ok) data = await resFallback.json();
+        } catch {}
+      }
+      if (!data) { setCnpjErro("CNPJ não encontrado na Receita Federal."); return; }
       const telefone = data.ddd_telefone_1 ? formatTelefone(data.ddd_telefone_1) : form.telefone;
-      const cepLimpo = data.cep ? data.cep.replace(/\D/g, "") : "";
+      const cepLimpo = data.cep ? String(data.cep).replace(/\D/g, "") : "";
       const tipoLogradouro = data.descricao_tipo_de_logradouro ? data.descricao_tipo_de_logradouro + " " : "";
       setForm((prev) => ({
         ...prev,
-        nome: data.razao_social || prev.nome,
+        nome: data.razao_social || data.nome_fantasia || prev.nome,
+        email: data.email || prev.email || "",
         telefone,
         cep: formatCep(cepLimpo),
         endereco: tipoLogradouro + (data.logradouro || ""),
@@ -125,10 +135,17 @@ function ParceiroClientes() {
     setSaving(true);
     try {
       const payload: any = {
-        nome: form.nome, cpf_cnpj: form.cpf_cnpj || null, telefone: form.telefone || null,
-        cep: form.cep || null, endereco: form.endereco || null, numero: form.numero || null,
-        bairro: form.bairro || null, cidade: form.cidade || null, uf: form.uf || null,
-        status: form.status,
+        nome: form.nome.trim(),
+        cpf_cnpj: form.cpf_cnpj?.trim() || null,
+        email: form.email?.trim() || null,
+        telefone: form.telefone?.trim() || null,
+        cep: form.cep?.trim() || null,
+        endereco: form.endereco?.trim() || null,
+        numero: form.numero?.trim() || null,
+        bairro: form.bairro?.trim() || null,
+        cidade: form.cidade?.trim() || null,
+        uf: form.uf?.trim() || null,
+        status: form.status || "Ativo",
       };
 
       let resultData;
@@ -139,19 +156,38 @@ function ParceiroClientes() {
         resultData = data;
         setClientes((prev) => prev.map((c) => (c.id === data.id ? data : c)));
       } else {
-        const { data, error } = await supabase.from("clientes").insert([payload]).select().single();
-        if (error) throw error;
-        resultData = data;
+        let existingId: string | null = null;
+        if (payload.cpf_cnpj) {
+          const { data: existing } = await supabase
+            .from("clientes")
+            .select("id")
+            .eq("cpf_cnpj", payload.cpf_cnpj)
+            .maybeSingle();
+          if (existing?.id) existingId = existing.id;
+        }
 
-        if (vendedorId) {
+        if (existingId) {
+          const { data, error } = await supabase.from("clientes").update(payload).eq("id", existingId).select().single();
+          if (error) throw error;
+          resultData = data;
+          setClientes((prev) => {
+            const existsInList = prev.some((c) => c.id === data.id);
+            return existsInList ? prev.map((c) => (c.id === data.id ? data : c)) : [data, ...prev];
+          });
+        } else {
+          const { data, error } = await supabase.from("clientes").insert([payload]).select().single();
+          if (error) throw error;
+          resultData = data;
+          setClientes((prev) => [data, ...prev]);
+        }
+
+        if (vendedorId && resultData?.id) {
           const savedStr = localStorage.getItem(`novos_clientes_${vendedorId}`);
           let savedIds = [];
           try { savedIds = savedStr ? JSON.parse(savedStr) : []; } catch(e){}
-          savedIds.push(data.id);
+          savedIds.push(resultData.id);
           localStorage.setItem(`novos_clientes_${vendedorId}`, JSON.stringify([...new Set(savedIds)]));
         }
-
-        setClientes((prev) => [data, ...prev]);
       }
 
       setForm(emptyForm);
@@ -222,14 +258,26 @@ function ParceiroClientes() {
             <p className="text-[11px] text-slate-400">Clique na lupa para preencher automaticamente via CNPJ</p>
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="text-sm font-semibold text-slate-700">Telefone</Label>
-            <Input
-              value={form.telefone}
-              onChange={(e) => setForm({ ...form, telefone: formatTelefone(e.target.value) })}
-              placeholder="(00) 00000-0000"
-              className="h-12 rounded-xl"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-sm font-semibold text-slate-700">Telefone</Label>
+              <Input
+                value={form.telefone || ""}
+                onChange={(e) => setForm({ ...form, telefone: formatTelefone(e.target.value) })}
+                placeholder="(00) 00000-0000"
+                className="h-12 rounded-xl"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-semibold text-slate-700">E-mail</Label>
+              <Input
+                type="email"
+                value={form.email || ""}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                placeholder="cliente@email.com"
+                className="h-12 rounded-xl"
+              />
+            </div>
           </div>
 
           <div className="border-t border-dashed border-slate-200 pt-4 space-y-4">
@@ -409,6 +457,13 @@ function ParceiroClientes() {
                       <div>
                         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Telefone</p>
                         <p className="text-slate-700">{selectedCliente.telefone || "Não informado"}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <Mail className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">E-mail</p>
+                        <p className="text-slate-700 break-all">{selectedCliente.email || "Não informado"}</p>
                       </div>
                     </div>
                   </div>

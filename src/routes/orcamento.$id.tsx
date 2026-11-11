@@ -76,7 +76,7 @@ function ImprimirDAV() {
             d.bairro = cli.bairro;
             d.cidade = cli.cidade;
             d.uf = cli.uf;
-            d.email = cli.email;
+            d.email = cli.email || d.cliente_email;
             if (!d.cliente_endereco) {
               d.cliente_endereco = [
                 cli.endereco,
@@ -449,7 +449,7 @@ function ImprimirDAV() {
               </div>
               <div className="flex">
                 <span className="w-20 font-black text-black shrink-0">E-mail:</span>
-                <span className="flex-1 break-words font-black text-black">{dav.rawVenda?.cliente?.email || dav.email || "-"}</span>
+                <span className="flex-1 break-words font-black text-black">{dav.rawVenda?.cliente?.email || dav.cliente_email || dav.email || "-"}</span>
               </div>
               <div className="flex">
                 <span className="w-20 font-black text-black shrink-0">Bairro:</span>

@@ -70,6 +70,7 @@ function RegistroRapido() {
   const [tipoFinanca, setTipoFinanca] = useState("receita");
   const [statusFinanca, setStatusFinanca] = useState("paga");
   const [clienteNomeCad, setClienteNomeCad] = useState("");
+  const [clienteEmailCad, setClienteEmailCad] = useState("");
   const [clienteTelCad, setClienteTelCad] = useState("");
   const [clienteCpfCad, setClienteCpfCad] = useState("");
   const [qtdEstoque, setQtdEstoque] = useState("");
@@ -145,9 +146,16 @@ function RegistroRapido() {
         toast.success("Lancamento financeiro salvo!");
       } else if (actionId === "cliente") {
         if (!clienteNomeCad) throw new Error("Preencha o nome do cliente.");
-        await supabase
+        const { error: cliErr } = await supabase
           .from("clientes")
-          .insert([{ nome: clienteNomeCad, telefone: clienteTelCad, cpf_cnpj: clienteCpfCad }]);
+          .insert([{
+            nome: clienteNomeCad.trim(),
+            email: clienteEmailCad?.trim() || null,
+            telefone: clienteTelCad?.trim() || null,
+            cpf_cnpj: clienteCpfCad?.trim() || null,
+            status: "Ativo",
+          }]);
+        if (cliErr) throw cliErr;
         toast.success("Cliente cadastrado com sucesso!");
       } else if (actionId === "estoque") {
         if (!produtoSelecionado || !qtdEstoque) throw new Error("Selecione produto e quantidade.");
@@ -453,6 +461,15 @@ function RegistroRapido() {
                             placeholder="(00) 00000-0000"
                             value={clienteTelCad}
                             onChange={(e) => setClienteTelCad(e.target.value)}
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>E-mail</Label>
+                          <Input
+                            type="email"
+                            placeholder="cliente@email.com"
+                            value={clienteEmailCad}
+                            onChange={(e) => setClienteEmailCad(e.target.value)}
                           />
                         </div>
                         <div className="grid gap-2">

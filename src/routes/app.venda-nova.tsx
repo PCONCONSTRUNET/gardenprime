@@ -71,6 +71,7 @@ function NovaVenda() {
   const [novoCliente, setNovoCliente] = useState({
     nome: "",
     cpf_cnpj: "",
+    email: "",
     telefone: "",
     cep: "",
     endereco: "",
@@ -176,37 +177,41 @@ function NovaVenda() {
       const { data: existingClient, error: searchError } = await query;
       if (searchError) throw searchError;
 
-      if (existingClient && existingClient.length > 0) {
-        alert(
-          `Já existe um cliente cadastrado com este ${
-            novoCliente.cpf_cnpj ? "CNPJ/CPF" : "Nome"
-          }.`
-        );
-        setLoadingCliente(false);
-        return;
-      }
-
-      const payload = {
-        nome: novoCliente.nome,
-        cpf_cnpj: novoCliente.cpf_cnpj,
-        telefone: novoCliente.telefone,
-        cep: novoCliente.cep,
-        endereco: novoCliente.endereco,
-        numero: novoCliente.numero,
-        bairro: novoCliente.bairro,
-        cidade: novoCliente.cidade,
-        uf: novoCliente.uf,
+      const payload: any = {
+        nome: novoCliente.nome.trim(),
+        cpf_cnpj: novoCliente.cpf_cnpj?.trim() || null,
+        email: novoCliente.email?.trim() || null,
+        telefone: novoCliente.telefone?.trim() || null,
+        cep: novoCliente.cep?.trim() || null,
+        endereco: novoCliente.endereco?.trim() || null,
+        numero: novoCliente.numero?.trim() || null,
+        bairro: novoCliente.bairro?.trim() || null,
+        cidade: novoCliente.cidade?.trim() || null,
+        uf: novoCliente.uf?.trim() || null,
         status: "Ativo",
       };
 
-      const { data, error } = await supabase.from("clientes").insert([payload]).select().single();
-      if (error) throw error;
+      let savedClientId: string;
+      if (existingClient && existingClient.length > 0) {
+        const { data: updated, error: updErr } = await supabase
+          .from("clientes")
+          .update(payload)
+          .eq("id", existingClient[0].id)
+          .select()
+          .single();
+        if (updErr) throw updErr;
+        savedClientId = updated.id;
+      } else {
+        const { data, error } = await supabase.from("clientes").insert([payload]).select().single();
+        if (error) throw error;
+        savedClientId = data.id;
+      }
 
-      setClienteId(data.id);
+      setClienteId(savedClientId);
       setOpenModalCliente(false);
 
       // Procede com a gravação do DAV/Venda com o novo cliente
-      await executarSalvamentoVenda(data.id);
+      await executarSalvamentoVenda(savedClientId);
     } catch (err: any) {
       console.error(err);
       alert("Erro ao criar novo cliente: " + err.message);
@@ -661,13 +666,24 @@ function NovaVenda() {
                 placeholder="000.000.000-00 ou 00.000.000/0000-00"
               />
             </div>
-            <div className="space-y-2">
-              <Label>Telefone</Label>
-              <Input
-                value={novoCliente.telefone}
-                onChange={(e) => setNovoCliente({ ...novoCliente, telefone: e.target.value })}
-                placeholder="(00) 00000-0000"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Telefone</Label>
+                <Input
+                  value={novoCliente.telefone}
+                  onChange={(e) => setNovoCliente({ ...novoCliente, telefone: e.target.value })}
+                  placeholder="(00) 00000-0000"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>E-mail</Label>
+                <Input
+                  type="email"
+                  value={novoCliente.email || ""}
+                  onChange={(e) => setNovoCliente({ ...novoCliente, email: e.target.value })}
+                  placeholder="cliente@email.com"
+                />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">

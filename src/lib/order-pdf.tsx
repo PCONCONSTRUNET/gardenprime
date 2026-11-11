@@ -323,7 +323,7 @@ export async function enrichOrderAndItems(
     cidade: rawC.cidade || (order as any).cidade || "-",
     uf: rawC.uf || (order as any).uf || "-",
     cep: rawC.cep || (order as any).cep || "",
-    email: rawC.email || (order as any).email || "-",
+    email: rawC.email || (order as any).cliente_email || (order as any).email || "-",
   };
 
   // 2. Buscar itens no banco se vieram vazios
