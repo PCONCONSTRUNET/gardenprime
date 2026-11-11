@@ -70,25 +70,31 @@ function ImprimirDAV() {
       let itemsData: any[] = [];
 
       if (d) {
+        let cli: any = null;
         if (d.cliente_id) {
-          const { data: cli } = await supabase.from("clientes").select("*").eq("id", d.cliente_id).single();
-          if (cli) {
-            d.bairro = cli.bairro;
-            d.cidade = cli.cidade;
-            d.uf = cli.uf;
-            d.email = cli.email || d.cliente_email;
-            if (!d.cliente_endereco) {
-              d.cliente_endereco = [
-                cli.endereco,
-                cli.numero ? `Nº ${cli.numero}` : null,
-                cli.bairro,
-                cli.cidade && cli.uf ? `${cli.cidade}/${cli.uf}` : cli.cidade || cli.uf || null,
-                cli.cep ? `CEP: ${cli.cep}` : null,
-              ]
-                .filter(Boolean)
-                .join(", ");
-            }
+          const { data } = await supabase.from("clientes").select("*").eq("id", d.cliente_id).maybeSingle();
+          cli = data;
+        } else if (d.cliente_cnpj) {
+          const { data } = await supabase.from("clientes").select("*").eq("cpf_cnpj", d.cliente_cnpj).limit(1).maybeSingle();
+          cli = data;
+        }
+        if (cli) {
+          d.bairro = cli.bairro || d.bairro;
+          d.cidade = cli.cidade || d.cidade;
+          d.uf = cli.uf || d.uf;
+          d.cep = cli.cep || d.cep;
+          d.numero = cli.numero || d.numero;
+          d.email = cli.email || d.cliente_email || d.email;
+          let endBase = d.cliente_endereco || cli.endereco || "";
+          if (cli.numero && endBase && !endBase.includes(String(cli.numero))) {
+            endBase = `${endBase}, Nº ${cli.numero}`;
           }
+          if (cli.cep && endBase && !endBase.toUpperCase().includes("CEP") && !endBase.includes(String(cli.cep))) {
+            endBase = `${endBase} - CEP: ${cli.cep}`;
+          } else if (cli.cep && !endBase) {
+            endBase = `CEP: ${cli.cep}`;
+          }
+          d.cliente_endereco = endBase;
         }
         setDav(d);
         const { data: i } = await supabase
@@ -107,15 +113,15 @@ function ImprimirDAV() {
         }
       } else if (v) {
         const cli = v.cliente;
-        const enderecoPartes = [
-          cli?.endereco,
-          cli?.numero ? `Nº ${cli.numero}` : null,
-          cli?.bairro,
-          cli?.cidade && cli?.uf ? `${cli.cidade}/${cli.uf}` : cli?.cidade || cli?.uf || null,
-          cli?.cep ? `CEP: ${cli.cep}` : null,
-        ]
-          .filter(Boolean)
-          .join(", ");
+        let enderecoFormatado = cli?.endereco || "";
+        if (cli?.numero && enderecoFormatado && !enderecoFormatado.includes(String(cli.numero))) {
+          enderecoFormatado = `${enderecoFormatado}, Nº ${cli.numero}`;
+        }
+        if (cli?.cep && enderecoFormatado && !enderecoFormatado.toUpperCase().includes("CEP") && !enderecoFormatado.includes(String(cli.cep))) {
+          enderecoFormatado = `${enderecoFormatado} - CEP: ${cli.cep}`;
+        } else if (cli?.cep && !enderecoFormatado) {
+          enderecoFormatado = `CEP: ${cli.cep}`;
+        }
 
         d = {
           id: v.id,
@@ -124,10 +130,11 @@ function ImprimirDAV() {
           cliente_nome: cli?.nome,
           cliente_cnpj: cli?.cpf_cnpj,
           cliente_telefone: cli?.telefone,
-          cliente_endereco: enderecoPartes || null,
+          cliente_endereco: enderecoFormatado || null,
           bairro: cli?.bairro || null,
           cidade: cli?.cidade || null,
           uf: cli?.uf || null,
+          cep: cli?.cep || null,
           email: cli?.email || null,
           condicao_pagamento: v.condicao_pagamento || v.metodo_pagamento,
           vencimentos: v.vencimentos || null,
@@ -463,9 +470,28 @@ function ImprimirDAV() {
                 <span className="w-20 font-black text-black shrink-0">UF:</span>
                 <span className="flex-1 break-words font-black text-black">{dav.rawVenda?.cliente?.uf || dav.uf || "-"}</span>
               </div>
+              <div className="flex">
+                <span className="w-20 font-black text-black shrink-0">CEP:</span>
+                <span className="flex-1 break-words font-black text-black">{dav.rawVenda?.cliente?.cep || dav.cep || "-"}</span>
+              </div>
               <div className="flex sm:col-span-2 print:col-span-2">
                 <span className="w-20 font-black text-black shrink-0">Endereço:</span>
-                <span className="flex-1 break-words whitespace-normal font-black text-black">{dav.rawVenda?.cliente?.endereco || dav.cliente_endereco || "-"}</span>
+                <span className="flex-1 break-words whitespace-normal font-black text-black">
+                  {(() => {
+                    let end = dav.cliente_endereco || dav.rawVenda?.cliente?.endereco || "";
+                    const num = dav.rawVenda?.cliente?.numero || dav.numero;
+                    const cep = dav.rawVenda?.cliente?.cep || dav.cep;
+                    if (num && end && !end.includes(String(num))) {
+                      end = `${end}, Nº ${num}`;
+                    }
+                    if (cep && end && !end.toUpperCase().includes("CEP") && !end.includes(String(cep))) {
+                      end = `${end} - CEP: ${cep}`;
+                    } else if (cep && !end) {
+                      end = `CEP: ${cep}`;
+                    }
+                    return end || "-";
+                  })()}
+                </span>
               </div>
             </div>
           </div>

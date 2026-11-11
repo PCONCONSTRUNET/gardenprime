@@ -1006,6 +1006,7 @@ function ParceiroPDV() {
     setClientForm({
       nome: "",
       documento: "",
+      email: "",
       telefone: "",
       cep: "",
       endereco: "",
@@ -1042,8 +1043,14 @@ function ParceiroPDV() {
         cliente: {
           nome: clientForm.nome,
           cpf_cnpj: clientForm.documento,
+          email: clientForm.email,
           telefone: clientForm.telefone,
-          endereco: `${clientForm.endereco || ""}${clientForm.numero ? `, ${clientForm.numero}` : ""}`,
+          cep: clientForm.cep,
+          numero: clientForm.numero,
+          bairro: clientForm.bairro,
+          cidade: clientForm.cidade,
+          uf: clientForm.uf,
+          endereco: `${clientForm.endereco || ""}${clientForm.numero ? `, Nº ${clientForm.numero}` : ""}${clientForm.cep ? ` - CEP: ${clientForm.cep}` : ""}`,
         },
         condicao_pagamento:
           clientForm.pagamento.startsWith("Boleto")
@@ -1518,8 +1525,14 @@ function ParceiroPDV() {
                         cliente: {
                           nome: clientForm.nome,
                           cpf_cnpj: clientForm.documento,
+                          email: clientForm.email,
                           telefone: clientForm.telefone,
-                          endereco: `${clientForm.endereco || ""}${clientForm.numero ? `, ${clientForm.numero}` : ""}`,
+                          cep: clientForm.cep,
+                          numero: clientForm.numero,
+                          bairro: clientForm.bairro,
+                          cidade: clientForm.cidade,
+                          uf: clientForm.uf,
+                          endereco: `${clientForm.endereco || ""}${clientForm.numero ? `, Nº ${clientForm.numero}` : ""}${clientForm.cep ? ` - CEP: ${clientForm.cep}` : ""}`,
                         },
                         condicao_pagamento:
                           clientForm.pagamento.startsWith("Boleto")

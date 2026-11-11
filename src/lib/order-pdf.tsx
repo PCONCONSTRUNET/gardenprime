@@ -220,8 +220,9 @@ export async function enrichOrderAndItems(
     (order as any).bairro ||
     (order as any).cliente_endereco
   );
+  const hasClientCep = Boolean(existingClient?.cep || (order as any).cep);
 
-  if ((!hasClientName || !hasClientAddressOrCity) && order.id) {
+  if ((!hasClientName || !hasClientAddressOrCity || !hasClientCep) && order.id) {
     // Tenta primeiro em 'vendas'
     try {
       const v = await queryDb<any>((client) =>
@@ -244,16 +245,16 @@ export async function enrichOrderAndItems(
         }
         if (v.clientes) {
           order.cliente = {
-            nome: v.clientes.nome,
-            cpf_cnpj: v.clientes.cpf_cnpj,
-            telefone: v.clientes.telefone,
-            endereco: v.clientes.endereco,
-            numero: v.clientes.numero,
-            bairro: v.clientes.bairro,
-            cidade: v.clientes.cidade,
-            uf: v.clientes.uf,
-            cep: v.clientes.cep,
-            email: (v.clientes as any).email,
+            nome: v.clientes.nome || existingClient?.nome,
+            cpf_cnpj: v.clientes.cpf_cnpj || existingClient?.cpf_cnpj,
+            telefone: v.clientes.telefone || existingClient?.telefone,
+            endereco: v.clientes.endereco || existingClient?.endereco,
+            numero: v.clientes.numero || existingClient?.numero,
+            bairro: v.clientes.bairro || existingClient?.bairro,
+            cidade: v.clientes.cidade || existingClient?.cidade,
+            uf: v.clientes.uf || existingClient?.uf,
+            cep: v.clientes.cep || existingClient?.cep,
+            email: (v.clientes as any).email || existingClient?.email,
           };
         }
       }
@@ -262,7 +263,7 @@ export async function enrichOrderAndItems(
     }
 
     // Se ainda não achou o cliente completo, tenta em 'davs'
-    if ((!order.cliente?.nome || !order.cliente?.cidade) && order.id) {
+    if ((!order.cliente?.nome || !order.cliente?.cidade || !order.cliente?.cep) && order.id) {
       try {
         const d = await queryDb<any>((client) =>
           client.from("davs").select("*").eq("id", order.id).maybeSingle()
@@ -285,6 +286,10 @@ export async function enrichOrderAndItems(
             cliData = await queryDb<any>((client) =>
               client.from("clientes").select("*").eq("id", d.cliente_id).maybeSingle()
             );
+          } else if (d.cliente_cnpj) {
+            cliData = await queryDb<any>((client) =>
+              client.from("clientes").select("*").eq("cpf_cnpj", d.cliente_cnpj).limit(1).maybeSingle()
+            );
           }
 
           order.cliente = {
@@ -292,12 +297,12 @@ export async function enrichOrderAndItems(
             cpf_cnpj: cliData?.cpf_cnpj || d.cliente_cnpj || order.cliente?.cpf_cnpj,
             telefone: cliData?.telefone || d.cliente_telefone || order.cliente?.telefone,
             endereco: cliData?.endereco || d.cliente_endereco || order.cliente?.endereco,
-            numero: cliData?.numero || "",
+            numero: cliData?.numero || order.cliente?.numero || "",
             bairro: cliData?.bairro || d.bairro || order.cliente?.bairro,
             cidade: cliData?.cidade || d.cidade || order.cliente?.cidade,
             uf: cliData?.uf || d.uf || order.cliente?.uf,
-            cep: cliData?.cep || order.cliente?.cep,
-            email: cliData?.email || d.email || order.cliente?.email,
+            cep: cliData?.cep || (d as any).cep || order.cliente?.cep,
+            email: cliData?.email || d.cliente_email || d.email || order.cliente?.email,
           };
         }
       } catch (e) {
@@ -308,9 +313,15 @@ export async function enrichOrderAndItems(
 
   // Normalizar objeto cliente
   const rawC = order.cliente || order.clientes || (order as any).client || {};
+  const cepVal = rawC.cep || (order as any).cep || (order as any).cliente_cep || "";
   let endFormatted = rawC.endereco || (order as any).cliente_endereco || "";
   if (rawC.numero && endFormatted && !endFormatted.includes(String(rawC.numero))) {
     endFormatted = `${endFormatted}, Nº ${rawC.numero}`;
+  }
+  if (cepVal && endFormatted && !endFormatted.toUpperCase().includes("CEP") && !endFormatted.includes(String(cepVal))) {
+    endFormatted = `${endFormatted} - CEP: ${cepVal}`;
+  } else if (cepVal && !endFormatted) {
+    endFormatted = `CEP: ${cepVal}`;
   }
 
   order.cliente = {
@@ -322,7 +333,7 @@ export async function enrichOrderAndItems(
     bairro: rawC.bairro || (order as any).bairro || "-",
     cidade: rawC.cidade || (order as any).cidade || "-",
     uf: rawC.uf || (order as any).uf || "-",
-    cep: rawC.cep || (order as any).cep || "",
+    cep: cepVal || "-",
     email: rawC.email || (order as any).cliente_email || (order as any).email || "-",
   };
 
@@ -744,7 +755,7 @@ export async function generateOrderPdfDoc(
 
   // 3. DADOS DO CLIENTE
   doc.setFillColor(colorGray[0], colorGray[1], colorGray[2]);
-  doc.roundedRect(margin, y, pageWidth - margin * 2, 32, 2, 2, "F");
+  doc.roundedRect(margin, y, pageWidth - margin * 2, 36, 2, 2, "F");
   
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.5);
@@ -759,44 +770,45 @@ export async function generateOrderPdfDoc(
   
   const c = order.cliente || order.clientes || ({} as any);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFontSize(7.8);
   doc.setTextColor(0, 0, 0);
   
   const labelX1 = margin + 5;
-  const valX1 = margin + 25;
+  const valX1 = margin + 24;
   const labelX2 = margin + 85;
-  const valX2 = margin + 105;
+  const valX2 = margin + 103;
 
-  let cy = y + 14;
-  const nomeTrunc = doc.splitTextToSize(String(c.nome || "-"), 57)[0] || "-";
-  const endTrunc = doc.splitTextToSize(String(c.endereco || "-"), 57)[0] || "-";
+  let cy = y + 12.5;
+  const nomeTrunc = doc.splitTextToSize(String(c.nome || "-"), 58)[0] || "-";
+  const endLines = doc.splitTextToSize(String(c.endereco || "-"), 112);
   doc.text("Nome:", labelX1, cy); doc.text(nomeTrunc, valX1, cy);
   doc.text("Bairro:", labelX2, cy); doc.text(String(c.bairro || "-"), valX2, cy);
-  cy += 5;
+  cy += 4.6;
   doc.text("CNPJ/CPF:", labelX1, cy); doc.text(String(c.cpf_cnpj || "-"), valX1, cy);
-  doc.text("Cidade:", labelX2, cy); doc.text(String(c.cidade || "-"), valX2, cy);
-  cy += 5;
+  doc.text("Cidade/UF:", labelX2, cy); doc.text(`${c.cidade || "-"}${c.uf && c.uf !== "-" ? ` / ${c.uf}` : ""}`, valX2, cy);
+  cy += 4.6;
   doc.text("Telefone:", labelX1, cy); doc.text(String(c.telefone || "-"), valX1, cy);
-  doc.text("UF:", labelX2, cy); doc.text(String(c.uf || "-"), valX2, cy);
-  cy += 5;
-  doc.text("Endereço:", labelX1, cy); doc.text(endTrunc, valX1, cy);
-  doc.text("E-mail:", labelX2, cy); doc.text(String(c.email || "-"), valX2, cy);
+  doc.text("CEP:", labelX2, cy); doc.text(String(c.cep || "-"), valX2, cy);
+  cy += 4.6;
+  doc.text("E-mail:", labelX1, cy); doc.text(String(c.email || "-"), valX1, cy);
+  cy += 4.6;
+  doc.text("Endereço:", labelX1, cy); doc.text(endLines[0] || "-", valX1, cy);
 
   // Obrigado box
   const obX = pageWidth - margin - 50;
   doc.setFillColor(250, 250, 245);
-  doc.roundedRect(obX, y + 4, 45, 24, 1, 1, "F");
+  doc.roundedRect(obX, y + 5, 45, 26, 1, 1, "F");
   doc.setFont("helvetica", "bold");
   doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
-  doc.text("Obrigado pela", obX + 15, y + 10);
-  doc.text("sua confiança!", obX + 15, y + 14);
+  doc.text("Obrigado pela", obX + 15, y + 11);
+  doc.text("sua confiança!", obX + 15, y + 15);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(6);
   doc.setTextColor(0, 0, 0);
-  doc.text("Estamos à disposição", obX + 15, y + 20);
-  doc.text("para lhe atender sempre!", obX + 15, y + 23);
+  doc.text("Estamos à disposição", obX + 15, y + 21);
+  doc.text("para lhe atender sempre!", obX + 15, y + 24);
 
-  y += 38;
+  y += 42;
 
   // 4. PRODUTOS
   doc.setFont("helvetica", "bold");
