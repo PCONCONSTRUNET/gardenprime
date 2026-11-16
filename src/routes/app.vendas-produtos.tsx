@@ -12,9 +12,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, Save, Pencil, Printer, ArrowUpDown, ArrowUp, ArrowDown, FileText, Calendar, Package, TrendingUp } from "lucide-react";
+import { Search, Save, Pencil, Printer, ArrowUpDown, ArrowUp, ArrowDown, FileText, Calendar, Package, TrendingUp, DollarSign, EyeOff } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -38,6 +46,8 @@ function VendasProdutos() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<number>(0);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [mostrarValorImpressao, setMostrarValorImpressao] = useState<boolean>(false);
+  const [printModalOpen, setPrintModalOpen] = useState<boolean>(false);
 
   type SortColumn = "codigo" | "nome" | "categoria" | "valor" | "total_calculado";
   type SortDirection = "asc" | "desc";
@@ -237,6 +247,14 @@ function VendasProdutos() {
     minute: "2-digit",
   });
 
+  const handleConfirmPrint = (comValor: boolean) => {
+    setMostrarValorImpressao(comValor);
+    setPrintModalOpen(false);
+    setTimeout(() => {
+      window.print();
+    }, 200);
+  };
+
   return (
     <>
       <style>{`
@@ -254,12 +272,45 @@ function VendasProdutos() {
         title="Desempenho de Produtos"
         subtitle="Acompanhe e ajuste o número de vendas por produto"
         actions={
-          <Button variant="outline" onClick={() => window.print()} className="print:hidden font-bold">
+          <Button variant="outline" onClick={() => setPrintModalOpen(true)} className="print:hidden font-bold">
             <Printer className="mr-2 h-4 w-4" />
             Imprimir Relatório
           </Button>
         }
       />
+
+      <Dialog open={printModalOpen} onOpenChange={setPrintModalOpen}>
+        <DialogContent className="sm:max-w-md print:hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Printer className="h-5 w-5 text-primary" />
+              Opções de Impressão do Relatório
+            </DialogTitle>
+            <DialogDescription>
+              Escolha se deseja exibir a coluna com o valor unitário (Vlr. Unit.) dos produtos na impressão ou PDF.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-3 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleConfirmPrint(false)}
+              className="flex-1 font-bold"
+            >
+              <EyeOff className="mr-2 h-4 w-4" />
+              Imprimir SEM Valor
+            </Button>
+            <Button
+              type="button"
+              onClick={() => handleConfirmPrint(true)}
+              className="flex-1 bg-gradient-brand text-primary-foreground font-bold"
+            >
+              <DollarSign className="mr-2 h-4 w-4" />
+              Imprimir COM Valor
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-4 sm:grid-cols-3 mb-6 print:hidden">
         <Card className="shadow-card">
@@ -599,9 +650,11 @@ function VendasProdutos() {
               <th className="py-2 px-2.5 text-center font-black uppercase tracking-wider border border-slate-400 w-32">
                 Categoria
               </th>
-              <th className="py-2 px-2.5 text-right font-black uppercase tracking-wider border border-slate-400 w-24">
-                Vlr. Unit.
-              </th>
+              {mostrarValorImpressao && (
+                <th className="py-2 px-2.5 text-right font-black uppercase tracking-wider border border-slate-400 w-24">
+                  Vlr. Unit.
+                </th>
+              )}
               <th className="py-2 px-2.5 text-right font-black uppercase tracking-wider border border-slate-400 w-28 text-[#E5C378]">
                 Total Vendas
               </th>
@@ -637,9 +690,11 @@ function VendasProdutos() {
                 <td className="py-1.5 px-2.5 text-center font-bold text-[11px] text-slate-800 border border-slate-300">
                   {p.categoria || "-"}
                 </td>
-                <td className="py-1.5 px-2.5 text-right font-bold text-xs text-black border border-slate-300 whitespace-nowrap">
-                  R$ {Number(p.valor || 0).toFixed(2).replace(".", ",")}
-                </td>
+                {mostrarValorImpressao && (
+                  <td className="py-1.5 px-2.5 text-right font-bold text-xs text-black border border-slate-300 whitespace-nowrap">
+                    R$ {Number(p.valor || 0).toFixed(2).replace(".", ",")}
+                  </td>
+                )}
                 <td className="py-1.5 px-2.5 text-right font-black text-sm text-[#112321] border border-slate-300 whitespace-nowrap">
                   {p.total_calculado || 0}
                 </td>
@@ -649,7 +704,7 @@ function VendasProdutos() {
           <tfoot>
             <tr className="bg-[#112321] text-white">
               <td
-                colSpan={4}
+                colSpan={mostrarValorImpressao ? 4 : 3}
                 className="py-2.5 px-3 text-right font-black uppercase tracking-wider text-xs border border-slate-400 text-[#E5C378]"
               >
                 TOTAL GERAL ({printableProducts.length} PRODUTOS LISTADOS):
