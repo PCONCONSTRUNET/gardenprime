@@ -260,7 +260,9 @@ function VendasProdutos() {
       <style>{`
         @media print {
           @page { margin: 8mm; size: A4 portrait; }
-          body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: #ffffff !important; color: #000000 !important; }
+          html, body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: #ffffff !important; background-color: #ffffff !important; color: #000000 !important; }
+          #root, main { background: #ffffff !important; background-color: #ffffff !important; }
+          [role="dialog"], [data-radix-portal] { display: none !important; }
           .print-table { width: 100%; border-collapse: collapse; }
           .print-table thead { display: table-header-group; }
           .print-table tfoot { display: table-row-group; }
@@ -279,38 +281,40 @@ function VendasProdutos() {
         }
       />
 
-      <Dialog open={printModalOpen} onOpenChange={setPrintModalOpen}>
-        <DialogContent className="sm:max-w-md print:hidden">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Printer className="h-5 w-5 text-primary" />
-              Opções de Impressão do Relatório
-            </DialogTitle>
-            <DialogDescription>
-              Escolha se deseja exibir a coluna com o valor unitário (Vlr. Unit.) dos produtos na impressão ou PDF.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-3 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handleConfirmPrint(false)}
-              className="flex-1 font-bold"
-            >
-              <EyeOff className="mr-2 h-4 w-4" />
-              Imprimir SEM Valor
-            </Button>
-            <Button
-              type="button"
-              onClick={() => handleConfirmPrint(true)}
-              className="flex-1 bg-gradient-brand text-primary-foreground font-bold"
-            >
-              <DollarSign className="mr-2 h-4 w-4" />
-              Imprimir COM Valor
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {printModalOpen && (
+        <Dialog open={printModalOpen} onOpenChange={setPrintModalOpen}>
+          <DialogContent className="sm:max-w-md print:hidden">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Printer className="h-5 w-5 text-primary" />
+                Opções de Impressão do Relatório
+              </DialogTitle>
+              <DialogDescription>
+                Escolha se deseja exibir a coluna com o valor unitário (Vlr. Unit.) dos produtos na impressão ou PDF.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleConfirmPrint(false)}
+                className="flex-1 font-bold"
+              >
+                <EyeOff className="mr-2 h-4 w-4" />
+                Imprimir SEM Valor
+              </Button>
+              <Button
+                type="button"
+                onClick={() => handleConfirmPrint(true)}
+                className="flex-1 bg-gradient-brand text-primary-foreground font-bold"
+              >
+                <DollarSign className="mr-2 h-4 w-4" />
+                Imprimir COM Valor
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-3 mb-6 print:hidden">
         <Card className="shadow-card">
@@ -661,10 +665,10 @@ function VendasProdutos() {
             </tr>
           </thead>
           <tbody>
-            {printableProducts.map((p, idx) => (
+            {printableProducts.map((p) => (
               <tr
                 key={p.id}
-                className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}
+                className="bg-white"
               >
                 <td className="py-1.5 px-2.5 text-center font-mono font-black text-xs text-black border border-slate-300">
                   {p.codigo}
@@ -695,7 +699,7 @@ function VendasProdutos() {
                     R$ {Number(p.valor || 0).toFixed(2).replace(".", ",")}
                   </td>
                 )}
-                <td className="py-1.5 px-2.5 text-right font-black text-sm text-[#112321] border border-slate-300 whitespace-nowrap">
+                <td className="py-1.5 px-2.5 text-right font-black text-lg text-black border border-slate-300 whitespace-nowrap">
                   {p.total_calculado || 0}
                 </td>
               </tr>
@@ -709,7 +713,7 @@ function VendasProdutos() {
               >
                 TOTAL GERAL ({printableProducts.length} PRODUTOS LISTADOS):
               </td>
-              <td className="py-2.5 px-3 text-right font-black text-base text-white border border-slate-400">
+              <td className="py-2.5 px-3 text-right font-black text-xl text-white border border-slate-400">
                 {totalVendasImpressao}
               </td>
             </tr>
