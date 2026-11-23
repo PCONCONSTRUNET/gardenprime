@@ -233,13 +233,16 @@ function ImprimirDAV() {
   return (
     <div
       className="bg-white min-h-screen text-black p-4 sm:p-8 print:p-0 font-sans"
-      style={{ maxWidth: "850px", margin: "0 auto" }}
+      style={{ maxWidth: "850px", margin: "0 auto", WebkitFontSmoothing: "auto" }}
     >
       <style>{`
         @media print {
           @page { margin: 8mm; size: A4; }
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; font-weight: 700; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; font-weight: 700; -webkit-font-smoothing: auto; }
           .no-print { display: none !important; }
+        }
+        .dados-cliente-bold, .dados-cliente-bold * {
+          font-weight: 900 !important;
         }
       `}</style>
 
@@ -430,52 +433,52 @@ function ImprimirDAV() {
         </div>
 
         {/* 3. DADOS DO CLIENTE */}
-        <div className="bg-white p-2 flex flex-wrap justify-between gap-6 mb-6 shadow-xs">
+        <div className="bg-white p-2 flex flex-wrap justify-between gap-6 mb-6 shadow-xs dados-cliente-bold">
           <div className="flex-1 min-w-[250px]">
-            <h2 className="font-black text-sm mb-3 flex items-center gap-2">
-              <div className="w-5 h-5 rounded-full bg-[#B89547] flex items-center justify-center text-white shrink-0">
+            <h2 className="font-display font-black text-sm mb-3 flex items-center gap-2">
+              <div className="w-5 h-5 rounded-full bg-[#A57F33] flex items-center justify-center text-white shrink-0">
                 <User className="w-3.5 h-3.5 stroke-[2.5]" />
               </div>
-              <span className="tracking-wide">
-                <span className="text-[#B89547] font-black">DADOS</span>{" "}
+              <span className="tracking-wide font-black">
+                <span className="text-[#9A7424] font-black">DADOS</span>{" "}
                 <span className="text-black font-black">DO CLIENTE</span>
               </span>
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-[13px] font-black text-black">
               <div className="flex sm:col-span-2 print:col-span-2">
-                <span className="w-20 font-black text-black shrink-0">Nome:</span>
+                <span className="w-24 font-black text-black shrink-0">Nome:</span>
                 <span className="flex-1 break-words font-black text-black">{dav.cliente_nome || "-"}</span>
               </div>
               <div className="flex">
-                <span className="w-20 font-black text-black shrink-0">CNPJ/CPF:</span>
+                <span className="w-24 font-black text-black shrink-0">CNPJ/CPF:</span>
                 <span className="flex-1 break-words font-black text-black">{dav.cliente_cnpj || "-"}</span>
               </div>
               <div className="flex">
-                <span className="w-20 font-black text-black shrink-0">Telefone:</span>
+                <span className="w-24 font-black text-black shrink-0">Telefone:</span>
                 <span className="flex-1 break-words font-black text-black">{dav.cliente_telefone || "-"}</span>
               </div>
               <div className="flex">
-                <span className="w-20 font-black text-black shrink-0">E-mail:</span>
+                <span className="w-24 font-black text-black shrink-0">E-mail:</span>
                 <span className="flex-1 break-words font-black text-black">{dav.rawVenda?.cliente?.email || dav.cliente_email || dav.email || "-"}</span>
               </div>
               <div className="flex">
-                <span className="w-20 font-black text-black shrink-0">Bairro:</span>
+                <span className="w-24 font-black text-black shrink-0">Bairro:</span>
                 <span className="flex-1 break-words font-black text-black">{dav.rawVenda?.cliente?.bairro || dav.bairro || "-"}</span>
               </div>
               <div className="flex">
-                <span className="w-20 font-black text-black shrink-0">Cidade:</span>
+                <span className="w-24 font-black text-black shrink-0">Cidade:</span>
                 <span className="flex-1 break-words font-black text-black">{dav.rawVenda?.cliente?.cidade || dav.cidade || "-"}</span>
               </div>
               <div className="flex">
-                <span className="w-20 font-black text-black shrink-0">UF:</span>
+                <span className="w-24 font-black text-black shrink-0">UF:</span>
                 <span className="flex-1 break-words font-black text-black">{dav.rawVenda?.cliente?.uf || dav.uf || "-"}</span>
               </div>
               <div className="flex">
-                <span className="w-20 font-black text-black shrink-0">CEP:</span>
+                <span className="w-24 font-black text-black shrink-0">CEP:</span>
                 <span className="flex-1 break-words font-black text-black">{dav.rawVenda?.cliente?.cep || dav.cep || "-"}</span>
               </div>
               <div className="flex sm:col-span-2 print:col-span-2">
-                <span className="w-20 font-black text-black shrink-0">Endereço:</span>
+                <span className="w-24 font-black text-black shrink-0">Endereço:</span>
                 <span className="flex-1 break-words whitespace-normal font-black text-black">
                   {(() => {
                     let end = dav.cliente_endereco || dav.rawVenda?.cliente?.endereco || "";

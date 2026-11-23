@@ -96,38 +96,38 @@ function DeclaracaoConteudo() {
             <td className="w-1/2 border border-black font-bold text-center py-0.5">DESTINATÁRIO</td>
           </tr>
           <tr>
-            <td className="w-1/2 border border-black p-0 align-top">
+            <td className="w-1/2 border border-black p-0 align-top font-bold text-black">
               <div className="flex px-1 border-b border-black">
-                <span>NOME:</span> <span className="ml-1 truncate">{remetente.nome}</span>
+                <span>NOME:</span> <span className="ml-1 truncate font-black">{remetente.nome}</span>
               </div>
               <div className="flex px-1 border-b border-black">
-                <span>ENDEREÇO:</span> <span className="ml-1 truncate">{remetente.endereco}</span>
+                <span>ENDEREÇO:</span> <span className="ml-1 truncate font-black">{remetente.endereco}</span>
               </div>
               <div className="flex border-b border-black">
                 <div className="w-[75%] px-1 border-r border-black flex">
-                  <span>CIDADE:</span> <span className="ml-1 truncate">{remetente.cidade}</span>
+                  <span>CIDADE:</span> <span className="ml-1 truncate font-black">{remetente.cidade}</span>
                 </div>
                 <div className="w-[25%] px-1 flex">
-                  <span>UF:</span> <span className="ml-1">{remetente.uf}</span>
+                  <span>UF:</span> <span className="ml-1 font-black">{remetente.uf}</span>
                 </div>
               </div>
               <div className="flex">
                 <div className="w-[40%] px-1 border-r border-black flex">
-                  <span>CEP:</span> <span className="ml-1 truncate">{remetente.cep}</span>
+                  <span>CEP:</span> <span className="ml-1 truncate font-black">{remetente.cep}</span>
                 </div>
                 <div className="w-[60%] px-1 flex">
-                  <span>CNPJ/CPF:</span> <span className="ml-1 truncate">{remetente.cpf_cnpj}</span>
+                  <span>CNPJ/CPF:</span> <span className="ml-1 truncate font-black">{remetente.cpf_cnpj}</span>
                 </div>
               </div>
             </td>
-            <td className="w-1/2 border border-black p-0 align-top">
+            <td className="w-1/2 border border-black p-0 align-top font-bold text-black">
               <div className="flex px-1 border-b border-black">
                 <span>NOME:</span>{" "}
-                <span className="ml-1 truncate">{destinatario.nome || "Não informado"}</span>
+                <span className="ml-1 truncate font-black">{destinatario.nome || "Não informado"}</span>
               </div>
               <div className="flex px-1 border-b border-black">
                 <span>ENDEREÇO:</span>{" "}
-                <span className="ml-1 truncate">
+                <span className="ml-1 truncate font-black">
                   {destinatario.endereco || "Não informado"}, {destinatario.numero} -{" "}
                   {destinatario.bairro}
                 </span>
@@ -135,19 +135,19 @@ function DeclaracaoConteudo() {
               <div className="flex border-b border-black">
                 <div className="w-[75%] px-1 border-r border-black flex">
                   <span>CIDADE:</span>{" "}
-                  <span className="ml-1 truncate">{destinatario.cidade || "-"}</span>
+                  <span className="ml-1 truncate font-black">{destinatario.cidade || "-"}</span>
                 </div>
                 <div className="w-[25%] px-1 flex">
-                  <span>UF:</span> <span className="ml-1">{destinatario.uf || "-"}</span>
+                  <span>UF:</span> <span className="ml-1 font-black">{destinatario.uf || "-"}</span>
                 </div>
               </div>
               <div className="flex">
                 <div className="w-[40%] px-1 border-r border-black flex">
-                  <span>CEP:</span> <span className="ml-1 truncate">{destinatario.cep || "-"}</span>
+                  <span>CEP:</span> <span className="ml-1 truncate font-black">{destinatario.cep || "-"}</span>
                 </div>
                 <div className="w-[60%] px-1 flex">
                   <span>CNPJ/CPF:</span>{" "}
-                  <span className="ml-1 truncate">{destinatario.cpf_cnpj || "-"}</span>
+                  <span className="ml-1 truncate font-black">{destinatario.cpf_cnpj || "-"}</span>
                 </div>
               </div>
             </td>

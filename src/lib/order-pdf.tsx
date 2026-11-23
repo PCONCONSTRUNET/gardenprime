@@ -754,33 +754,41 @@ export async function generateOrderPdfDoc(
   y += (29.5 + extraHeight);
 
   // 3. DADOS DO CLIENTE
+  const c = order.cliente || order.clientes || ({} as any);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.2);
+  const nomeTrunc = doc.splitTextToSize(String(c.nome || "-"), 56)[0] || "-";
+  const endLines = doc.splitTextToSize(String(c.endereco || "-"), 108);
+  const extraEndLines = endLines.length > 1 ? 1 : 0;
+  const clientBoxH = 36 + extraEndLines * 4.2;
+
   doc.setFillColor(colorGray[0], colorGray[1], colorGray[2]);
-  doc.roundedRect(margin, y, pageWidth - margin * 2, 36, 2, 2, "F");
+  doc.roundedRect(margin, y, pageWidth - margin * 2, clientBoxH, 2, 2, "F");
   
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.5);
+  doc.setFontSize(9.5);
+  doc.setTextColor(154, 116, 36);
+  doc.text("DADOS", margin + 5, y + 6);
+  const dadosTitleWidth = doc.getTextWidth("DADOS ");
   doc.setTextColor(0, 0, 0);
-  doc.text("DADOS DO CLIENTE", margin + 10, y + 6);
+  doc.text("DO CLIENTE", margin + 5 + dadosTitleWidth, y + 6);
   if (order.vendedor_nome) {
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.5);
-    doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
+    doc.setFontSize(8);
+    doc.setTextColor(154, 116, 36);
     doc.text(`VENDEDOR: ${String(order.vendedor_nome).toUpperCase()}`, pageWidth - margin - 55, y + 6, { align: "right" });
   }
   
-  const c = order.cliente || order.clientes || ({} as any);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.8);
+  doc.setFontSize(8.2);
   doc.setTextColor(0, 0, 0);
   
   const labelX1 = margin + 5;
-  const valX1 = margin + 24;
+  const valX1 = margin + 25;
   const labelX2 = margin + 85;
-  const valX2 = margin + 103;
+  const valX2 = margin + 104;
 
   let cy = y + 12.5;
-  const nomeTrunc = doc.splitTextToSize(String(c.nome || "-"), 58)[0] || "-";
-  const endLines = doc.splitTextToSize(String(c.endereco || "-"), 112);
   doc.text("Nome:", labelX1, cy); doc.text(nomeTrunc, valX1, cy);
   doc.text("Bairro:", labelX2, cy); doc.text(String(c.bairro || "-"), valX2, cy);
   cy += 4.6;
@@ -792,14 +800,16 @@ export async function generateOrderPdfDoc(
   cy += 4.6;
   doc.text("E-mail:", labelX1, cy); doc.text(String(c.email || "-"), valX1, cy);
   cy += 4.6;
-  doc.text("Endereço:", labelX1, cy); doc.text(endLines[0] || "-", valX1, cy);
+  doc.text("Endereço:", labelX1, cy);
+  doc.text(endLines.slice(0, 2), valX1, cy);
 
   // Obrigado box
   const obX = pageWidth - margin - 50;
   doc.setFillColor(250, 250, 245);
   doc.roundedRect(obX, y + 5, 45, 26, 1, 1, "F");
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
+  doc.setFontSize(7.5);
+  doc.setTextColor(154, 116, 36);
   doc.text("Obrigado pela", obX + 15, y + 11);
   doc.text("sua confiança!", obX + 15, y + 15);
   doc.setFont("helvetica", "bold");
@@ -808,7 +818,7 @@ export async function generateOrderPdfDoc(
   doc.text("Estamos à disposição", obX + 15, y + 21);
   doc.text("para lhe atender sempre!", obX + 15, y + 24);
 
-  y += 42;
+  y += clientBoxH + 6;
 
   // 4. PRODUTOS
   doc.setFont("helvetica", "bold");
