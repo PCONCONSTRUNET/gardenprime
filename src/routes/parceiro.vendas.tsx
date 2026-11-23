@@ -13,15 +13,15 @@ import {
   Ban,
   PackagePlus,
   ShoppingCart,
-  ChevronsUpDown,
   Save,
   Plus,
   Minus,
-  Check,
   Truck,
   CheckCircle2,
   Clock,
   UserCheck,
+  ArrowLeft,
+  Pencil,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -41,15 +41,7 @@ import {
   getOrderNumber,
   isOrderDav,
 } from "@/lib/order-pdf";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
+import { OrderProductPicker, type PickerProduct } from "@/components/order-product-picker";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/parceiro/vendas")({
@@ -81,10 +73,6 @@ function VendasParceiro() {
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const [newItems, setNewItems] = useState<any[]>([]);
   const [produtos, setProdutos] = useState<any[]>([]);
-  const [openProdutoPop, setOpenProdutoPop] = useState(false);
-  const [selectedProdutoId, setSelectedProdutoId] = useState("");
-  const [newQtd, setNewQtd] = useState(1);
-  const [newUnitario, setNewUnitario] = useState(0);
   const [savingItems, setSavingItems] = useState(false);
 
   // Confirm dialog state
@@ -115,7 +103,7 @@ function VendasParceiro() {
     }
   };
 
-  const openDetails = async (venda: any) => {
+  const openDetails = async (venda: any, autoEdit = false) => {
     setSelectedVenda(venda);
     setDeliveryStatus(venda.status || "Aguardando Entrega");
     setDeliveryPerson(venda.rotas?.motorista || "");
@@ -124,11 +112,22 @@ function VendasParceiro() {
     setLoadingItens(true);
     setVendaItens([]);
     try {
-      const { data, error } = await supabase
-        .from("vendas_itens")
-        .select("*, produto:produtos(nome, codigo, emoji, imagem, valor, estoque)")
-        .eq("venda_id", venda.id);
-      if (data) setVendaItens(data);
+      const [{ data }] = await Promise.all([
+        supabase
+          .from("vendas_itens")
+          .select("*, produto:produtos(nome, codigo, emoji, imagem, valor, estoque)")
+          .eq("venda_id", venda.id),
+        autoEdit ? fetchProdutos() : Promise.resolve(),
+      ]);
+      if (data) {
+        setVendaItens(data);
+        if (autoEdit) {
+          setEditItens(data.map((i: any) => ({ ...i })));
+          setRemovedIds([]);
+          setNewItems([]);
+          setIsEditingItems(true);
+        }
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -257,9 +256,6 @@ function VendasParceiro() {
     setEditItens(vendaItens.map((i) => ({ ...i })));
     setRemovedIds([]);
     setNewItems([]);
-    setSelectedProdutoId("");
-    setNewQtd(1);
-    setNewUnitario(0);
     setIsEditingItems(true);
   };
 
@@ -356,40 +352,42 @@ function VendasParceiro() {
           return { ...item, valor_unitario: "", subtotal: 0 };
         }
         const newU = typeof val === "number" ? val : parseFloat(val);
-        if (isNaN(newU) || newU < 0) return i;
+        if (isNaN(newU) || newU < 0) return item;
         const qVal = typeof item.quantidade === "number" ? item.quantidade : (parseInt(String(item.quantidade)) || 0);
         return { ...item, valor_unitario: newU, subtotal: qVal * newU };
       })
     );
   };
 
-  const handleSelectProduto = (prodId: string) => {
-    const prod = produtos.find((p) => p.id === prodId);
-    if (prod) setNewUnitario(Number(prod.valor));
-    setSelectedProdutoId(prodId);
-    setOpenProdutoPop(false);
-  };
+  const handleQuickAddProduct = (prod: PickerProduct, quantidade: number) => {
+    const qtdSafe = Math.max(1, Number(quantidade) || 1);
+    const unitVal = Number(prod.valor || 0);
 
-  const handleAddNewItem = () => {
-    if (!selectedProdutoId || newQtd <= 0) return;
-    const prod = produtos.find((p) => p.id === selectedProdutoId);
-    if (!prod) return;
-    setNewItems((prev) => [
-      ...prev,
-      {
-        produto_id: prod.id,
-        nome: prod.nome,
-        imagem: prod.imagem,
-        emoji: prod.emoji,
-        quantidade: newQtd,
-        valor_unitario: newUnitario,
-        subtotal: newUnitario * newQtd,
-        estoque: prod.estoque,
-      },
-    ]);
-    setSelectedProdutoId("");
-    setNewQtd(1);
-    setNewUnitario(0);
+    setNewItems((prev) => {
+      const existingIdx = prev.findIndex((i) => i.produto_id === prod.id);
+      if (existingIdx >= 0) {
+        return prev.map((item, idx) => {
+          if (idx !== existingIdx) return item;
+          const nextQty = (Number(item.quantidade) || 0) + qtdSafe;
+          const uVal = Number(item.valor_unitario) || 0;
+          return { ...item, quantidade: nextQty, subtotal: nextQty * uVal };
+        });
+      }
+      return [
+        ...prev,
+        {
+          produto_id: prod.id,
+          codigo: prod.codigo ?? null,
+          nome: prod.nome,
+          imagem: prod.imagem,
+          emoji: prod.emoji,
+          quantidade: qtdSafe,
+          valor_unitario: unitVal,
+          subtotal: unitVal * qtdSafe,
+          estoque: prod.estoque,
+        },
+      ];
+    });
   };
 
   const handleSaveItems = async () => {
@@ -812,6 +810,16 @@ function VendasParceiro() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDetails(v, true);
+                      }}
+                      className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-lg transition-colors"
+                      title={isDav ? "Editar orçamento" : "Editar pedido"}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
                     {isDav && v.status !== "Cancelado" && (
                       <button
                         onClick={(e) => {
@@ -926,28 +934,559 @@ function VendasParceiro() {
         </div>
       )}
 
-      {/* ── Details Dialog ── */}
-      <Dialog open={isDetailsOpen} onOpenChange={(o) => { setIsDetailsOpen(o); if (!o) handleCancelEditItems(); }}>
-        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-[480px] max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6 rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {isOrderDav(selectedVenda || {}) ? "Ficha do Orçamento" : "Ficha do Pedido"}
-            </DialogTitle>
-            <DialogDescription asChild>
-              <div>
-                {isOrderDav(selectedVenda || {}) ? "Orçamento" : "Pedido"} #
-                {getOrderNumber(selectedVenda || {})} •{" "}
-                {selectedVenda && new Date(selectedVenda.created_at).toLocaleDateString("pt-BR")}
+      {/* ── Full-Screen Details & Order Editor Dialog ── */}
+      <Dialog
+        open={isDetailsOpen}
+        onOpenChange={(o) => {
+          setIsDetailsOpen(o);
+          if (!o) handleCancelEditItems();
+        }}
+      >
+        <DialogContent className="!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !w-screen !h-[100dvh] !max-w-none !rounded-none !border-0 !p-0 flex flex-col bg-slate-50/95 overflow-hidden [&>button.absolute]:hidden">
+          {/* ── Top Header Bar ── */}
+          <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-xs">
+            <div className="flex items-center gap-3 min-w-0">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 gap-1.5 text-slate-600 hover:text-slate-900 rounded-xl shrink-0"
+                onClick={() => setIsDetailsOpen(false)}
+              >
+                <ArrowLeft className="h-4 w-4" />
+                <span className="hidden sm:inline">Voltar</span>
+              </Button>
+              <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+              <DialogHeader className="text-left space-y-0.5 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <DialogTitle className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+                    {isOrderDav(selectedVenda || {}) ? "Orçamento" : "Pedido"} #
+                    {getOrderNumber(selectedVenda || {})}
+                  </DialogTitle>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-[11px] font-bold px-2 py-0.5",
+                      getStatusColor(selectedVenda?.status || "")
+                    )}
+                  >
+                    {selectedVenda?.status || "Aguardando"}
+                  </Badge>
+                </div>
+                <DialogDescription className="text-xs text-slate-500 truncate">
+                  {selectedVenda?.clientes?.nome || "Cliente não informado"} •{" "}
+                  {selectedVenda &&
+                    new Date(selectedVenda.created_at).toLocaleDateString("pt-BR")}
+                </DialogDescription>
+              </DialogHeader>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {selectedVenda && (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 rounded-xl border-slate-200 text-xs font-semibold gap-1.5"
+                    onClick={() => openOrderPdf(selectedVenda, vendaItens)}
+                  >
+                    <FileText className="h-3.5 w-3.5 text-slate-500" />
+                    <span className="hidden md:inline">Ver / Imprimir PDF</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 rounded-xl border-slate-200 text-xs font-semibold gap-1.5"
+                    onClick={() => downloadOrderPdf(selectedVenda, vendaItens)}
+                  >
+                    <Download className="h-3.5 w-3.5 text-slate-500" />
+                    <span className="hidden md:inline">Baixar PDF</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-9 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold gap-1.5"
+                    onClick={() => handleShare(selectedVenda, vendaItens)}
+                    disabled={sharingId === selectedVenda.id}
+                  >
+                    {sharingId === selectedVenda.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                    ) : (
+                      <WhatsAppIcon className="w-3.5 h-3.5 shrink-0" />
+                    )}
+                    <span className="hidden md:inline">WhatsApp</span>
+                  </Button>
+                </>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 rounded-xl text-slate-500 hover:text-slate-900"
+                onClick={() => setIsDetailsOpen(false)}
+                title="Fechar"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* ── Main Full-Screen 2-Column Workspace ── */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+            <div className="max-w-[1440px] mx-auto grid grid-cols-1 lg:grid-cols-[1fr_380px] xl:grid-cols-[1fr_420px] gap-6 items-start">
+              {/* ── LEFT WIDE COLUMN: Itens do Pedido + Catálogo ── */}
+              <div className="space-y-5 min-w-0">
+                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4 sm:p-6 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+                        <ShoppingCart className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-900 text-base">
+                          {isOrderDav(selectedVenda || {})
+                            ? "Itens do Orçamento"
+                            : "Itens do Pedido"}
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                          {isEditingItems
+                            ? `${editItens.length + newItems.length} item(ns) no pedido`
+                            : `${vendaItens.length} item(ns) registrados`}
+                        </p>
+                      </div>
+                    </div>
+
+                    {!loadingItens && (
+                      <div className="flex items-center gap-2">
+                        {isEditingItems ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-9 text-destructive border-destructive/30 hover:bg-destructive/10 text-xs font-semibold rounded-xl"
+                              onClick={handleCancelEditItems}
+                              disabled={savingItems}
+                            >
+                              <X className="h-3.5 w-3.5 mr-1.5" /> Cancelar Edição
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl px-4"
+                              onClick={handleSaveItems}
+                              disabled={savingItems}
+                            >
+                              <Save className="h-3.5 w-3.5 mr-1.5" />
+                              {savingItems ? "Salvando..." : "Salvar Alterações"}
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-9 text-xs font-semibold gap-1.5 rounded-xl border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                            onClick={handleStartEditItems}
+                          >
+                            <PackagePlus className="h-3.5 w-3.5" /> Editar Produtos / Adicionar Itens
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {loadingItens ? (
+                    <div className="text-center py-10 text-muted-foreground flex flex-col items-center gap-2">
+                      <Loader2 className="w-6 h-6 animate-spin text-brand" />
+                      <span className="text-sm">Carregando itens...</span>
+                    </div>
+                  ) : isEditingItems ? (
+                    <div className="space-y-3">
+                      {editItens.map((item) => (
+                        <div
+                          key={item.id}
+                          className="p-3.5 bg-slate-50/40 hover:bg-white border border-slate-200/90 rounded-2xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all"
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className="w-11 h-11 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-lg shrink-0 overflow-hidden">
+                              {item.produto?.imagem ? (
+                                <img
+                                  src={item.produto.imagem}
+                                  alt={item.produto?.nome}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                item.produto?.emoji || "📦"
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-bold text-sm text-slate-800 truncate">
+                                {item.produto?.nome || "Produto Excluído"}
+                              </p>
+                              {item.produto?.codigo && (
+                                <p className="text-[11px] text-slate-400 font-medium truncate">
+                                  Cód: {item.produto.codigo}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between sm:justify-end gap-3 flex-wrap shrink-0">
+                            {/* Stepper e Input Qtd */}
+                            <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5 border border-slate-200/70 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleChangeExistingQty(item.id, -1)}
+                                className="w-7 h-7 flex items-center justify-center bg-white rounded-md shadow-xs hover:bg-slate-50 active:scale-95 text-slate-700"
+                                title="Diminuir"
+                              >
+                                <Minus className="w-3 h-3" />
+                              </button>
+                              <input
+                                type="number"
+                                min="1"
+                                value={item.quantidade === "" ? "" : item.quantidade}
+                                onChange={(e) => handleSetExistingQty(item.id, e.target.value)}
+                                onBlur={() => {
+                                  if (
+                                    item.quantidade === "" ||
+                                    parseInt(String(item.quantidade)) <= 0
+                                  ) {
+                                    handleSetExistingQty(item.id, "1");
+                                  }
+                                }}
+                                className="w-12 text-center text-xs font-black text-slate-800 bg-transparent border-0 outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                title="Quantidade"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleChangeExistingQty(item.id, 1)}
+                                className="w-7 h-7 flex items-center justify-center bg-white rounded-md shadow-xs hover:bg-slate-50 active:scale-95 text-slate-700"
+                                title="Aumentar"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+                            </div>
+
+                            {/* Input Valor Unitário */}
+                            <div className="flex items-center gap-1 bg-white border border-slate-200 focus-within:border-emerald-600 rounded-lg px-2 py-1 transition-all shrink-0">
+                              <span className="text-[11px] font-bold text-slate-500 select-none">
+                                R$
+                              </span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={item.valor_unitario === "" ? "" : item.valor_unitario}
+                                onChange={(e) =>
+                                  handleSetExistingUnitPrice(item.id, e.target.value)
+                                }
+                                onBlur={() => {
+                                  if (
+                                    item.valor_unitario === "" ||
+                                    isNaN(Number(item.valor_unitario))
+                                  ) {
+                                    handleSetExistingUnitPrice(item.id, "0");
+                                  }
+                                }}
+                                className="w-16 text-xs font-bold text-slate-800 bg-transparent outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                title="Editar valor unitário"
+                                placeholder="0,00"
+                              />
+                              <span className="text-[10px] font-semibold text-slate-400 select-none">
+                                un
+                              </span>
+                            </div>
+
+                            {/* Subtotal */}
+                            <div className="min-w-[84px] text-right shrink-0">
+                              <p className="font-black text-brand text-sm">
+                                R${" "}
+                                {Number(item.subtotal || 0)
+                                  .toFixed(2)
+                                  .replace(".", ",")}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveExistingItem(item.id)}
+                              className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
+                              title="Remover item"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+
+                      {newItems.map((item, idx) => (
+                        <div
+                          key={`new-${idx}`}
+                          className="p-3.5 bg-emerald-50/50 border border-emerald-200/80 rounded-2xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all"
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className="w-11 h-11 rounded-xl bg-white border border-emerald-200 flex items-center justify-center text-lg shrink-0 overflow-hidden">
+                              {item.imagem ? (
+                                <img
+                                  src={item.imagem}
+                                  alt={item.nome}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                item.emoji || "📦"
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] border-emerald-400 text-emerald-700 bg-white px-1.5 py-0 h-4 shrink-0"
+                                >
+                                  novo
+                                </Badge>
+                                <p className="font-bold text-sm text-slate-800 truncate">
+                                  {item.nome}
+                                </p>
+                              </div>
+                              {item.codigo && (
+                                <p className="text-[11px] text-slate-500 font-medium mt-0.5 truncate">
+                                  Cód: {item.codigo}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between sm:justify-end gap-3 flex-wrap shrink-0">
+                            {/* Stepper e Input Qtd */}
+                            <div className="flex items-center gap-0.5 bg-white rounded-lg p-0.5 border border-emerald-200 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleChangeNewItemQty(idx, -1)}
+                                className="w-7 h-7 flex items-center justify-center bg-slate-50 rounded-md shadow-xs hover:bg-slate-100 active:scale-95 text-slate-700"
+                                title="Diminuir"
+                              >
+                                <Minus className="w-3 h-3" />
+                              </button>
+                              <input
+                                type="number"
+                                min="1"
+                                value={item.quantidade === "" ? "" : item.quantidade}
+                                onChange={(e) => handleSetNewItemQty(idx, e.target.value)}
+                                onBlur={() => {
+                                  if (
+                                    item.quantidade === "" ||
+                                    parseInt(String(item.quantidade)) <= 0
+                                  ) {
+                                    handleSetNewItemQty(idx, "1");
+                                  }
+                                }}
+                                className="w-12 text-center text-xs font-black text-slate-800 bg-transparent border-0 outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                title="Quantidade"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleChangeNewItemQty(idx, 1)}
+                                className="w-7 h-7 flex items-center justify-center bg-slate-50 rounded-md shadow-xs hover:bg-slate-100 active:scale-95 text-slate-700"
+                                title="Aumentar"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+                            </div>
+
+                            {/* Input Valor Unitário */}
+                            <div className="flex items-center gap-1 bg-white border border-emerald-200 focus-within:border-emerald-600 rounded-lg px-2 py-1 transition-all shrink-0">
+                              <span className="text-[11px] font-bold text-slate-500 select-none">
+                                R$
+                              </span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={item.valor_unitario === "" ? "" : item.valor_unitario}
+                                onChange={(e) =>
+                                  handleSetNewItemUnitPrice(idx, e.target.value)
+                                }
+                                onBlur={() => {
+                                  if (
+                                    item.valor_unitario === "" ||
+                                    isNaN(Number(item.valor_unitario))
+                                  ) {
+                                    handleSetNewItemUnitPrice(idx, "0");
+                                  }
+                                }}
+                                className="w-16 text-xs font-bold text-slate-800 bg-transparent outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                title="Editar valor unitário"
+                                placeholder="0,00"
+                              />
+                              <span className="text-[10px] font-semibold text-slate-400 select-none">
+                                un
+                              </span>
+                            </div>
+
+                            {/* Subtotal */}
+                            <div className="min-w-[84px] text-right shrink-0">
+                              <p className="font-black text-brand text-sm">
+                                R${" "}
+                                {Number(item.subtotal || 0)
+                                  .toFixed(2)
+                                  .replace(".", ",")}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveNewItem(idx)}
+                              className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
+                              title="Remover item"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+
+                      {editItens.length === 0 && newItems.length === 0 && (
+                        <div className="p-8 text-center text-sm text-muted-foreground bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                          Nenhum item restante. Utilize o catálogo abaixo para adicionar produtos.
+                        </div>
+                      )}
+                    </div>
+                  ) : vendaItens.length === 0 ? (
+                    <div className="p-8 text-center text-sm text-muted-foreground border border-dashed border-slate-200 rounded-xl">
+                      Nenhum item encontrado.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-100 border border-slate-200/80 rounded-xl overflow-hidden">
+                      {vendaItens.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between gap-3 p-3.5 bg-white hover:bg-slate-50/70 transition-colors"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-11 h-11 rounded-xl bg-slate-100 border border-slate-200/60 flex items-center justify-center text-lg shrink-0 overflow-hidden">
+                              {item.produto?.imagem ? (
+                                <img
+                                  src={item.produto.imagem}
+                                  alt={item.produto?.nome}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                item.produto?.emoji || "📦"
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold text-sm text-slate-900 truncate">
+                                {item.produto?.nome || "Produto Excluído"}
+                              </p>
+                              <p className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                                {item.produto?.codigo && (
+                                  <span className="font-medium text-slate-400">
+                                    Cód: {item.produto.codigo} •
+                                  </span>
+                                )}
+                                <span>
+                                  {item.quantidade}x R${" "}
+                                  {Number(item.valor_unitario).toFixed(2).replace(".", ",")}
+                                </span>
+                              </p>
+                            </div>
+                          </div>
+                          <p className="font-bold text-brand text-sm sm:text-base shrink-0">
+                            R$ {Number(item.subtotal).toFixed(2).replace(".", ",")}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Catálogo rápido de produtos no modo edição */}
+                {isEditingItems && (
+                  <OrderProductPicker
+                    produtos={produtos}
+                    onAddProduct={handleQuickAddProduct}
+                  />
+                )}
+              </div>
+
+              {/* ── RIGHT SIDEBAR: Total, Cliente, Entrega & Ações ── */}
+              <div className="space-y-4 lg:sticky lg:top-0">
+                {/* Card Total */}
+                <div className="rounded-2xl bg-slate-900 text-white p-5 shadow-md space-y-3">
+                  <div className="flex items-center justify-between text-xs uppercase tracking-wider text-slate-300 font-semibold">
+                    <span>
+                      {isEditingItems
+                        ? "Novo Total Estimado"
+                        : isOrderDav(selectedVenda || {})
+                        ? "Total do Orçamento"
+                        : "Total do Pedido"}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-white/10 text-white">
+                      {isEditingItems ? editItens.length + newItems.length : vendaItens.length}{" "}
+                      itens
+                    </span>
+                  </div>
+                  <div className="text-3xl font-black tracking-tight">
+                    R${" "}
+                    {(isEditingItems ? editTotal : Number(selectedVenda?.valor_total || 0))
+                      .toFixed(2)
+                      .replace(".", ",")}
+                  </div>
+                  {isEditingItems && (
+                    <div className="pt-2 flex flex-col gap-2">
+                      <Button
+                        className="w-full h-10 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl"
+                        onClick={handleSaveItems}
+                        disabled={savingItems}
+                      >
+                        <Save className="h-4 w-4 mr-2" />
+                        {savingItems ? "Salvando Alterações..." : "Salvar Alterações"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="w-full h-9 text-slate-200 hover:text-white hover:bg-white/10 rounded-xl text-xs"
+                        onClick={handleCancelEditItems}
+                        disabled={savingItems}
+                      >
+                        Descartar Edição
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Cliente */}
                 {selectedVenda?.clientes?.nome && (
-                  <div className="mt-3 text-sm text-slate-700 bg-slate-100 p-3 rounded-xl border border-slate-200 text-left">
-                    <p className="font-semibold text-slate-900 flex items-center gap-2">
+                  <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 space-y-2">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                      Cliente
+                    </h4>
+                    <p className="font-bold text-sm text-slate-900">
                       👤 {selectedVenda.clientes.nome}
                     </p>
+                    <div className="text-xs text-slate-500 space-y-0.5">
+                      {selectedVenda.clientes.cnpj_cpf && (
+                        <p>CNPJ/CPF: {selectedVenda.clientes.cnpj_cpf}</p>
+                      )}
+                      {selectedVenda.clientes.telefone && (
+                        <p>Tel: {selectedVenda.clientes.telefone}</p>
+                      )}
+                      {(selectedVenda.clientes.cidade || selectedVenda.clientes.uf) && (
+                        <p>
+                          {[selectedVenda.clientes.cidade, selectedVenda.clientes.uf]
+                            .filter(Boolean)
+                            .join(" / ")}
+                          {selectedVenda.clientes.cep
+                            ? ` • CEP ${selectedVenda.clientes.cep}`
+                            : ""}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
 
-                {/* ── Status & Responsável pela Entrega ── */}
-                <div className="mt-3 bg-slate-50 border border-slate-200/90 rounded-2xl p-3 sm:p-3.5 space-y-3 text-left">
+                {/* Status & Responsável pela Entrega */}
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-3 text-left">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
@@ -988,9 +1527,12 @@ function VendasParceiro() {
                       onClick={() => setDeliveryStatus("Aguardando Entrega")}
                       className={cn(
                         "py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 min-w-0",
-                        deliveryStatus === "Aguardando Entrega" || (!deliveryStatus && selectedVenda?.status !== "Entregue" && selectedVenda?.status !== "Em Transporte")
+                        deliveryStatus === "Aguardando Entrega" ||
+                          (!deliveryStatus &&
+                            selectedVenda?.status !== "Entregue" &&
+                            selectedVenda?.status !== "Em Transporte")
                           ? "bg-amber-500 text-white border-amber-600 shadow-sm"
-                          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
+                          : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
                       )}
                     >
                       <Clock className="w-3.5 h-3.5 shrink-0" />
@@ -1003,7 +1545,7 @@ function VendasParceiro() {
                         "py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 min-w-0",
                         deliveryStatus === "Em Transporte" || deliveryStatus === "Em rota"
                           ? "bg-blue-600 text-white border-blue-700 shadow-sm"
-                          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
+                          : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
                       )}
                     >
                       <Truck className="w-3.5 h-3.5 shrink-0" />
@@ -1016,7 +1558,7 @@ function VendasParceiro() {
                         "py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 min-w-0",
                         deliveryStatus === "Entregue"
                           ? "bg-emerald-600 text-white border-emerald-700 shadow-sm"
-                          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
+                          : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
                       )}
                     >
                       <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
@@ -1053,501 +1595,72 @@ function VendasParceiro() {
                     </div>
                   </div>
                 </div>
-              </div>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-2">
-            {loadingItens ? (
-              <div className="text-center py-6 text-muted-foreground flex flex-col items-center gap-2">
-                <Loader2 className="w-6 h-6 animate-spin text-brand" />
-                <span>Carregando itens...</span>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* ── Header itens ── */}
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider truncate">
-                    Itens do Pedido
-                  </p>
-                  {isEditingItems ? (
-                    <div className="flex gap-1 shrink-0">
+
+                {/* Ações do Pedido */}
+                {!loadingItens && selectedVenda && (
+                  <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-2.5">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Ações
+                    </h4>
+
+                    {vendaItens.length > 0 && (
                       <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 text-destructive hover:bg-destructive/10 text-xs px-2 shrink-0"
-                        onClick={handleCancelEditItems}
-                        disabled={savingItems}
+                        variant="secondary"
+                        className="w-full h-10 font-bold border border-slate-200 rounded-xl flex items-center justify-center gap-1.5 text-xs text-slate-700"
+                        onClick={() => {
+                          if (selectedVenda?.id) {
+                            window.location.href = `/parceiro/pdv?draft_id=${selectedVenda.id}`;
+                            return;
+                          }
+                          const itemsMagic = vendaItens
+                            .map((i) => `${i.produto_id}:${i.quantidade}`)
+                            .join(",");
+                          window.location.href = `/parceiro/pdv?c=${itemsMagic}`;
+                        }}
                       >
-                        <X className="h-3 w-3 mr-1" /> Cancelar
+                        <Copy className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                        <span>Clonar Pedido no PDV</span>
                       </Button>
-                      <Button
-                        size="sm"
-                        className="h-7 bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-2.5 shrink-0"
-                        onClick={handleSaveItems}
-                        disabled={savingItems}
-                      >
-                        <Save className="h-3 w-3 mr-1" />
-                        {savingItems ? "Salvando..." : "Salvar"}
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-xs gap-1 rounded-lg shrink-0"
-                      onClick={handleStartEditItems}
-                    >
-                      <PackagePlus className="h-3 w-3" /> Editar Itens
-                    </Button>
-                  )}
-                </div>
+                    )}
 
-                {/* ── Modo edição ── */}
-                {isEditingItems ? (
-                  <div className="space-y-3">
-                    <div className="max-h-[300px] overflow-y-auto space-y-2 p-0.5">
-                      {editItens.map((item) => (
-                        <div key={item.id} className="p-2.5 sm:p-3 bg-white border border-slate-200/90 rounded-2xl shadow-xs space-y-2 transition-all">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <div className="w-8 h-8 rounded-xl bg-slate-50 border flex items-center justify-center text-lg shrink-0 overflow-hidden">
-                                {item.produto?.imagem ? (
-                                  <img src={item.produto.imagem} alt={item.produto?.nome} className="w-full h-full object-cover" />
-                                ) : (
-                                  item.produto?.emoji || "📦"
-                                )}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="font-bold text-xs sm:text-sm text-slate-800 truncate">
-                                  {item.produto?.nome || "Produto Excluído"}
-                                </p>
-                                {item.produto?.codigo && (
-                                  <p className="text-[10px] text-slate-400 font-medium truncate">Cód: {item.produto.codigo}</p>
-                                )}
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveExistingItem(item.id)}
-                              className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
-                              title="Remover item"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-
-                          <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-100 flex-wrap sm:flex-nowrap">
-                            <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap min-w-0">
-                              {/* Stepper e Input Qtd */}
-                              <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5 shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={() => handleChangeExistingQty(item.id, -1)}
-                                  className="w-6 h-6 flex items-center justify-center bg-white rounded-md shadow-xs hover:bg-slate-50 active:scale-95 text-slate-700"
-                                  title="Diminuir"
-                                >
-                                  <Minus className="w-3 h-3" />
-                                </button>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  value={item.quantidade === "" ? "" : item.quantidade}
-                                  onChange={(e) => handleSetExistingQty(item.id, e.target.value)}
-                                  onBlur={() => {
-                                    if (item.quantidade === "" || parseInt(String(item.quantidade)) <= 0) {
-                                      handleSetExistingQty(item.id, "1");
-                                    }
-                                  }}
-                                  className="w-10 text-center text-xs font-black text-slate-800 bg-transparent border-0 outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                  title="Quantidade"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => handleChangeExistingQty(item.id, 1)}
-                                  className="w-6 h-6 flex items-center justify-center bg-white rounded-md shadow-xs hover:bg-slate-50 active:scale-95 text-slate-700"
-                                  title="Aumentar"
-                                >
-                                  <Plus className="w-3 h-3" />
-                                </button>
-                              </div>
-
-                              {/* Input Valor Unitário */}
-                              <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 focus-within:border-emerald-600 focus-within:bg-white rounded-lg px-1.5 py-0.5 transition-all shrink-0">
-                                <span className="text-[10px] font-bold text-slate-500 select-none">R$</span>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  value={item.valor_unitario === "" ? "" : item.valor_unitario}
-                                  onChange={(e) => handleSetExistingUnitPrice(item.id, e.target.value)}
-                                  onBlur={() => {
-                                    if (item.valor_unitario === "" || isNaN(Number(item.valor_unitario))) {
-                                      handleSetExistingUnitPrice(item.id, "0");
-                                    }
-                                  }}
-                                  className="w-14 text-xs font-bold text-slate-800 bg-transparent outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                  title="Editar valor unitário"
-                                  placeholder="0,00"
-                                />
-                                <span className="text-[9px] font-semibold text-slate-400 select-none">un</span>
-                              </div>
-                            </div>
-
-                            {/* Subtotal */}
-                            <div className="text-right shrink-0">
-                              <p className="font-black text-brand text-xs sm:text-base">
-                                R${" "}
-                                {Number(item.subtotal || 0)
-                                  .toFixed(2)
-                                  .replace(".", ",")}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-
-                      {newItems.map((item, idx) => (
-                        <div key={`new-${idx}`} className="p-2.5 sm:p-3 bg-emerald-50/50 border border-emerald-200/80 rounded-2xl shadow-xs space-y-2 transition-all">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <div className="w-8 h-8 rounded-xl bg-white border border-emerald-100 flex items-center justify-center text-lg shrink-0 overflow-hidden">
-                                {item.emoji || "📦"}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-1.5">
-                                  <Badge variant="outline" className="text-[9px] border-emerald-400 text-emerald-700 px-1 py-0 h-4 shrink-0">novo</Badge>
-                                  <p className="font-bold text-xs sm:text-sm text-slate-800 truncate">
-                                    {item.nome}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveNewItem(idx)}
-                              className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
-                              title="Remover item"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-
-                          <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-emerald-100 flex-wrap sm:flex-nowrap">
-                            <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap min-w-0">
-                              {/* Stepper e Input Qtd */}
-                              <div className="flex items-center gap-0.5 bg-white rounded-lg p-0.5 border border-emerald-200 shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={() => handleChangeNewItemQty(idx, -1)}
-                                  className="w-6 h-6 flex items-center justify-center bg-slate-50 rounded-md shadow-xs hover:bg-slate-100 active:scale-95 text-slate-700"
-                                  title="Diminuir"
-                                >
-                                  <Minus className="w-3 h-3" />
-                                </button>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  value={item.quantidade === "" ? "" : item.quantidade}
-                                  onChange={(e) => handleSetNewItemQty(idx, e.target.value)}
-                                  onBlur={() => {
-                                    if (item.quantidade === "" || parseInt(String(item.quantidade)) <= 0) {
-                                      handleSetNewItemQty(idx, "1");
-                                    }
-                                  }}
-                                  className="w-10 text-center text-xs font-black text-slate-800 bg-transparent border-0 outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                  title="Quantidade"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => handleChangeNewItemQty(idx, 1)}
-                                  className="w-6 h-6 flex items-center justify-center bg-slate-50 rounded-md shadow-xs hover:bg-slate-100 active:scale-95 text-slate-700"
-                                  title="Aumentar"
-                                >
-                                  <Plus className="w-3 h-3" />
-                                </button>
-                              </div>
-
-                              {/* Input Valor Unitário */}
-                              <div className="flex items-center gap-1 bg-white border border-emerald-200 focus-within:border-emerald-600 rounded-lg px-1.5 py-0.5 transition-all shrink-0">
-                                <span className="text-[10px] font-bold text-slate-500 select-none">R$</span>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  value={item.valor_unitario === "" ? "" : item.valor_unitario}
-                                  onChange={(e) => handleSetNewItemUnitPrice(idx, e.target.value)}
-                                  onBlur={() => {
-                                    if (item.valor_unitario === "" || isNaN(Number(item.valor_unitario))) {
-                                      handleSetNewItemUnitPrice(idx, "0");
-                                    }
-                                  }}
-                                  className="w-14 text-xs font-bold text-slate-800 bg-transparent outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                  title="Editar valor unitário"
-                                  placeholder="0,00"
-                                />
-                                <span className="text-[9px] font-semibold text-slate-400 select-none">un</span>
-                              </div>
-                            </div>
-
-                            {/* Subtotal */}
-                            <div className="text-right shrink-0">
-                              <p className="font-black text-brand text-xs sm:text-base">
-                                R${" "}
-                                {Number(item.subtotal || 0)
-                                  .toFixed(2)
-                                  .replace(".", ",")}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-
-                      {editItens.length === 0 && newItems.length === 0 && (
-                        <div className="p-6 text-center text-sm text-muted-foreground bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                          Nenhum item restante. Adicione produtos abaixo.
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Formulário adição */}
-                    <div className="rounded-xl border border-dashed border-emerald-300 bg-emerald-50/30 p-2.5 sm:p-3 space-y-2">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                        <ShoppingCart className="h-3 w-3 shrink-0" /> Adicionar Produto
-                      </p>
-                      <Popover open={openProdutoPop} onOpenChange={setOpenProdutoPop}>
-                        <PopoverTrigger asChild>
+                    {isOrderDav(selectedVenda) ? (
+                      <>
+                        {selectedVenda.status !== "Cancelado" && (
                           <Button
+                            type="button"
                             variant="outline"
-                            role="combobox"
-                            className="w-full justify-between h-9 font-normal text-xs sm:text-sm bg-white truncate"
+                            className="w-full h-10 font-bold border-amber-300 text-amber-800 hover:bg-amber-50 rounded-xl flex items-center justify-center gap-1.5 text-xs"
+                            onClick={() => cancelarOrcamento(selectedVenda.id)}
                           >
-                            <span className="truncate">
-                              {selectedProdutoId
-                                ? (() => {
-                                    const p = produtos.find((p) => p.id === selectedProdutoId);
-                                    return p ? `${p.nome}` : "Selecionar produto...";
-                                  })()
-                                : "Selecionar ou buscar produto..."}
-                            </span>
-                            <ChevronsUpDown className="ml-1.5 h-3.5 w-3.5 shrink-0 opacity-50" />
+                            <Ban className="w-4 h-4 text-amber-600" />
+                            <span>Cancelar Orçamento</span>
                           </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[calc(100vw-3rem)] sm:w-[320px] p-0" align="start">
-                          <Command>
-                            <CommandInput placeholder="Buscar produto..." />
-                            <CommandList>
-                              <CommandEmpty>Nenhum produto encontrado.</CommandEmpty>
-                              <CommandGroup>
-                                {produtos.map((p) => (
-                                  <CommandItem
-                                    key={p.id}
-                                    value={`${p.nome} ${p.id}`}
-                                    onSelect={() => handleSelectProduto(p.id)}
-                                  >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4 shrink-0",
-                                        selectedProdutoId === p.id ? "opacity-100" : "opacity-0",
-                                      )}
-                                    />
-                                    <span className="text-xs sm:text-sm truncate">
-                                      {p.nome} — R$ {Number(p.valor).toFixed(2)}
-                                    </span>
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-
-                      <div className="flex gap-2 items-end">
-                        <div className="flex-1 space-y-0.5 min-w-0">
-                          <label className="text-[11px] font-semibold text-muted-foreground">Qtd</label>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={newQtd}
-                            onChange={(e) => setNewQtd(Number(e.target.value))}
-                            className="h-8 text-xs bg-white w-full min-w-0"
-                          />
-                        </div>
-                        <div className="flex-1 space-y-0.5 min-w-0">
-                          <label className="text-[11px] font-semibold text-muted-foreground">Valor Unit.</label>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={newUnitario}
-                            onChange={(e) => setNewUnitario(parseFloat(e.target.value) || 0)}
-                            className="h-8 text-xs bg-white w-full min-w-0"
-                          />
-                        </div>
-                        <Button
-                          size="sm"
-                          className="h-8 px-3 bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
-                          onClick={handleAddNewItem}
-                          disabled={!selectedProdutoId || newQtd <= 0}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Preview novo total */}
-                    <div className="flex justify-between items-center p-3 bg-slate-100 rounded-xl">
-                      <span className="font-semibold text-slate-700 text-xs sm:text-sm">Novo Total:</span>
-                      <span className="text-base sm:text-lg font-bold font-display text-slate-900">
-                        R$ {editTotal.toFixed(2).replace(".", ",")}
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  /* Modo visualização */
-                  <>
-                    <div className="max-h-[260px] overflow-y-auto divide-y border rounded-xl">
-                      {vendaItens.length === 0 ? (
-                        <div className="p-4 text-center text-sm text-muted-foreground">
-                          Nenhum item encontrado.
-                        </div>
-                      ) : (
-                        vendaItens.map((item) => (
-                          <div
-                            key={item.id}
-                            className="flex items-center justify-between p-3 bg-slate-50/50"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="text-2xl">{item.produto?.emoji || "📦"}</div>
-                              <div>
-                                <p className="font-semibold text-sm text-slate-800">
-                                  {item.produto?.nome || "Produto Excluído"}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {item.quantidade}x R${" "}
-                                  {Number(item.valor_unitario).toFixed(2).replace(".", ",")}
-                                </p>
-                              </div>
-                            </div>
-                            <p className="font-bold text-brand">
-                              R$ {Number(item.subtotal).toFixed(2).replace(".", ",")}
-                            </p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                    <div className="flex justify-between items-center p-4 bg-slate-100 rounded-xl">
-                      <span className="font-semibold text-slate-700">Total do Pedido:</span>
-                      <span className="text-xl font-bold font-display text-slate-900">
-                        R${" "}
-                        {Number(selectedVenda?.valor_total || 0)
-                          .toFixed(2)
-                          .replace(".", ",")}
-                      </span>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-
-            {!loadingItens && selectedVenda && (
-              <div className="pt-4 space-y-2.5">
-                {/* Botão principal de WhatsApp com PDF */}
-                <Button
-                  className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2"
-                  onClick={() => handleShare(selectedVenda, vendaItens)}
-                  disabled={sharingId === selectedVenda.id}
-                >
-                  {sharingId === selectedVenda.id ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-white" />
-                  ) : (
-                    <WhatsAppIcon className="w-4 h-4 shrink-0" />
-                  )}
-                  <span>Enviar PDF no WhatsApp</span>
-                </Button>
-
-                {/* Botões secundários */}
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-10 border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5"
-                    onClick={() => openOrderPdf(selectedVenda, vendaItens)}
-                  >
-                    <FileText className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                    <span>Ver / Imprimir PDF</span>
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-10 border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5"
-                    onClick={() => downloadOrderPdf(selectedVenda, vendaItens)}
-                  >
-                    <Download className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                    <span>Baixar PDF</span>
-                  </Button>
-                </div>
-
-                {/* Clonar Pedido */}
-                {vendaItens.length > 0 && (
-                  <Button
-                    variant="secondary"
-                    className="w-full h-10 font-bold border border-slate-200 rounded-xl flex items-center justify-center gap-1.5 text-xs text-slate-700"
-                    onClick={() => {
-                      if (selectedVenda?.id) {
-                        window.location.href = `/parceiro/pdv?draft_id=${selectedVenda.id}`;
-                        return;
-                      }
-                      const itemsMagic = vendaItens
-                        .map((i) => `${i.produto_id}:${i.quantidade}`)
-                        .join(",");
-                      window.location.href = `/parceiro/pdv?c=${itemsMagic}`;
-                    }}
-                  >
-                    <Copy className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                    <span>Clonar Pedido no PDV</span>
-                  </Button>
-                )}
-
-                {/* Ações de Cancelamento e Exclusão */}
-                <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
-                  {isOrderDav(selectedVenda) ? (
-                    <>
-                      {selectedVenda.status !== "Cancelado" && (
+                        )}
                         <Button
                           type="button"
-                          variant="outline"
-                          className="w-full h-10 font-bold border-amber-300 text-amber-800 hover:bg-amber-50 rounded-xl flex items-center justify-center gap-1.5 text-xs"
-                          onClick={() => cancelarOrcamento(selectedVenda.id)}
+                          variant="ghost"
+                          className="w-full h-9 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl flex items-center justify-center gap-1.5 text-xs font-semibold"
+                          onClick={() => deleteVenda(selectedVenda.id, true)}
                         >
-                          <Ban className="w-4 h-4 text-amber-600" />
-                          <span>Cancelar Orçamento</span>
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Excluir Orçamento Definitivamente</span>
                         </Button>
-                      )}
+                      </>
+                    ) : (
                       <Button
                         type="button"
-                        variant="ghost"
-                        className="w-full h-9 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl flex items-center justify-center gap-1.5 text-xs font-semibold"
-                        onClick={() => deleteVenda(selectedVenda.id, true)}
+                        variant="outline"
+                        className="w-full h-10 font-bold border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl flex items-center justify-center gap-1.5 text-xs"
+                        onClick={() => deleteVenda(selectedVenda.id, false)}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Excluir Orçamento Definitivamente</span>
+                        <Trash2 className="w-4 h-4 text-rose-500" />
+                        <span>Excluir Pedido</span>
                       </Button>
-                    </>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full h-10 font-bold border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl flex items-center justify-center gap-1.5 text-xs"
-                      onClick={() => deleteVenda(selectedVenda.id, false)}
-                    >
-                      <Trash2 className="w-4 h-4 text-rose-500" />
-                      <span>Excluir Pedido</span>
-                    </Button>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>

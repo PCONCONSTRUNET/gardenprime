@@ -22,7 +22,6 @@ import {
   Pencil,
   Search,
   Ban,
-  Zap,
   Download,
   Printer,
   ShoppingCart,
@@ -33,20 +32,22 @@ import {
   Calendar,
   User,
   UserCheck,
+  ArrowLeft,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useConfirm } from "@/contexts/ConfirmContext";
 import { downloadOrderPdf, openOrderPdf, shareOrderWhatsApp } from "@/lib/order-pdf";
 import { AsaasCobrancaModal } from "@/components/asaas-cobranca-modal";
+import { OrderProductPicker, type PickerProduct } from "@/components/order-product-picker";
 import { toast } from "sonner";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -91,10 +92,6 @@ function Vendas() {
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const [newItems, setNewItems] = useState<any[]>([]);
   const [produtos, setProdutos] = useState<any[]>([]);
-  const [openProdutoPop, setOpenProdutoPop] = useState(false);
-  const [selectedProdutoId, setSelectedProdutoId] = useState("");
-  const [newQtd, setNewQtd] = useState(1);
-  const [newUnitario, setNewUnitario] = useState(0);
   const [savingItems, setSavingItems] = useState(false);
 
   // Payment editing
@@ -192,7 +189,7 @@ function Vendas() {
     return name.includes(lower) || cnpj.includes(lower) || numero.includes(lower) || vendName.includes(lower);
   });
 
-  const handleOpenDetails = async (venda: any) => {
+  const handleOpenDetails = async (venda: any, autoEdit = false) => {
     setSelectedVenda(venda);
     setOpenSheet(true);
     setIsEditingTotal(false);
@@ -210,11 +207,28 @@ function Vendas() {
     }
     setLoadingItens(true);
     try {
-      const { data, error } = await supabase
-        .from("vendas_itens")
-        .select("*, produtos(nome, codigo, imagem, estoque, valor)")
-        .eq("venda_id", venda.id);
-      if (!error && data) setVendaItens(data);
+      const [{ data, error }] = await Promise.all([
+        supabase
+          .from("vendas_itens")
+          .select("*, produtos(nome, codigo, imagem, estoque, valor)")
+          .eq("venda_id", venda.id),
+        autoEdit ? fetchProdutos() : Promise.resolve(),
+      ]);
+      const loaded = !error && data ? data : [];
+      setVendaItens(loaded);
+      if (autoEdit) {
+        setEditItens(
+          loaded.map((i: any) => ({
+            ...i,
+            quantidade: Number(i.quantidade) || 1,
+            valor_unitario: Number(i.valor_unitario) || 0,
+            subtotal: Number(i.subtotal) || 0,
+          }))
+        );
+        setRemovedIds([]);
+        setNewItems([]);
+        setIsEditingItems(true);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -419,9 +433,6 @@ function Vendas() {
     );
     setRemovedIds([]);
     setNewItems([]);
-    setSelectedProdutoId("");
-    setNewQtd(1);
-    setNewUnitario(0);
     setIsEditingItems(true);
   };
 
@@ -501,33 +512,50 @@ function Vendas() {
     );
   };
 
-  const handleSelectProduto = (prodId: string) => {
-    const prod = produtos.find((p) => p.id === prodId);
-    if (prod) setNewUnitario(Number(prod.valor));
-    setSelectedProdutoId(prodId);
-    setOpenProdutoPop(false);
-  };
+  const handleQuickAddProduct = (prod: PickerProduct, qty: number) => {
+    const qAdd = Math.max(1, Number(qty) || 1);
+    const existingIdx = editItens.findIndex((i) => i.produto_id === prod.id);
+    if (existingIdx >= 0) {
+      setEditItens((prev) =>
+        prev.map((i, idx) => {
+          if (idx !== existingIdx) return i;
+          const novaQtd = Number(i.quantidade || 0) + qAdd;
+          return { ...i, quantidade: novaQtd, subtotal: novaQtd * Number(i.valor_unitario || 0) };
+        })
+      );
+      toast.success(`${prod.nome} (+${qAdd}) atualizado no pedido!`);
+      return;
+    }
 
-  const handleAddNewItem = () => {
-    if (!selectedProdutoId || newQtd <= 0) return;
-    const prod = produtos.find((p) => p.id === selectedProdutoId);
-    if (!prod) return;
-    const unit = Number(newUnitario) || 0;
+    const newIdx = newItems.findIndex((i) => i.produto_id === prod.id);
+    if (newIdx >= 0) {
+      setNewItems((prev) =>
+        prev.map((item, idx) => {
+          if (idx !== newIdx) return item;
+          const novaQtd = Number(item.quantidade || 0) + qAdd;
+          return { ...item, quantidade: novaQtd, subtotal: novaQtd * Number(item.valor_unitario || 0) };
+        })
+      );
+      toast.success(`${prod.nome} (+${qAdd}) adicionado!`);
+      return;
+    }
+
+    const unit = Number(prod.valor) || 0;
     setNewItems((prev) => [
       ...prev,
       {
         produto_id: prod.id,
         nome: prod.nome,
+        codigo: prod.codigo,
         imagem: prod.imagem,
-        quantidade: newQtd,
+        emoji: prod.emoji,
+        quantidade: qAdd,
         valor_unitario: unit,
-        subtotal: unit * newQtd,
+        subtotal: unit * qAdd,
         estoque: prod.estoque,
       },
     ]);
-    setSelectedProdutoId("");
-    setNewQtd(1);
-    setNewUnitario(0);
+    toast.success(`${prod.nome} adicionado ao pedido!`);
   };
 
   const handleSaveItems = async () => {
@@ -947,6 +975,15 @@ function Vendas() {
                     <Badge className={getTone(v.status)}>{v.status}</Badge>
                   </TableCell>
                   <TableCell className="text-right space-x-1" onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-primary hover:bg-primary/10"
+                      title="Editar Pedido / Itens em Tela Cheia"
+                      onClick={() => handleOpenDetails(v, true)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
                     {v.tipo === "DAV" && v.status !== "Cancelado" && (
                       <Button
                         variant="ghost"
@@ -975,823 +1012,174 @@ function Vendas() {
         </Table>
       </Card>
 
-      <Sheet open={openSheet} onOpenChange={(o) => { setOpenSheet(o); if (!o) handleCancelEditItems(); }}>
-        <SheetContent className="w-[95vw] sm:w-[640px] sm:max-w-2xl overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Detalhes da Operação</SheetTitle>
-            <SheetDescription>
-              {selectedVenda?.tipo === "DAV" ? "Orçamento" : "Venda"} Nº{" "}
-              {selectedVenda?.numero_venda}
-            </SheetDescription>
-          </SheetHeader>
-
-          <div className="mt-6 space-y-6">
-            <div className="grid grid-cols-2 gap-4 text-sm bg-muted/30 p-4 rounded-xl border border-border/50">
-              {/* Cliente */}
-              <div>
-                <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">
-                  Cliente
-                </span>
-                {isEditingCliente ? (
-                  <div className="space-y-1.5">
-                    <Popover open={openClientePop} onOpenChange={setOpenClientePop}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          className="w-full justify-between h-8 text-xs font-normal"
-                          onClick={() => fetchClientes()}
-                        >
-                          <span className="truncate">
-                            {selectedVenda?.clientes?.nome || "Selecionar cliente..."}
-                          </span>
-                          <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[300px] p-0" align="start">
-                        <Command>
-                          <CommandInput placeholder="Buscar cliente..." />
-                          <CommandList>
-                            <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
-                            <CommandGroup>
-                              {clientesList.map((c) => (
-                                <CommandItem
-                                  key={c.id}
-                                  value={`${c.nome} ${c.cpf_cnpj || ""}`}
-                                  onSelect={() => handleChangeCliente(c.id)}
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-3.5 w-3.5",
-                                      selectedVenda?.cliente_id === c.id ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
-                                  <div className="truncate text-xs">
-                                    <p className="font-medium">{c.nome}</p>
-                                    {c.cpf_cnpj && (
-                                      <p className="text-[10px] text-muted-foreground">{c.cpf_cnpj}</p>
-                                    )}
-                                  </div>
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 text-[11px] text-muted-foreground hover:text-foreground"
-                      onClick={() => setIsEditingCliente(false)}
-                    >
-                      Cancelar
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="font-medium truncate" title={selectedVenda?.clientes?.nome}>
-                      {selectedVenda?.clientes?.nome || "Cliente Avulso"}
-                    </span>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6 opacity-50 hover:opacity-100 shrink-0"
-                      title="Alterar cliente"
-                      onClick={() => {
-                        fetchClientes();
-                        setIsEditingCliente(true);
-                      }}
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {/* Data */}
-              <div>
-                <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">
-                  Data
-                </span>
-                {isEditingDate ? (
-                  <div className="flex items-center gap-1.5">
-                    <Input
-                      type="date"
-                      value={editDateValue}
-                      onChange={(e) => setEditDateValue(e.target.value)}
-                      className="h-8 text-xs font-medium"
-                    />
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-success shrink-0"
-                      onClick={handleSaveDate}
-                      disabled={savingDate}
-                    >
-                      <Check className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-destructive shrink-0"
-                      onClick={() => setIsEditingDate(false)}
-                      disabled={savingDate}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="font-medium">
-                      {selectedVenda ? new Date(selectedVenda.created_at).toLocaleDateString() : "-"}
-                    </span>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6 opacity-50 hover:opacity-100 shrink-0"
-                      title="Alterar data"
-                      onClick={handleStartEditDate}
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {/* Status */}
-              <div>
-                <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">
-                  Status
-                </span>
-                <Select
-                  value={selectedVenda?.status || ""}
-                  onValueChange={(val) => handleStatusChange(selectedVenda.id, val)}
-                >
-                  <SelectTrigger className="h-8 text-xs font-medium">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Pendente">Pendente</SelectItem>
-                    <SelectItem value="Aguardando Pagamento">Aguardando Pagamento</SelectItem>
-                    <SelectItem value="Pago">Pago</SelectItem>
-                    <SelectItem value="Faturado">Faturado</SelectItem>
-                    <SelectItem value="Entregue">Entregue</SelectItem>
-                    <SelectItem value="Cancelado">Cancelado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Total */}
-              <div>
-                <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">
-                  Total
-                </span>
-                {isEditingTotal ? (
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-sm">R$</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={newTotalValue}
-                      onChange={(e) => setNewTotalValue(e.target.value)}
-                      className="w-24 border-b border-dashed border-slate-400 outline-none bg-transparent font-semibold text-sm"
-                    />
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6 text-success"
-                      onClick={handleSaveTotal}
-                    >
-                      <Check className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6 text-destructive"
-                      onClick={() => setIsEditingTotal(false)}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="font-bold text-base text-foreground">
-                      R${" "}
-                      {Number(selectedVenda?.valor_total || 0).toLocaleString("pt-BR", {
-                        minimumFractionDigits: 2,
-                      })}
-                    </span>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6 opacity-50 hover:opacity-100 shrink-0"
-                      title="Editar total diretamente"
-                      onClick={handleEditTotal}
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {/* Vendedor / Parceiro Destacado */}
-              <div className="col-span-2 pt-3 border-t border-border/50">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-muted-foreground block text-xs uppercase tracking-wider font-semibold flex items-center gap-1.5">
-                    <UserCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                    Vendedor / Parceiro
-                  </span>
-                  {!isEditingVendedor && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 px-2 text-[11px] text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 font-medium flex items-center gap-1"
-                      onClick={() => {
-                        fetchVendedores();
-                        setIsEditingVendedor(true);
-                      }}
-                    >
-                      <Pencil className="h-3 w-3" />
-                      {selectedVenda?.vendedor ? "Alterar Vendedor" : "Vincular Vendedor"}
-                    </Button>
-                  )}
-                </div>
-
-                {isEditingVendedor ? (
-                  <div className="space-y-2 bg-background p-3 rounded-lg border-2 border-emerald-500/30 shadow-sm animate-in fade-in-50">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                        <UserCheck className="h-3.5 w-3.5 text-emerald-600" /> Selecione o Parceiro Cadastrado:
-                      </span>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6 text-muted-foreground"
-                        onClick={() => setIsEditingVendedor(false)}
-                        disabled={savingVendedor}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-
-                    <Popover open={openVendedorPop} onOpenChange={setOpenVendedorPop}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          className="w-full justify-between h-9 text-xs font-medium"
-                          onClick={() => fetchVendedores()}
-                          disabled={savingVendedor}
-                        >
-                          <span className="truncate">
-                            {selectedVenda?.vendedor?.nome || "Venda Direta / Sem Vendedor"}
-                          </span>
-                          <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[320px] p-0" align="start">
-                        <Command>
-                          <CommandInput placeholder="Buscar parceiro por nome..." />
-                          <CommandList>
-                            <CommandEmpty>Nenhum parceiro encontrado.</CommandEmpty>
-                            <CommandGroup heading="Opções">
-                              <CommandItem
-                                value="venda direta sem vendedor nenhum desvincular"
-                                onSelect={() => handleChangeVendedor(null)}
-                                className="cursor-pointer"
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-3.5 w-3.5",
-                                    !selectedVenda?.vendedor_id ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
-                                <div className="truncate text-xs">
-                                  <p className="font-semibold text-muted-foreground">Venda Direta (Sem Vendedor)</p>
-                                  <p className="text-[10px] text-muted-foreground">Não vincula comissão a nenhum parceiro</p>
-                                </div>
-                              </CommandItem>
-                            </CommandGroup>
-                            <CommandGroup heading="Parceiros Cadastrados">
-                              {vendedoresList
-                                .filter((vend) => vend.status === "Ativo" || vend.id === selectedVenda?.vendedor_id)
-                                .map((vend) => (
-                                  <CommandItem
-                                    key={vend.id}
-                                    value={`${vend.nome} ${vend.email || ""} ${vend.telefone || ""}`}
-                                    onSelect={() => handleChangeVendedor(vend.id)}
-                                    className="cursor-pointer"
-                                  >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-3.5 w-3.5 text-emerald-600",
-                                        selectedVenda?.vendedor_id === vend.id ? "opacity-100" : "opacity-0"
-                                      )}
-                                    />
-                                    <div className="truncate text-xs flex-1">
-                                      <div className="flex items-center justify-between gap-1">
-                                        <p className="font-bold text-foreground truncate">{vend.nome}</p>
-                                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-emerald-300 text-emerald-700 bg-emerald-50">
-                                          {vend.tipo_comissao === "fixo" ? `R$ ${vend.valor_comissao}` : `${vend.valor_comissao}%`}
-                                        </Badge>
-                                      </div>
-                                      {vend.email && (
-                                        <p className="text-[10px] text-muted-foreground truncate">{vend.email}</p>
-                                      )}
-                                    </div>
-                                  </CommandItem>
-                                ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-
-                    <div className="flex justify-end">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 text-[11px] text-muted-foreground"
-                        onClick={() => setIsEditingVendedor(false)}
-                        disabled={savingVendedor}
-                      >
-                        Cancelar
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border-2 border-emerald-200/80 dark:border-emerald-800/60 rounded-xl p-3 flex items-center justify-between gap-2 shadow-2xs">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="h-9 w-9 rounded-full bg-emerald-100 dark:bg-emerald-900/60 flex items-center justify-center text-emerald-700 dark:text-emerald-300 shrink-0 font-bold">
-                        <UserCheck className="h-4.5 w-4.5" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-bold text-sm text-foreground truncate">
-                            {selectedVenda?.vendedor?.nome || "Venda Direta (Sem Vendedor)"}
-                          </span>
-                          {selectedVenda?.vendedor ? (
-                            <Badge className="bg-emerald-600 text-white hover:bg-emerald-700 text-[10px] px-1.5 py-0 h-4 font-semibold">
-                              Parceiro
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-muted-foreground border-dashed">
-                              Venda Direta
-                            </Badge>
-                          )}
-                        </div>
-                        {selectedVenda?.vendedor && (
-                          <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                            {selectedVenda.vendedor.email || ""}
-                            {selectedVenda.vendedor.telefone ? ` • Tel: ${selectedVenda.vendedor.telefone}` : ""}
-                            {selectedVenda.valor_comissao ? ` • Comissão: R$ ${Number(selectedVenda.valor_comissao).toFixed(2).replace(".", ",")}` : ""}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 px-2 border-emerald-300 text-emerald-700 hover:bg-emerald-100/50 dark:border-emerald-700 dark:text-emerald-300 text-xs font-semibold shrink-0 gap-1"
-                      title="Alterar vendedor parceiro"
-                      onClick={() => {
-                        fetchVendedores();
-                        setIsEditingVendedor(true);
-                      }}
-                    >
-                      <Pencil className="h-3 w-3" />
-                      {selectedVenda?.vendedor ? "Alterar" : "Vincular"}
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {/* Pagamento (Forma e Condição) */}
-              <div className="col-span-2 pt-3 border-t border-border/50">
-                {isEditingPayment ? (
-                  <div className="space-y-3 bg-background p-3 rounded-lg border border-border/60 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs uppercase tracking-wider text-primary flex items-center gap-1.5">
-                        <CreditCard className="h-3.5 w-3.5" /> Editar Forma de Pagamento
-                      </span>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                        onClick={() => setIsEditingPayment(false)}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-medium text-muted-foreground">
-                          Forma de Pagamento
-                        </label>
-                        <Select
-                          value={editMetodoPagamento}
-                          onValueChange={(val) => setEditMetodoPagamento(val)}
-                        >
-                          <SelectTrigger className="h-8 text-xs font-medium">
-                            <SelectValue placeholder="Selecione a forma..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Dinheiro">Dinheiro</SelectItem>
-                            <SelectItem value="Pix">Pix</SelectItem>
-                            <SelectItem value="Cartão de Crédito">Cartão de Crédito</SelectItem>
-                            <SelectItem value="Cartão de Débito">Cartão de Débito</SelectItem>
-                            <SelectItem value="Boleto">Boleto Bancário</SelectItem>
-                            <SelectItem value="Boleto a Prazo">Boleto a Prazo</SelectItem>
-                            <SelectItem value="Transferência">Transferência / TED</SelectItem>
-                            <SelectItem value="Cheque">Cheque</SelectItem>
-                            <SelectItem value="Outro">Outro</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-medium text-muted-foreground">
-                          Condição / Prazo
-                        </label>
-                        <Input
-                          className="h-8 text-xs font-medium"
-                          placeholder="Ex: À Vista, Boleto a Prazo..."
-                          value={editCondicaoPagamento}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setEditCondicaoPagamento(val);
-                            const baseDate = selectedVenda?.created_at || new Date().toISOString();
-                            setEditVencimentos(calcularVencimentosPadrao(val, baseDate, selectedVenda?.valor_total));
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Presets rápidos */}
-                    <div className="space-y-1">
-                      <span className="text-[10px] text-muted-foreground uppercase font-semibold">
-                        Atalhos rápidos de condição:
-                      </span>
-                      <div className="flex flex-wrap gap-1">
-                        {[
-                          "À Vista",
-                          "Boleto (28 dias)",
-                          "Boleto (35 dias)",
-                          "Boleto (28, 35, 42 dias)",
-                          "Boleto (30, 45, 60 dias)",
-                          "Boleto 30 dias",
-                          "Boleto 30/60 dias",
-                          "Entrada + 30 dias",
-                          "2x sem juros",
-                          "3x sem juros",
-                        ].map((preset) => (
-                          <button
-                            key={preset}
-                            type="button"
-                            onClick={() => {
-                              setEditCondicaoPagamento(preset);
-                              if (preset.toLowerCase().includes("boleto") && !editMetodoPagamento) {
-                                setEditMetodoPagamento("Boleto");
-                              }
-                              const baseDate = selectedVenda?.created_at || new Date().toISOString();
-                              setEditVencimentos(calcularVencimentosPadrao(preset, baseDate, selectedVenda?.valor_total));
-                            }}
-                            className="text-[10px] px-2 py-0.5 rounded-md bg-muted hover:bg-primary/10 hover:text-primary transition-colors text-muted-foreground border border-border/40"
-                          >
-                            {preset}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Vencimentos das Parcelas */}
-                    <div className="space-y-2 pt-2 border-t border-border/40">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
-                          <Calendar className="h-3.5 w-3.5 text-primary" /> Datas de Vencimento ({editVencimentos.length})
-                        </span>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-6 text-[10px] px-2"
-                          onClick={() => {
-                            const nextNum = editVencimentos.length + 1;
-                            setEditVencimentos([
-                              ...editVencimentos,
-                              {
-                                parcela: nextNum,
-                                data: new Date().toISOString().split("T")[0],
-                                label: `${nextNum}º Vencimento`,
-                              },
-                            ]);
-                          }}
-                        >
-                          <Plus className="h-3 w-3 mr-1" /> Parcela
-                        </Button>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                        {editVencimentos.map((venc, idx) => (
-                          <div
-                            key={idx}
-                            className="p-2 rounded-lg bg-muted/40 border border-border/60 space-y-1"
-                          >
-                            <div className="flex items-center justify-between text-[11px]">
-                              <span className="font-semibold text-foreground">
-                                {venc.label || `${idx + 1}º Vencimento`}
-                              </span>
-                              {editVencimentos.length > 1 && (
-                                <button
-                                  type="button"
-                                  className="text-destructive hover:underline text-[10px]"
-                                  onClick={() => {
-                                    setEditVencimentos(editVencimentos.filter((_, i) => i !== idx));
-                                  }}
-                                >
-                                  Remover
-                                </button>
-                              )}
-                            </div>
-                            <Input
-                              type="date"
-                              className="h-8 text-xs bg-background font-medium"
-                              value={venc.data ? venc.data.split("T")[0] : ""}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditVencimentos(
-                                  editVencimentos.map((v, i) =>
-                                    i === idx ? { ...v, data: val } : v
-                                  )
-                                );
-                              }}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end gap-2 pt-1 border-t border-border/40">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs"
-                        onClick={() => setIsEditingPayment(false)}
-                        disabled={savingPayment}
-                      >
-                        Cancelar
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="h-7 text-xs bg-gradient-brand text-primary-foreground"
-                        onClick={handleSavePayment}
-                        disabled={savingPayment}
-                      >
-                        <Check className="h-3.5 w-3.5 mr-1" />
-                        {savingPayment ? "Salvando..." : "Salvar Pagamento"}
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">
-                        Pagamento
-                      </span>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-foreground text-sm">
-                          {selectedVenda?.metodo_pagamento || "Não informado"}
-                        </span>
-                        {selectedVenda?.condicao_pagamento && (
-                          <Badge variant="secondary" className="text-xs font-normal">
-                            {selectedVenda.condicao_pagamento}
-                          </Badge>
-                        )}
-                      </div>
-                      {selectedVenda?.vencimentos &&
-                        Array.isArray(selectedVenda.vencimentos) &&
-                        selectedVenda.vencimentos.length > 0 && (
-                          <div className="flex items-center gap-1.5 flex-wrap mt-2">
-                            <span className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1">
-                              <Calendar className="h-3.5 w-3.5 text-primary" /> Vencimento(s):
-                            </span>
-                            {selectedVenda.vencimentos.map((v: any, i: number) => {
-                              const valParcela = calcularValorParcela(
-                                v,
-                                i,
-                                selectedVenda.vencimentos.length,
-                                selectedVenda?.valor_total
-                              );
-                              return (
-                                <Badge
-                                  key={i}
-                                  variant="outline"
-                                  className="text-[11px] bg-background font-medium border-primary/40 text-primary px-2 py-0.5"
-                                >
-                                  {selectedVenda.vencimentos.length > 1 ? `${i + 1}ª: ` : ""}
-                                  {formatarDataBr(v.data || v)}
-                                  {valParcela > 0 ? ` - R$ ${valParcela.toFixed(2).replace(".", ",")}` : ""}
-                                </Badge>
-                              );
-                            })}
-                          </div>
-                        )}
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 text-xs gap-1 hover:bg-muted text-muted-foreground hover:text-foreground"
-                      onClick={() => {
-                        setEditMetodoPagamento(selectedVenda?.metodo_pagamento || "");
-                        setEditCondicaoPagamento(selectedVenda?.condicao_pagamento || "");
-                        if (Array.isArray(selectedVenda?.vencimentos) && selectedVenda.vencimentos.length > 0) {
-                          setEditVencimentos(selectedVenda.vencimentos);
-                        } else {
-                          setEditVencimentos(
-                            calcularVencimentosPadrao(
-                              selectedVenda?.condicao_pagamento || "",
-                              selectedVenda?.created_at,
-                              selectedVenda?.valor_total
-                            )
-                          );
-                        }
-                        setIsEditingPayment(true);
-                      }}
-                    >
-                      <Pencil className="h-3 w-3" /> Alterar Pagamento
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Ações / Botões */}
-            <div className="flex flex-col gap-3 pt-6 border-t pb-2">
-              <div className="flex gap-3">
-                <Button
-                  className="flex-1"
-                  variant="outline"
-                  onClick={() => handleShareWhatsApp(selectedVenda)}
-                >
-                  <svg
-                    className="mr-2 h-4 w-4 text-green-500"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.888-.788-1.489-1.761-1.663-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z" />
-                  </svg>
-                  Enviar WhatsApp
-                </Button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  variant="outline"
-                  className="h-10 border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5"
-                  onClick={() => openOrderPdf(
-                    {
-                      ...selectedVenda,
-                      cliente: selectedVenda?.clientes || selectedVenda?.cliente,
-                      condicao_pagamento: selectedVenda?.condicao_pagamento || selectedVenda?.metodo_pagamento,
-                      total: selectedVenda?.valor_total ?? selectedVenda?.total,
-                      subtotal: selectedVenda?.subtotal ?? selectedVenda?.valor_total,
-                      vendedor_nome: selectedVenda?.vendedor?.nome || undefined,
-                    },
-                    vendaItens
-                  )}
-                >
-                  <Printer className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                  Imprimir PDF
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-10 border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5"
-                  onClick={() => downloadOrderPdf(
-                    {
-                      ...selectedVenda,
-                      cliente: selectedVenda?.clientes || selectedVenda?.cliente,
-                      condicao_pagamento: selectedVenda?.condicao_pagamento || selectedVenda?.metodo_pagamento,
-                      total: selectedVenda?.valor_total ?? selectedVenda?.total,
-                      subtotal: selectedVenda?.subtotal ?? selectedVenda?.valor_total,
-                      vendedor_nome: selectedVenda?.vendedor?.nome || undefined,
-                    },
-                    vendaItens
-                  )}
-                >
-                  <Download className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                  Baixar PDF
-                </Button>
-              </div>
+      <Dialog open={openSheet} onOpenChange={(o) => { setOpenSheet(o); if (!o) handleCancelEditItems(); }}>
+        <DialogContent className="!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !w-screen !h-[100dvh] !max-w-none !rounded-none !border-0 !p-0 flex flex-col overflow-hidden bg-slate-50/90 dark:bg-background [&>button.absolute]:hidden">
+          <DialogHeader className="bg-card border-b px-4 sm:px-8 py-3.5 flex flex-row flex-wrap items-center justify-between gap-3 shrink-0 space-y-0">
+            <div className="flex items-center gap-3 min-w-0">
               <Button
-                variant="secondary"
-                className="w-full font-bold border border-slate-200"
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 font-semibold shrink-0"
                 onClick={() => {
-                  if (selectedVenda?.id) {
-                    window.location.href = `/app/pdv?clone_id=${selectedVenda.id}`;
-                    return;
-                  }
-                  const itemsMagic = vendaItens
-                    .map((i) => `${i.produto_id}:${i.quantidade}`)
-                    .join(",");
-                  window.location.href = `/app/pdv?c=${itemsMagic}`;
+                  setOpenSheet(false);
+                  handleCancelEditItems();
                 }}
               >
-                Clonar Pedido
+                <ArrowLeft className="h-4 w-4" />
+                Voltar
               </Button>
-
-              <div className="pt-2 border-t flex flex-col gap-2">
-                {selectedVenda?.tipo === "DAV" ? (
-                  <>
-                    {selectedVenda.status !== "Cancelado" && (
-                      <Button
-                        variant="outline"
-                        className="w-full border-amber-300 text-amber-800 hover:bg-amber-50 font-semibold"
-                        onClick={() => handleCancelDav(selectedVenda)}
-                      >
-                        <Ban className="h-4 w-4 mr-2 text-amber-600" />
-                        Cancelar Orçamento
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      className="w-full text-destructive hover:bg-destructive/10 font-semibold text-xs"
-                      onClick={() => handleDelete(selectedVenda)}
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Excluir Orçamento Definitivamente
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    variant="outline"
-                    className="w-full border-destructive/30 text-destructive hover:bg-destructive/10 font-semibold"
-                    onClick={() => handleDelete(selectedVenda)}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Excluir Venda / Pedido
-                  </Button>
-                )}
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <DialogTitle className="text-base sm:text-xl font-bold font-display">
+                    {selectedVenda?.tipo === "DAV" ? "Orçamento" : "Pedido / Venda"} Nº{" "}
+                    {selectedVenda?.numero_venda}
+                  </DialogTitle>
+                  {selectedVenda?.status && (
+                    <Badge className={getTone(selectedVenda.status)}>{selectedVenda.status}</Badge>
+                  )}
+                </div>
+                <DialogDescription className="text-xs sm:text-sm truncate">
+                  {selectedVenda?.clientes?.nome || "Cliente Avulso"} •{" "}
+                  {selectedVenda ? new Date(selectedVenda.created_at).toLocaleDateString("pt-BR") : ""}
+                </DialogDescription>
               </div>
             </div>
 
-            {/* ── SEÇÃO PRODUTOS ─────────────────────────────────────────── */}
-            <div className="border-t pt-6">
-              <h4 className="font-semibold mb-4 flex items-center justify-between">
-                <span>Produtos</span>
-                <div className="flex items-center gap-2">
-                  {!isEditingItems && (
-                    <Badge variant="outline">{vendaItens.length} itens</Badge>
-                  )}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 text-xs font-semibold gap-1.5"
+                onClick={() => handleShareWhatsApp(selectedVenda)}
+              >
+                <svg
+                  className="h-4 w-4 text-green-500"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.888-.788-1.489-1.761-1.663-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z" />
+                </svg>
+                <span className="hidden sm:inline">WhatsApp</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 text-xs font-semibold gap-1.5"
+                onClick={() => openOrderPdf(
+                  {
+                    ...selectedVenda,
+                    cliente: selectedVenda?.clientes || selectedVenda?.cliente,
+                    condicao_pagamento: selectedVenda?.condicao_pagamento || selectedVenda?.metodo_pagamento,
+                    total: selectedVenda?.valor_total ?? selectedVenda?.total,
+                    subtotal: selectedVenda?.subtotal ?? selectedVenda?.valor_total,
+                    vendedor_nome: selectedVenda?.vendedor?.nome || undefined,
+                  },
+                  vendaItens
+                )}
+              >
+                <Printer className="h-4 w-4 text-slate-500 shrink-0" />
+                <span className="hidden sm:inline">Imprimir PDF</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 text-xs font-semibold gap-1.5"
+                onClick={() => downloadOrderPdf(
+                  {
+                    ...selectedVenda,
+                    cliente: selectedVenda?.clientes || selectedVenda?.cliente,
+                    condicao_pagamento: selectedVenda?.condicao_pagamento || selectedVenda?.metodo_pagamento,
+                    total: selectedVenda?.valor_total ?? selectedVenda?.total,
+                    subtotal: selectedVenda?.subtotal ?? selectedVenda?.valor_total,
+                    vendedor_nome: selectedVenda?.vendedor?.nome || undefined,
+                  },
+                  vendaItens
+                )}
+              >
+                <Download className="h-4 w-4 text-slate-500 shrink-0" />
+                <span className="hidden sm:inline">Baixar PDF</span>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 rounded-full"
+                onClick={() => {
+                  setOpenSheet(false);
+                  handleCancelEditItems();
+                }}
+                title="Fechar"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+            <div className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-[1fr_420px] xl:grid-cols-[1fr_460px] gap-6 items-start">
+              {/* ── COLUNA ESQUERDA: PRODUTOS / MONTAGEM DO PEDIDO ──────────── */}
+              <Card className="shadow-card overflow-hidden border">
+                <div className="p-4 sm:p-5 border-b bg-card flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <h3 className="font-display text-lg font-bold flex items-center gap-2">
+                      <ShoppingCart className="h-5 w-5 text-primary" />
+                      Produtos do Pedido
+                    </h3>
+                    <Badge variant="outline" className="font-semibold">
+                      {isEditingItems ? editItens.length + newItems.length : vendaItens.length} itens
+                    </Badge>
+                  </div>
                   {isEditingItems ? (
-                    <div className="flex gap-1">
+                    <div className="flex items-center gap-2">
                       <Button
                         size="sm"
-                        variant="ghost"
-                        className="h-7 text-destructive hover:bg-destructive/10 text-xs"
+                        variant="outline"
+                        className="h-9 text-destructive hover:bg-destructive/10 font-semibold"
                         onClick={handleCancelEditItems}
                         disabled={savingItems}
                       >
-                        <X className="h-3 w-3 mr-1" /> Cancelar
+                        <X className="h-4 w-4 mr-1.5" /> Cancelar Edição
                       </Button>
                       <Button
                         size="sm"
-                        className="h-7 bg-gradient-brand text-primary-foreground text-xs"
+                        className="h-9 bg-gradient-brand text-primary-foreground font-bold px-4"
                         onClick={handleSaveItems}
                         disabled={savingItems}
                       >
-                        <Save className="h-3 w-3 mr-1" />
-                        {savingItems ? "Salvando..." : "Salvar Itens"}
+                        <Save className="h-4 w-4 mr-1.5" />
+                        {savingItems ? "Salvando..." : "Salvar Itens do Pedido"}
                       </Button>
                     </div>
                   ) : (
                     <Button
                       size="sm"
-                      variant="outline"
-                      className="h-7 text-xs gap-1"
+                      className="h-9 bg-gradient-brand text-primary-foreground font-bold px-4"
                       onClick={handleStartEditItems}
                       disabled={loadingItens}
                     >
-                      <PackagePlus className="h-3 w-3" /> Editar Itens
+                      <PackagePlus className="h-4 w-4 mr-1.5" /> Editar / Adicionar Produtos
                     </Button>
                   )}
                 </div>
-              </h4>
 
-              {/* Modo edição */}
-              {isEditingItems ? (
-                <div className="space-y-4">
-                  {/* Itens existentes editáveis */}
-                  <div className="space-y-2.5">
-                    {editItens.map((item) => (
-                      <div
-                        key={item.id}
-                        className="p-3 rounded-xl border border-border/70 bg-card shadow-sm space-y-2.5 transition-all"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                            <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-accent text-base border">
+                <div className="p-4 sm:p-5 space-y-5">
+                  {isEditingItems ? (
+                    <>
+                      <OrderProductPicker produtos={produtos} onAddProduct={handleQuickAddProduct} />
+
+                      {/* Lista ampla estilo PDV para os itens do pedido */}
+                      <div className="space-y-2.5">
+                        {editItens.map((item) => (
+                          <div
+                            key={item.id}
+                            className="grid grid-cols-1 md:grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-3 p-3.5 rounded-xl border border-border/80 bg-card shadow-2xs"
+                          >
+                            <div className="hidden md:grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-accent text-xl border">
                               {item.produtos?.imagem ? (
                                 <img
                                   src={item.produtos.imagem}
@@ -1802,345 +1190,250 @@ function Vendas() {
                                 <span className="opacity-50">📦</span>
                               )}
                             </div>
-                            <div className="min-w-0 flex-1">
-                              <div
-                                className="font-semibold text-sm truncate text-foreground"
-                                title={item.produtos?.nome}
-                              >
-                                {item.produtos?.nome || "Produto"}
-                              </div>
-                              <div className="text-[11px] text-muted-foreground flex items-center gap-2 flex-wrap">
-                                {item.produtos?.codigo && (
-                                  <span>Cód: {item.produtos.codigo}</span>
-                                )}
-                                {item.produtos?.estoque !== undefined && (
-                                  <span>• Estoque: {item.produtos.estoque}</span>
-                                )}
+
+                            <div className="flex items-center justify-between gap-2 min-w-0">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="grid md:hidden h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-accent text-base border">
+                                  {item.produtos?.imagem ? (
+                                    <img src={item.produtos.imagem} alt={item.produtos?.nome || "Produto"} className="h-full w-full object-cover" />
+                                  ) : (
+                                    <span className="opacity-50">📦</span>
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="font-bold text-sm sm:text-base text-foreground truncate" title={item.produtos?.nome}>
+                                    {item.produtos?.nome || "Produto"}
+                                  </p>
+                                  <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                                    {item.produtos?.codigo && <span className="font-mono font-semibold">Cód: {item.produtos.codigo}</span>}
+                                    {item.produtos?.estoque !== undefined && <span>• Estoque: {item.produtos.estoque}</span>}
+                                  </div>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-destructive hover:bg-destructive/10 shrink-0 rounded-lg"
-                            title="Remover produto do pedido"
-                            onClick={() => handleRemoveExistingItem(item.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
 
-                        {/* Linha de edição de Quantidade, Preço Unitário e Subtotal */}
-                        <div className="grid grid-cols-12 gap-2 pt-2 border-t border-border/40 items-center">
-                          {/* Quantidade */}
-                          <div className="col-span-5 flex flex-col gap-1">
-                            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
-                              Qtd
-                            </span>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                size="icon"
-                                variant="outline"
-                                className="h-7 w-7 rounded-md shrink-0"
-                                onClick={() => handleChangeExistingQty(item.id, -1)}
-                                disabled={item.quantidade <= 1}
-                              >
-                                <Minus className="h-3 w-3" />
-                              </Button>
+                            {/* Quantidade */}
+                            <div className="flex items-center justify-between md:justify-start gap-2">
+                              <span className="md:hidden text-xs font-semibold text-muted-foreground">Qtd:</span>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  className="h-8 w-8 rounded-md shrink-0"
+                                  onClick={() => handleChangeExistingQty(item.id, -1)}
+                                  disabled={item.quantidade <= 1}
+                                >
+                                  <Minus className="h-3.5 w-3.5" />
+                                </Button>
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  className="h-8 w-16 text-center text-sm font-bold px-1"
+                                  value={item.quantidade}
+                                  onChange={(e) => handleSetExistingQty(item.id, parseInt(e.target.value) || 1)}
+                                />
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  className="h-8 w-8 rounded-md shrink-0"
+                                  onClick={() => handleChangeExistingQty(item.id, 1)}
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+
+                            {/* Valor Unitário */}
+                            <div className="flex items-center justify-between md:justify-start gap-2">
+                              <span className="text-xs font-semibold text-muted-foreground">R$ Unit:</span>
                               <Input
                                 type="number"
-                                min="1"
-                                className="h-7 w-12 text-center text-xs font-semibold px-1"
-                                value={item.quantidade}
+                                step="0.01"
+                                min="0"
+                                className="h-8 w-28 text-right text-sm font-bold px-2"
+                                value={item.valor_unitario}
                                 onChange={(e) =>
-                                  handleSetExistingQty(item.id, parseInt(e.target.value) || 1)
+                                  handleChangeExistingUnitario(item.id, parseFloat(e.target.value) || 0)
                                 }
                               />
+                            </div>
+
+                            {/* Subtotal */}
+                            <div className="flex items-center justify-between md:justify-end gap-2 md:min-w-[115px]">
+                              <span className="md:hidden text-xs font-semibold text-muted-foreground">Subtotal:</span>
+                              <span className="font-extrabold text-sm sm:text-base text-primary whitespace-nowrap">
+                                R${" "}
+                                {Number(item.subtotal || 0).toLocaleString("pt-BR", {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                              </span>
+                            </div>
+
+                            <div className="flex justify-end">
                               <Button
                                 size="icon"
-                                variant="outline"
-                                className="h-7 w-7 rounded-md shrink-0"
-                                onClick={() => handleChangeExistingQty(item.id, 1)}
+                                variant="ghost"
+                                className="h-8 w-8 text-destructive hover:bg-destructive/10 shrink-0 rounded-lg"
+                                title="Remover produto do pedido"
+                                onClick={() => handleRemoveExistingItem(item.id)}
                               >
-                                <Plus className="h-3 w-3" />
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
                           </div>
+                        ))}
 
-                          {/* Valor Unitário */}
-                          <div className="col-span-4 flex flex-col gap-1">
-                            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
-                              Vlr Unit. (R$)
-                            </span>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              className="h-7 text-xs font-semibold px-2"
-                              value={item.valor_unitario}
-                              onChange={(e) =>
-                                handleChangeExistingUnitario(
-                                  item.id,
-                                  parseFloat(e.target.value) || 0
-                                )
-                              }
-                            />
-                          </div>
-
-                          {/* Subtotal */}
-                          <div className="col-span-3 flex flex-col gap-1 text-right">
-                            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
-                              Subtotal
-                            </span>
-                            <div className="text-xs font-bold text-foreground truncate h-7 flex items-center justify-end">
-                              R${" "}
-                              {Number(item.subtotal || 0).toLocaleString("pt-BR", {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-
-                    {/* Novos itens adicionados */}
-                    {newItems.map((item, idx) => (
-                      <div
-                        key={`new-${idx}`}
-                        className="p-3 rounded-xl border border-brand/40 bg-brand/5 shadow-sm space-y-2.5 transition-all"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                            <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-accent text-base border">
+                        {newItems.map((item, idx) => (
+                          <div
+                            key={`new-${idx}`}
+                            className="grid grid-cols-1 md:grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-3 p-3.5 rounded-xl border border-emerald-500/40 bg-emerald-50/40 dark:bg-emerald-950/15 shadow-2xs"
+                          >
+                            <div className="hidden md:grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-accent text-xl border">
                               {item.imagem ? (
-                                <img
-                                  src={item.imagem}
-                                  alt={item.nome || "Produto"}
-                                  className="h-full w-full object-cover"
-                                />
+                                <img src={item.imagem} alt={item.nome || "Produto"} className="h-full w-full object-cover" />
                               ) : (
-                                <span className="opacity-50">📦</span>
+                                <span className="opacity-50">{item.emoji || "📦"}</span>
                               )}
                             </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5">
-                                <span
-                                  className="font-semibold text-sm truncate text-foreground"
-                                  title={item.nome}
-                                >
+
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-sm sm:text-base text-foreground truncate" title={item.nome}>
                                   {item.nome}
                                 </span>
-                                <Badge
-                                  variant="outline"
-                                  className="text-[9px] px-1 py-0 border-brand/50 text-brand"
-                                >
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-emerald-500 text-emerald-700 shrink-0">
                                   novo
                                 </Badge>
                               </div>
-                              <div className="text-[11px] text-muted-foreground flex items-center gap-2">
-                                {item.estoque !== undefined && <span>Estoque: {item.estoque}</span>}
+                              <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                {item.codigo && <span className="font-mono font-semibold">Cód: {item.codigo}</span>}
+                                {item.estoque !== undefined && <span>• Estoque: {item.estoque}</span>}
                               </div>
                             </div>
-                          </div>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-destructive hover:bg-destructive/10 shrink-0 rounded-lg"
-                            title="Remover produto"
-                            onClick={() => handleRemoveNewItem(idx)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
 
-                        {/* Linha de edição */}
-                        <div className="grid grid-cols-12 gap-2 pt-2 border-t border-brand/20 items-center">
-                          <div className="col-span-5 flex flex-col gap-1">
-                            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
-                              Qtd
-                            </span>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                size="icon"
-                                variant="outline"
-                                className="h-7 w-7 rounded-md shrink-0"
-                                onClick={() => handleChangeNewItemQty(idx, -1)}
-                                disabled={item.quantidade <= 1}
-                              >
-                                <Minus className="h-3 w-3" />
-                              </Button>
+                            <div className="flex items-center justify-between md:justify-start gap-2">
+                              <span className="md:hidden text-xs font-semibold text-muted-foreground">Qtd:</span>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  className="h-8 w-8 rounded-md shrink-0"
+                                  onClick={() => handleChangeNewItemQty(idx, -1)}
+                                  disabled={item.quantidade <= 1}
+                                >
+                                  <Minus className="h-3.5 w-3.5" />
+                                </Button>
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  className="h-8 w-16 text-center text-sm font-bold px-1"
+                                  value={item.quantidade}
+                                  onChange={(e) => handleSetNewItemQty(idx, parseInt(e.target.value) || 1)}
+                                />
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  className="h-8 w-8 rounded-md shrink-0"
+                                  onClick={() => handleChangeNewItemQty(idx, 1)}
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between md:justify-start gap-2">
+                              <span className="text-xs font-semibold text-muted-foreground">R$ Unit:</span>
                               <Input
                                 type="number"
-                                min="1"
-                                className="h-7 w-12 text-center text-xs font-semibold px-1"
-                                value={item.quantidade}
+                                step="0.01"
+                                min="0"
+                                className="h-8 w-28 text-right text-sm font-bold px-2"
+                                value={item.valor_unitario}
                                 onChange={(e) =>
-                                  handleSetNewItemQty(idx, parseInt(e.target.value) || 1)
+                                  handleChangeNewItemUnitario(idx, parseFloat(e.target.value) || 0)
                                 }
                               />
+                            </div>
+
+                            <div className="flex items-center justify-between md:justify-end gap-2 md:min-w-[115px]">
+                              <span className="md:hidden text-xs font-semibold text-muted-foreground">Subtotal:</span>
+                              <span className="font-extrabold text-sm sm:text-base text-primary whitespace-nowrap">
+                                R${" "}
+                                {Number(item.subtotal || 0).toLocaleString("pt-BR", {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                              </span>
+                            </div>
+
+                            <div className="flex justify-end">
                               <Button
                                 size="icon"
-                                variant="outline"
-                                className="h-7 w-7 rounded-md shrink-0"
-                                onClick={() => handleChangeNewItemQty(idx, 1)}
+                                variant="ghost"
+                                className="h-8 w-8 text-destructive hover:bg-destructive/10 shrink-0 rounded-lg"
+                                title="Remover produto"
+                                onClick={() => handleRemoveNewItem(idx)}
                               >
-                                <Plus className="h-3 w-3" />
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
                           </div>
+                        ))}
 
-                          <div className="col-span-4 flex flex-col gap-1">
-                            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
-                              Vlr Unit. (R$)
-                            </span>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              className="h-7 text-xs font-semibold px-2"
-                              value={item.valor_unitario}
-                              onChange={(e) =>
-                                handleChangeNewItemUnitario(
-                                  idx,
-                                  parseFloat(e.target.value) || 0
-                                )
-                              }
-                            />
-                          </div>
+                        {editItens.length === 0 && newItems.length === 0 && (
+                          <p className="text-sm text-muted-foreground text-center py-8 border border-dashed rounded-xl">
+                            Nenhum item restante. Use o catálogo acima para adicionar produtos ao pedido.
+                          </p>
+                        )}
+                      </div>
 
-                          <div className="col-span-3 flex flex-col gap-1 text-right">
-                            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
-                              Subtotal
-                            </span>
-                            <div className="text-xs font-bold text-foreground truncate h-7 flex items-center justify-end">
-                              R${" "}
-                              {Number(item.subtotal || 0).toLocaleString("pt-BR", {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}
-                            </div>
-                          </div>
+                      <div className="flex flex-wrap justify-between items-center gap-3 p-4 bg-muted/50 rounded-xl border">
+                        <div>
+                          <span className="text-xs uppercase tracking-wider font-semibold text-muted-foreground block">
+                            Novo Total Estimado
+                          </span>
+                          <span className="font-display font-extrabold text-2xl text-primary">
+                            R$ {editTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            onClick={handleCancelEditItems}
+                            disabled={savingItems}
+                          >
+                            Cancelar
+                          </Button>
+                          <Button
+                            className="bg-gradient-brand text-primary-foreground font-bold px-5"
+                            onClick={handleSaveItems}
+                            disabled={savingItems}
+                          >
+                            <Save className="h-4 w-4 mr-1.5" />
+                            {savingItems ? "Salvando..." : "Salvar Alterações"}
+                          </Button>
                         </div>
                       </div>
-                    ))}
-
-                    {editItens.length === 0 && newItems.length === 0 && (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        Nenhum item. Adicione produtos abaixo.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Formulário para adicionar produto */}
-                  <div className="rounded-xl border border-dashed border-brand/30 bg-muted/20 p-4 space-y-3">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                      <ShoppingCart className="h-3.5 w-3.5" /> Adicionar Produto
-                    </p>
-                    <Popover open={openProdutoPop} onOpenChange={setOpenProdutoPop}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          className="w-full justify-between h-9 font-normal text-sm"
-                        >
-                          {selectedProdutoId
-                            ? (() => {
-                                const p = produtos.find((p) => p.id === selectedProdutoId);
-                                return p ? `${p.nome} (Estoque: ${p.estoque})` : "Selecionar produto...";
-                              })()
-                            : "Selecionar ou buscar produto..."}
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[340px] p-0" align="start">
-                        <Command>
-                          <CommandInput placeholder="Buscar produto por nome..." />
-                          <CommandList>
-                            <CommandEmpty>Nenhum produto encontrado.</CommandEmpty>
-                            <CommandGroup>
-                              {produtos.map((p) => (
-                                <CommandItem
-                                  key={p.id}
-                                  value={`${p.codigo || ""} ${p.nome} ${p.id}`}
-                                  onSelect={() => handleSelectProduto(p.id)}
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      selectedProdutoId === p.id ? "opacity-100" : "opacity-0",
-                                    )}
-                                  />
-                                  <span className="text-sm">
-                                    {p.nome} — R$ {Number(p.valor).toFixed(2)} (Est: {p.estoque})
-                                  </span>
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-
-                    <div className="flex gap-2">
-                      <div className="flex-1 space-y-1">
-                        <label className="text-xs text-muted-foreground">Qtd</label>
-                        <Input
-                          type="number"
-                          min="1"
-                          value={newQtd}
-                          onChange={(e) => setNewQtd(Number(e.target.value))}
-                          className="h-8 text-sm"
-                        />
-                      </div>
-                      <div className="flex-1 space-y-1">
-                        <label className="text-xs text-muted-foreground">Valor Unit. (R$)</label>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={newUnitario}
-                          onChange={(e) => setNewUnitario(parseFloat(e.target.value) || 0)}
-                          className="h-8 text-sm"
-                        />
-                      </div>
-                      <div className="flex items-end">
-                        <Button
-                          size="sm"
-                          className="h-8 bg-gradient-brand text-primary-foreground"
-                          onClick={handleAddNewItem}
-                          disabled={!selectedProdutoId || newQtd <= 0}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Preview do novo total */}
-                  <div className="flex justify-between items-center p-3 bg-muted/40 rounded-lg">
-                    <span className="text-sm font-semibold text-muted-foreground">Novo Total Estimado:</span>
-                    <span className="font-bold text-base text-brand">
-                      R$ {editTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                /* Modo visualização */
-                <div>
-                  {loadingItens ? (
-                    <p className="text-sm text-muted-foreground">Carregando itens...</p>
+                    </>
+                  ) : loadingItens ? (
+                    <p className="text-sm text-muted-foreground py-8 text-center">Carregando itens...</p>
                   ) : vendaItens.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nenhum item encontrado.</p>
+                    <div className="text-center py-10 space-y-3 border border-dashed rounded-xl">
+                      <p className="text-sm text-muted-foreground">Nenhum item encontrado neste pedido.</p>
+                      <Button size="sm" variant="outline" onClick={handleStartEditItems}>
+                        <PackagePlus className="h-4 w-4 mr-1.5" /> Adicionar Produtos
+                      </Button>
+                    </div>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="divide-y border rounded-xl overflow-hidden bg-background">
                       {vendaItens.map((item) => (
                         <div
                           key={item.id}
-                          className="flex justify-between items-center p-3 rounded-lg border border-border/50 bg-background hover:bg-muted/20 transition-colors"
+                          className="flex items-center justify-between gap-4 p-3.5 hover:bg-muted/20 transition-colors"
                         >
-                          <div className="flex items-center gap-3">
-                            <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-md bg-accent text-lg">
+                          <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                            <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-accent text-xl border">
                               {item.produtos?.imagem ? (
                                 <img
                                   src={item.produtos.imagem}
@@ -2151,19 +1444,26 @@ function Vendas() {
                                 <span className="opacity-50">📦</span>
                               )}
                             </div>
-                            <div>
-                              <div className="font-semibold text-sm">
+                            <div className="min-w-0">
+                              <div className="font-bold text-sm sm:text-base text-foreground">
                                 {item.produtos?.nome || "Produto Desconhecido"}
                               </div>
-                              <div className="text-xs text-muted-foreground">
-                                {item.quantidade}x R${" "}
-                                {Number(item.valor_unitario).toLocaleString("pt-BR", {
-                                  minimumFractionDigits: 2,
-                                })}
+                              <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap mt-0.5">
+                                {item.produtos?.codigo && (
+                                  <span className="font-mono font-semibold text-foreground/80">
+                                    Cód: {item.produtos.codigo}
+                                  </span>
+                                )}
+                                <span>
+                                  {item.quantidade}x R${" "}
+                                  {Number(item.valor_unitario).toLocaleString("pt-BR", {
+                                    minimumFractionDigits: 2,
+                                  })}
+                                </span>
                               </div>
                             </div>
                           </div>
-                          <div className="text-right font-medium text-sm">
+                          <div className="text-right font-extrabold text-sm sm:text-base text-primary whitespace-nowrap shrink-0">
                             R${" "}
                             {Number(item.subtotal).toLocaleString("pt-BR", {
                               minimumFractionDigits: 2,
@@ -2174,11 +1474,709 @@ function Vendas() {
                     </div>
                   )}
                 </div>
-              )}
+              </Card>
+
+              {/* ── COLUNA DIREITA: RESUMO, CLIENTE, PAGAMENTO E AÇÕES ────────── */}
+              <div className="space-y-4 lg:sticky lg:top-0">
+                {/* Total destacado estilo PDV */}
+                <div className="rounded-2xl bg-gradient-brand p-5 text-primary-foreground shadow-elevated">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs uppercase tracking-widest opacity-85 font-semibold">
+                      {isEditingItems ? "Total Estimado do Pedido" : "Total do Pedido"}
+                    </p>
+                    {!isEditingItems && !isEditingTotal && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-primary-foreground/80 hover:text-white hover:bg-white/15 shrink-0"
+                        title="Editar total diretamente"
+                        onClick={handleEditTotal}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                  {isEditingTotal ? (
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="font-bold text-lg">R$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={newTotalValue}
+                        onChange={(e) => setNewTotalValue(e.target.value)}
+                        className="w-36 border-b-2 border-white/70 outline-none bg-transparent font-extrabold text-2xl text-white"
+                      />
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-white hover:bg-white/20"
+                        onClick={handleSaveTotal}
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-white/80 hover:bg-white/20"
+                        onClick={() => setIsEditingTotal(false)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="font-display text-4xl font-extrabold mt-1">
+                      R${" "}
+                      {Number(isEditingItems ? editTotal : selectedVenda?.valor_total || 0).toLocaleString("pt-BR", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </p>
+                  )}
+                </div>
+
+                <Card className="shadow-card p-4 sm:p-5 space-y-4">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    {/* Cliente */}
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">
+                        Cliente
+                      </span>
+                      {isEditingCliente ? (
+                        <div className="space-y-1.5">
+                          <Popover open={openClientePop} onOpenChange={setOpenClientePop}>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                className="w-full justify-between h-9 text-xs font-normal"
+                                onClick={() => fetchClientes()}
+                              >
+                                <span className="truncate">
+                                  {selectedVenda?.clientes?.nome || "Selecionar cliente..."}
+                                </span>
+                                <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[340px] p-0 z-[70]" align="start">
+                              <Command>
+                                <CommandInput placeholder="Buscar cliente..." />
+                                <CommandList>
+                                  <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+                                  <CommandGroup>
+                                    {clientesList.map((c) => (
+                                      <CommandItem
+                                        key={c.id}
+                                        value={`${c.nome} ${c.cpf_cnpj || ""}`}
+                                        onSelect={() => handleChangeCliente(c.id)}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-3.5 w-3.5",
+                                            selectedVenda?.cliente_id === c.id ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        <div className="truncate text-xs">
+                                          <p className="font-medium">{c.nome}</p>
+                                          {c.cpf_cnpj && (
+                                            <p className="text-[10px] text-muted-foreground">{c.cpf_cnpj}</p>
+                                          )}
+                                        </div>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 text-[11px] text-muted-foreground hover:text-foreground"
+                            onClick={() => setIsEditingCliente(false)}
+                          >
+                            Cancelar
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-foreground" title={selectedVenda?.clientes?.nome}>
+                            {selectedVenda?.clientes?.nome || "Cliente Avulso"}
+                          </span>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 opacity-70 hover:opacity-100 shrink-0"
+                            title="Alterar cliente"
+                            onClick={() => {
+                              fetchClientes();
+                              setIsEditingCliente(true);
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Data */}
+                    <div>
+                      <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">
+                        Data
+                      </span>
+                      {isEditingDate ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="date"
+                            value={editDateValue}
+                            onChange={(e) => setEditDateValue(e.target.value)}
+                            className="h-8 text-xs font-medium"
+                          />
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-success shrink-0"
+                            onClick={handleSaveDate}
+                            disabled={savingDate}
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-destructive shrink-0"
+                            onClick={() => setIsEditingDate(false)}
+                            disabled={savingDate}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="font-semibold">
+                            {selectedVenda ? new Date(selectedVenda.created_at).toLocaleDateString() : "-"}
+                          </span>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 opacity-60 hover:opacity-100 shrink-0"
+                            title="Alterar data"
+                            onClick={handleStartEditDate}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Status */}
+                    <div>
+                      <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">
+                        Status
+                      </span>
+                      <Select
+                        value={selectedVenda?.status || ""}
+                        onValueChange={(val) => handleStatusChange(selectedVenda.id, val)}
+                      >
+                        <SelectTrigger className="h-8 text-xs font-medium">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="z-[70]">
+                          <SelectItem value="Pendente">Pendente</SelectItem>
+                          <SelectItem value="Aguardando Pagamento">Aguardando Pagamento</SelectItem>
+                          <SelectItem value="Pago">Pago</SelectItem>
+                          <SelectItem value="Faturado">Faturado</SelectItem>
+                          <SelectItem value="Entregue">Entregue</SelectItem>
+                          <SelectItem value="Cancelado">Cancelado</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Vendedor / Parceiro Destacado */}
+                  <div className="pt-3 border-t border-border/50">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-muted-foreground block text-xs uppercase tracking-wider font-semibold flex items-center gap-1.5">
+                        <UserCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        Vendedor / Parceiro
+                      </span>
+                      {!isEditingVendedor && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2 text-[11px] text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 font-medium flex items-center gap-1"
+                          onClick={() => {
+                            fetchVendedores();
+                            setIsEditingVendedor(true);
+                          }}
+                        >
+                          <Pencil className="h-3 w-3" />
+                          {selectedVenda?.vendedor ? "Alterar Vendedor" : "Vincular Vendedor"}
+                        </Button>
+                      )}
+                    </div>
+
+                    {isEditingVendedor ? (
+                      <div className="space-y-2 bg-background p-3 rounded-lg border-2 border-emerald-500/30 shadow-sm animate-in fade-in-50">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                            <UserCheck className="h-3.5 w-3.5 text-emerald-600" /> Selecione o Parceiro Cadastrado:
+                          </span>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 text-muted-foreground"
+                            onClick={() => setIsEditingVendedor(false)}
+                            disabled={savingVendedor}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+
+                        <Popover open={openVendedorPop} onOpenChange={setOpenVendedorPop}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              className="w-full justify-between h-9 text-xs font-medium"
+                              onClick={() => fetchVendedores()}
+                              disabled={savingVendedor}
+                            >
+                              <span className="truncate">
+                                {selectedVenda?.vendedor?.nome || "Venda Direta / Sem Vendedor"}
+                              </span>
+                              <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[340px] p-0 z-[70]" align="start">
+                            <Command>
+                              <CommandInput placeholder="Buscar parceiro por nome..." />
+                              <CommandList>
+                                <CommandEmpty>Nenhum parceiro encontrado.</CommandEmpty>
+                                <CommandGroup heading="Opções">
+                                  <CommandItem
+                                    value="venda direta sem vendedor nenhum desvincular"
+                                    onSelect={() => handleChangeVendedor(null)}
+                                    className="cursor-pointer"
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-3.5 w-3.5",
+                                        !selectedVenda?.vendedor_id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <div className="truncate text-xs">
+                                      <p className="font-semibold text-muted-foreground">Venda Direta (Sem Vendedor)</p>
+                                      <p className="text-[10px] text-muted-foreground">Não vincula comissão a nenhum parceiro</p>
+                                    </div>
+                                  </CommandItem>
+                                </CommandGroup>
+                                <CommandGroup heading="Parceiros Cadastrados">
+                                  {vendedoresList
+                                    .filter((vend) => vend.status === "Ativo" || vend.id === selectedVenda?.vendedor_id)
+                                    .map((vend) => (
+                                      <CommandItem
+                                        key={vend.id}
+                                        value={`${vend.nome} ${vend.email || ""} ${vend.telefone || ""}`}
+                                        onSelect={() => handleChangeVendedor(vend.id)}
+                                        className="cursor-pointer"
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-3.5 w-3.5 text-emerald-600",
+                                            selectedVenda?.vendedor_id === vend.id ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        <div className="truncate text-xs flex-1">
+                                          <div className="flex items-center justify-between gap-1">
+                                            <p className="font-bold text-foreground truncate">{vend.nome}</p>
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-emerald-300 text-emerald-700 bg-emerald-50">
+                                              {vend.tipo_comissao === "fixo" ? `R$ ${vend.valor_comissao}` : `${vend.valor_comissao}%`}
+                                            </Badge>
+                                          </div>
+                                          {vend.email && (
+                                            <p className="text-[10px] text-muted-foreground truncate">{vend.email}</p>
+                                          )}
+                                        </div>
+                                      </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+
+                        <div className="flex justify-end">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 text-[11px] text-muted-foreground"
+                            onClick={() => setIsEditingVendedor(false)}
+                            disabled={savingVendedor}
+                          >
+                            Cancelar
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border-2 border-emerald-200/80 dark:border-emerald-800/60 rounded-xl p-3 flex items-center justify-between gap-2 shadow-2xs">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="h-9 w-9 rounded-full bg-emerald-100 dark:bg-emerald-900/60 flex items-center justify-center text-emerald-700 dark:text-emerald-300 shrink-0 font-bold">
+                            <UserCheck className="h-4.5 w-4.5" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-sm text-foreground truncate">
+                                {selectedVenda?.vendedor?.nome || "Venda Direta (Sem Vendedor)"}
+                              </span>
+                              {selectedVenda?.vendedor ? (
+                                <Badge className="bg-emerald-600 text-white hover:bg-emerald-700 text-[10px] px-1.5 py-0 h-4 font-semibold">
+                                  Parceiro
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-muted-foreground border-dashed">
+                                  Venda Direta
+                                </Badge>
+                              )}
+                            </div>
+                            {selectedVenda?.vendedor && (
+                              <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                                {selectedVenda.vendedor.email || ""}
+                                {selectedVenda.vendedor.telefone ? ` • Tel: ${selectedVenda.vendedor.telefone}` : ""}
+                                {selectedVenda.valor_comissao ? ` • Comissão: R$ ${Number(selectedVenda.valor_comissao).toFixed(2).replace(".", ",")}` : ""}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 border-emerald-300 text-emerald-700 hover:bg-emerald-100/50 dark:border-emerald-700 dark:text-emerald-300 text-xs font-semibold shrink-0 gap-1"
+                          title="Alterar vendedor parceiro"
+                          onClick={() => {
+                            fetchVendedores();
+                            setIsEditingVendedor(true);
+                          }}
+                        >
+                          <Pencil className="h-3 w-3" />
+                          {selectedVenda?.vendedor ? "Alterar" : "Vincular"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Pagamento (Forma e Condição) */}
+                  <div className="pt-3 border-t border-border/50">
+                    {isEditingPayment ? (
+                      <div className="space-y-3 bg-background p-3 rounded-lg border border-border/60 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-xs uppercase tracking-wider text-primary flex items-center gap-1.5">
+                            <CreditCard className="h-3.5 w-3.5" /> Editar Forma de Pagamento
+                          </span>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                            onClick={() => setIsEditingPayment(false)}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-medium text-muted-foreground">
+                              Forma de Pagamento
+                            </label>
+                            <Select
+                              value={editMetodoPagamento}
+                              onValueChange={(val) => setEditMetodoPagamento(val)}
+                            >
+                              <SelectTrigger className="h-8 text-xs font-medium">
+                                <SelectValue placeholder="Selecione a forma..." />
+                              </SelectTrigger>
+                              <SelectContent className="z-[70]">
+                                <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                                <SelectItem value="Pix">Pix</SelectItem>
+                                <SelectItem value="Cartão de Crédito">Cartão de Crédito</SelectItem>
+                                <SelectItem value="Cartão de Débito">Cartão de Débito</SelectItem>
+                                <SelectItem value="Boleto">Boleto Bancário</SelectItem>
+                                <SelectItem value="Boleto a Prazo">Boleto a Prazo</SelectItem>
+                                <SelectItem value="Transferência">Transferência / TED</SelectItem>
+                                <SelectItem value="Cheque">Cheque</SelectItem>
+                                <SelectItem value="Outro">Outro</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-medium text-muted-foreground">
+                              Condição / Prazo
+                            </label>
+                            <Input
+                              className="h-8 text-xs font-medium"
+                              placeholder="Ex: À Vista, Boleto a Prazo..."
+                              value={editCondicaoPagamento}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditCondicaoPagamento(val);
+                                const baseDate = selectedVenda?.created_at || new Date().toISOString();
+                                setEditVencimentos(calcularVencimentosPadrao(val, baseDate, selectedVenda?.valor_total));
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <span className="text-[10px] text-muted-foreground uppercase font-semibold">
+                            Atalhos rápidos de condição:
+                          </span>
+                          <div className="flex flex-wrap gap-1">
+                            {[
+                              "À Vista",
+                              "Boleto (28 dias)",
+                              "Boleto (35 dias)",
+                              "Boleto (28, 35, 42 dias)",
+                              "Boleto (30, 45, 60 dias)",
+                              "Boleto 30 dias",
+                              "Boleto 30/60 dias",
+                              "Entrada + 30 dias",
+                              "2x sem juros",
+                              "3x sem juros",
+                            ].map((preset) => (
+                              <button
+                                key={preset}
+                                type="button"
+                                onClick={() => {
+                                  setEditCondicaoPagamento(preset);
+                                  if (preset.toLowerCase().includes("boleto") && !editMetodoPagamento) {
+                                    setEditMetodoPagamento("Boleto");
+                                  }
+                                  const baseDate = selectedVenda?.created_at || new Date().toISOString();
+                                  setEditVencimentos(calcularVencimentosPadrao(preset, baseDate, selectedVenda?.valor_total));
+                                }}
+                                className="text-[10px] px-2 py-0.5 rounded-md bg-muted hover:bg-primary/10 hover:text-primary transition-colors text-muted-foreground border border-border/40"
+                              >
+                                {preset}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 pt-2 border-t border-border/40">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
+                              <Calendar className="h-3.5 w-3.5 text-primary" /> Datas de Vencimento ({editVencimentos.length})
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-6 text-[10px] px-2"
+                              onClick={() => {
+                                const nextNum = editVencimentos.length + 1;
+                                setEditVencimentos([
+                                  ...editVencimentos,
+                                  {
+                                    parcela: nextNum,
+                                    data: new Date().toISOString().split("T")[0],
+                                    label: `${nextNum}º Vencimento`,
+                                  },
+                                ]);
+                              }}
+                            >
+                              <Plus className="h-3 w-3 mr-1" /> Parcela
+                            </Button>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {editVencimentos.map((venc, idx) => (
+                              <div
+                                key={idx}
+                                className="p-2 rounded-lg bg-muted/40 border border-border/60 space-y-1"
+                              >
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="font-semibold text-foreground">
+                                    {venc.label || `${idx + 1}º Vencimento`}
+                                  </span>
+                                  {editVencimentos.length > 1 && (
+                                    <button
+                                      type="button"
+                                      className="text-destructive hover:underline text-[10px]"
+                                      onClick={() => {
+                                        setEditVencimentos(editVencimentos.filter((_, i) => i !== idx));
+                                      }}
+                                    >
+                                      Remover
+                                    </button>
+                                  )}
+                                </div>
+                                <Input
+                                  type="date"
+                                  className="h-8 text-xs bg-background font-medium"
+                                  value={venc.data ? venc.data.split("T")[0] : ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setEditVencimentos(
+                                      editVencimentos.map((v, i) =>
+                                        i === idx ? { ...v, data: val } : v
+                                      )
+                                    );
+                                  }}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-1 border-t border-border/40">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => setIsEditingPayment(false)}
+                            disabled={savingPayment}
+                          >
+                            Cancelar
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="h-7 text-xs bg-gradient-brand text-primary-foreground"
+                            onClick={handleSavePayment}
+                            disabled={savingPayment}
+                          >
+                            <Check className="h-3.5 w-3.5 mr-1" />
+                            {savingPayment ? "Salvando..." : "Salvar Pagamento"}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">
+                            Pagamento
+                          </span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-foreground text-sm">
+                              {selectedVenda?.metodo_pagamento || "Não informado"}
+                            </span>
+                            {selectedVenda?.condicao_pagamento && (
+                              <Badge variant="secondary" className="text-xs font-normal">
+                                {selectedVenda.condicao_pagamento}
+                              </Badge>
+                            )}
+                          </div>
+                          {selectedVenda?.vencimentos &&
+                            Array.isArray(selectedVenda.vencimentos) &&
+                            selectedVenda.vencimentos.length > 0 && (
+                              <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                                <span className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1">
+                                  <Calendar className="h-3.5 w-3.5 text-primary" /> Vencimento(s):
+                                </span>
+                                {selectedVenda.vencimentos.map((v: any, i: number) => {
+                                  const valParcela = calcularValorParcela(
+                                    v,
+                                    i,
+                                    selectedVenda.vencimentos.length,
+                                    selectedVenda?.valor_total
+                                  );
+                                  return (
+                                    <Badge
+                                      key={i}
+                                      variant="outline"
+                                      className="text-[11px] bg-background font-medium border-primary/40 text-primary px-2 py-0.5"
+                                    >
+                                      {selectedVenda.vencimentos.length > 1 ? `${i + 1}ª: ` : ""}
+                                      {formatarDataBr(v.data || v)}
+                                      {valParcela > 0 ? ` - R$ ${valParcela.toFixed(2).replace(".", ",")}` : ""}
+                                    </Badge>
+                                  );
+                                })}
+                              </div>
+                            )}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs gap-1 hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+                          onClick={() => {
+                            setEditMetodoPagamento(selectedVenda?.metodo_pagamento || "");
+                            setEditCondicaoPagamento(selectedVenda?.condicao_pagamento || "");
+                            if (Array.isArray(selectedVenda?.vencimentos) && selectedVenda.vencimentos.length > 0) {
+                              setEditVencimentos(selectedVenda.vencimentos);
+                            } else {
+                              setEditVencimentos(
+                                calcularVencimentosPadrao(
+                                  selectedVenda?.condicao_pagamento || "",
+                                  selectedVenda?.created_at,
+                                  selectedVenda?.valor_total
+                                )
+                              );
+                            }
+                            setIsEditingPayment(true);
+                          }}
+                        >
+                          <Pencil className="h-3 w-3" /> Alterar
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+
+                {/* Ações do Pedido */}
+                <Card className="shadow-card p-4 space-y-2.5">
+                  <Button
+                    variant="secondary"
+                    className="w-full font-bold border border-slate-200"
+                    onClick={() => {
+                      if (selectedVenda?.id) {
+                        window.location.href = `/app/pdv?clone_id=${selectedVenda.id}`;
+                        return;
+                      }
+                      const itemsMagic = vendaItens
+                        .map((i) => `${i.produto_id}:${i.quantidade}`)
+                        .join(",");
+                      window.location.href = `/app/pdv?c=${itemsMagic}`;
+                    }}
+                  >
+                    Clonar Pedido no PDV
+                  </Button>
+
+                  {selectedVenda?.tipo === "DAV" ? (
+                    <>
+                      {selectedVenda.status !== "Cancelado" && (
+                        <Button
+                          variant="outline"
+                          className="w-full border-amber-300 text-amber-800 hover:bg-amber-50 font-semibold"
+                          onClick={() => handleCancelDav(selectedVenda)}
+                        >
+                          <Ban className="h-4 w-4 mr-2 text-amber-600" />
+                          Cancelar Orçamento
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        className="w-full text-destructive hover:bg-destructive/10 font-semibold text-xs"
+                        onClick={() => handleDelete(selectedVenda)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Excluir Orçamento Definitivamente
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="w-full border-destructive/30 text-destructive hover:bg-destructive/10 font-semibold"
+                      onClick={() => handleDelete(selectedVenda)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Excluir Venda / Pedido
+                    </Button>
+                  )}
+                </Card>
+              </div>
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal ASAAS */}
       {openAsaas && (
