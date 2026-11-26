@@ -12,14 +12,43 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, Save, Pencil, Printer, ArrowUpDown, ArrowUp, ArrowDown, FileText, Calendar, Package, TrendingUp, DollarSign, EyeOff, FileInput, X, Layers } from "lucide-react";
+import {
+  Search,
+  Printer,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  FileText,
+  Calendar,
+  Package,
+  TrendingUp,
+  DollarSign,
+  EyeOff,
+  FileInput,
+  Layers,
+  ArrowLeft,
+  Eye,
+  Trash2,
+  History,
+  FileSpreadsheet,
+} from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import {
   ImportarPedidosModal,
+  type ImportedOrderInfo,
   type ImportedOrdersResult,
+  type ImportedProductAgg,
 } from "@/components/importar-pedidos-modal";
-import { formatOrderRangeSummary } from "@/lib/utils";
+import { formatBrDecimal, formatOrderRangeSummary } from "@/lib/utils";
+import {
+  carregarHistorico,
+  excluirHistorico,
+  salvarHistorico,
+  type HistoricoEntry,
+  type HistoricoItem,
+} from "@/lib/historico-vendas-produtos";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -43,22 +72,54 @@ export const Route = createFileRoute("/app/vendas-produtos")({
   component: VendasProdutos,
 });
 
+type ActiveView =
+  | {
+      kind: "lote";
+      orders: ImportedOrderInfo[];
+      productMap: Record<string, ImportedProductAgg>;
+      title: string;
+    }
+  | {
+      kind: "relatorio";
+      entry: HistoricoEntry;
+    }
+  | null;
+
+interface PrintSnapshot {
+  title: string;
+  subtitle: string;
+  items: any[];
+  comValor: boolean;
+  dataEmissao: string;
+  horaEmissao: string;
+}
+
 function VendasProdutos() {
+  const confirm = useConfirm();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [historico, setHistorico] = useState<HistoricoEntry[]>([]);
+  const [loadingHistorico, setLoadingHistorico] = useState(true);
+  const [historicoFiltroTipo, setHistoricoFiltroTipo] = useState<"todos" | "lote" | "relatorio">(
+    "todos",
+  );
+  const [historicoBusca, setHistoricoBusca] = useState("");
+
+  const [activeView, setActiveView] = useState<ActiveView>(null);
+  const [showAllInImport, setShowAllInImport] = useState(false);
+
+  // Filtros e seleção na visualização detalhada de um lote/relatório
   const [busca, setBusca] = useState("");
   const [buscaCodigo, setBuscaCodigo] = useState("");
   const [categoriaFilter, setCategoriaFilter] = useState<string>("Todas");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState<number>(0);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
-  const [mostrarValorImpressao, setMostrarValorImpressao] = useState<boolean>(false);
-  const [printModalOpen, setPrintModalOpen] = useState<boolean>(false);
-  const [importModalOpen, setImportModalOpen] = useState<boolean>(false);
-  const [importedBatch, setImportedBatch] = useState<ImportedOrdersResult | null>(null);
-  const [showAllInImport, setShowAllInImport] = useState<boolean>(false);
 
-  const isImportMode = Boolean(importedBatch && importedBatch.orders.length > 0);
+  // Modais de importação e impressão
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [printModalOpen, setPrintModalOpen] = useState(false);
+  const [pendingPrintEntry, setPendingPrintEntry] = useState<HistoricoEntry | null>(null);
+  const [printSnapshot, setPrintSnapshot] = useState<PrintSnapshot | null>(null);
 
   type SortColumn = "codigo" | "nome" | "categoria" | "valor" | "total_calculado";
   type SortDirection = "asc" | "desc";
@@ -92,7 +153,9 @@ function VendasProdutos() {
       while (true) {
         const { data: pBatch, error: pError } = await supabase
           .from("produtos")
-          .select("id, nome, codigo, categoria, estoque, valor, status, created_at, emoji, quantidade_vendas, imagem")
+          .select(
+            "id, nome, codigo, categoria, estoque, valor, status, created_at, emoji, quantidade_vendas, imagem",
+          )
           .order("created_at", { ascending: false })
           .range(pFrom, pFrom + PAGE_SIZE - 1);
         if (pError) throw pError;
@@ -102,7 +165,6 @@ function VendasProdutos() {
         pFrom += PAGE_SIZE;
       }
 
-      // Fetch all items from valid sales to compute system sales
       const itens: any[] = [];
       let iFrom = 0;
       while (true) {
@@ -148,80 +210,91 @@ function VendasProdutos() {
     }
   };
 
-  useEffect(() => {
-    fetchProductsAndSales();
-  }, []);
-
-  const handleSave = async (id: string) => {
+  const fetchHistorico = async () => {
+    setLoadingHistorico(true);
     try {
-      const p = products.find((prod) => prod.id === id);
-      if (!p) return;
-
-      const vs = p.vendas_sistema || 0;
-      const novo_ajuste = editValue - vs;
-
-      const { error } = await supabase
-        .from("produtos")
-        .update({ quantidade_vendas: novo_ajuste })
-        .eq("id", id);
-
-      if (error) throw error;
-
-      toast.success("Quantidade atualizada com sucesso!");
-      setEditingId(null);
-      fetchProductsAndSales();
-    } catch (err: any) {
-      toast.error("Erro ao salvar: " + err.message);
+      const list = await carregarHistorico();
+      setHistorico(list);
+    } finally {
+      setLoadingHistorico(false);
     }
   };
 
-  const enrichedProducts = useMemo(() => {
-    return products.map((p) => {
-      const agg = isImportMode ? importedBatch?.productMap[p.id] : undefined;
-      const importedQty = agg?.quantidade || 0;
-      const importedSubtotal = agg?.subtotal || 0;
-      const importedOrders = agg?.pedidos || [];
-      return {
-        ...p,
-        imported_qty: importedQty,
-        imported_subtotal: importedSubtotal,
-        imported_orders: importedOrders,
-        display_total: isImportMode ? importedQty : p.total_calculado,
-      };
-    });
-  }, [products, isImportMode, importedBatch]);
+  useEffect(() => {
+    fetchProductsAndSales();
+    fetchHistorico();
+  }, []);
+
+  const totalVendasGlobais = useMemo(
+    () => products.reduce((acc, p) => acc + Number(p.total_calculado || 0), 0),
+    [products],
+  );
+
+  // Linhas disponíveis na visualização ativa (lote importado ou relatório aberto)
+  const activeSourceProducts = useMemo(() => {
+    if (!activeView) return [];
+
+    if (activeView.kind === "lote") {
+      return products.map((p) => {
+        const agg = activeView.productMap[p.id];
+        const qty = agg?.quantidade || 0;
+        return {
+          ...p,
+          imported_qty: qty,
+          imported_subtotal: agg?.subtotal || 0,
+          imported_orders: agg?.pedidos || [],
+          display_total: qty,
+        };
+      });
+    }
+
+    return activeView.entry.itens.map((it) => ({
+      id: it.produto_id,
+      codigo: it.codigo,
+      nome: it.nome,
+      categoria: it.categoria,
+      imagem: it.imagem,
+      valor: it.valor,
+      imported_qty: it.quantidade,
+      imported_subtotal: it.subtotal,
+      imported_orders: it.pedidos || [],
+      display_total: it.quantidade,
+    }));
+  }, [activeView, products]);
 
   const codeQuery = buscaCodigo.trim().toLowerCase();
   const hasExactCodeMatch =
     codeQuery.length > 0 &&
-    enrichedProducts.some((p) => {
-      const pCode = p.codigo !== undefined && p.codigo !== null ? String(p.codigo).trim().toLowerCase() : "";
-      return pCode === codeQuery || (/^\d+$/.test(codeQuery) && /^\d+$/.test(pCode) && Number(pCode) === Number(codeQuery));
+    activeSourceProducts.some((p) => {
+      const pCode =
+        p.codigo !== undefined && p.codigo !== null ? String(p.codigo).trim().toLowerCase() : "";
+      return (
+        pCode === codeQuery ||
+        (/^\d+$/.test(codeQuery) && /^\d+$/.test(pCode) && Number(pCode) === Number(codeQuery))
+      );
     });
 
   const filteredProducts = useMemo(() => {
-    const filtered = enrichedProducts.filter((p) => {
-      if (isImportMode && !showAllInImport && p.imported_qty <= 0) {
+    const filtered = activeSourceProducts.filter((p) => {
+      if (activeView?.kind === "lote" && !showAllInImport && p.imported_qty <= 0) {
         return false;
       }
 
       const search = busca.toLowerCase().trim();
       const nome = p.nome ? String(p.nome).toLowerCase() : "";
-      const codigo = p.codigo !== undefined && p.codigo !== null ? String(p.codigo).trim().toLowerCase() : "";
-      
-      const normalize = (str: string) => 
-        str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        
+      const codigo =
+        p.codigo !== undefined && p.codigo !== null ? String(p.codigo).trim().toLowerCase() : "";
+
+      const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       const searchNormalized = normalize(search);
       const nomeNormalized = normalize(nome);
       const codigoNormalized = normalize(codigo);
-
       const searchTerms = searchNormalized.split(/\s+/).filter(Boolean);
-      
+
       const matchBusca =
         searchTerms.length === 0 ||
-        searchTerms.every((term) =>
-          nomeNormalized.includes(term) || codigoNormalized.includes(term)
+        searchTerms.every(
+          (term) => nomeNormalized.includes(term) || codigoNormalized.includes(term),
         );
 
       let matchCodigo = true;
@@ -229,7 +302,9 @@ function VendasProdutos() {
         if (hasExactCodeMatch) {
           matchCodigo =
             codigo === codeQuery ||
-            (/^\d+$/.test(codeQuery) && /^\d+$/.test(codigo) && Number(codigo) === Number(codeQuery));
+            (/^\d+$/.test(codeQuery) &&
+              /^\d+$/.test(codigo) &&
+              Number(codigo) === Number(codeQuery));
         } else {
           matchCodigo = codigo.startsWith(codeQuery) || nomeNormalized.includes(`codigo ${codeQuery}`);
         }
@@ -262,53 +337,284 @@ function VendasProdutos() {
       const codeB = b.codigo !== undefined && b.codigo !== null ? String(b.codigo).trim() : "";
       return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: "base" });
     });
-  }, [enrichedProducts, isImportMode, showAllInImport, busca, codeQuery, hasExactCodeMatch, categoriaFilter, sortColumn, sortDirection]);
+  }, [
+    activeSourceProducts,
+    activeView,
+    showAllInImport,
+    busca,
+    codeQuery,
+    hasExactCodeMatch,
+    categoriaFilter,
+    sortColumn,
+    sortDirection,
+  ]);
 
-  const printableProducts = useMemo(() => {
+  const printableFromActiveView = useMemo(() => {
     if (selectedProducts.length > 0) {
       return filteredProducts.filter((p) => selectedProducts.includes(p.id));
     }
     return filteredProducts;
   }, [filteredProducts, selectedProducts]);
 
-  const totalVendasImpressao = useMemo(
-    () => printableProducts.reduce((acc, p) => acc + Number(p.display_total || 0), 0),
-    [printableProducts]
-  );
+  const filteredHistorico = useMemo(() => {
+    const q = historicoBusca.trim().toLowerCase();
+    return historico.filter((entry) => {
+      if (historicoFiltroTipo !== "todos" && entry.tipo !== historicoFiltroTipo) return false;
+      if (!q) return true;
+      const inTitle = entry.titulo.toLowerCase().includes(q);
+      const inDesc = (entry.descricao || "").toLowerCase().includes(q);
+      const inOrders = entry.pedidos.some(
+        (o) => o.numero.toLowerCase().includes(q) || o.cliente_nome.toLowerCase().includes(q),
+      );
+      const inItems = entry.itens.some(
+        (it) => it.nome.toLowerCase().includes(q) || it.codigo.toLowerCase().includes(q),
+      );
+      return inTitle || inDesc || inOrders || inItems;
+    });
+  }, [historico, historicoFiltroTipo, historicoBusca]);
 
-  const totalVendasGlobais = products.reduce((acc, p) => acc + (p.total_calculado || 0), 0);
+  const buildHistoricoItensFromProducts = (list: any[]): HistoricoItem[] =>
+    list.map((p) => {
+      const qty = Number(p.display_total ?? p.total_calculado ?? 0);
+      const unitVal = Number(p.valor || 0);
+      return {
+        produto_id: p.id,
+        codigo: String(p.codigo || ""),
+        nome: String(p.nome || ""),
+        categoria: p.categoria || null,
+        imagem: p.imagem || null,
+        valor: unitVal,
+        quantidade: qty,
+        subtotal: Number(p.imported_subtotal ?? qty * unitVal),
+        pedidos: Array.isArray(p.imported_orders) ? p.imported_orders : [],
+      };
+    });
 
-  const importedRangeSummary = useMemo(
-    () => (isImportMode ? formatOrderRangeSummary(importedBatch!.orders) : ""),
-    [isImportMode, importedBatch]
-  );
+  const handleImportOrders = async (result: ImportedOrdersResult) => {
+    const rangeSummary = formatOrderRangeSummary(result.orders);
+    const title = `Pedidos ${rangeSummary} (${result.orders.length} pedido${
+      result.orders.length === 1 ? "" : "s"
+    })`;
 
-  const importedProductsCount = useMemo(
-    () => (isImportMode ? enrichedProducts.filter((p) => p.imported_qty > 0).length : 0),
-    [isImportMode, enrichedProducts]
-  );
-
-  const totalImportedUnits = useMemo(
-    () => (isImportMode ? enrichedProducts.reduce((acc, p) => acc + Number(p.imported_qty || 0), 0) : 0),
-    [isImportMode, enrichedProducts]
-  );
-
-  const totalImportedValue = useMemo(
-    () => (isImportMode ? enrichedProducts.reduce((acc, p) => acc + Number(p.imported_subtotal || 0), 0) : 0),
-    [isImportMode, enrichedProducts]
-  );
-
-  const handleImportOrders = (result: ImportedOrdersResult) => {
-    setImportedBatch(result);
+    setActiveView({
+      kind: "lote",
+      orders: result.orders,
+      productMap: result.productMap,
+      title,
+    });
     setShowAllInImport(false);
     setSelectedProducts([]);
-    setEditingId(null);
+    setBusca("");
+    setBuscaCodigo("");
+    setCategoriaFilter("Todas");
+
+    const itensLote: HistoricoItem[] = products
+      .filter((p) => (result.productMap[p.id]?.quantidade || 0) > 0)
+      .sort((a, b) =>
+        String(a.codigo || "").localeCompare(String(b.codigo || ""), undefined, {
+          numeric: true,
+          sensitivity: "base",
+        }),
+      )
+      .map((p) => {
+        const agg = result.productMap[p.id];
+        return {
+          produto_id: p.id,
+          codigo: String(p.codigo || ""),
+          nome: String(p.nome || ""),
+          categoria: p.categoria || null,
+          imagem: p.imagem || null,
+          valor: Number(p.valor || 0),
+          quantidade: Number(agg?.quantidade || 0),
+          subtotal: Number(agg?.subtotal || 0),
+          pedidos: agg?.pedidos || [],
+        };
+      });
+
+    const totalUnidades = itensLote.reduce((acc, it) => acc + it.quantidade, 0);
+    const totalValor = itensLote.reduce((acc, it) => acc + it.subtotal, 0);
+
+    try {
+      const saved = await salvarHistorico({
+        tipo: "lote",
+        titulo: `Pedidos ${rangeSummary}`,
+        descricao: `${result.orders.length} pedido(s) • ${itensLote.length} produto(s)`,
+        pedidos: result.orders.map((o) => ({
+          id: o.id,
+          numero: String(o.numero_venda ?? o.numero ?? o.id.slice(0, 6)),
+          cliente_nome: o.cliente_nome,
+          valor_total: Number(o.valor_total || 0),
+        })),
+        itens: itensLote,
+        total_unidades: totalUnidades,
+        total_valor: totalValor,
+      });
+      setHistorico((prev) => [saved, ...prev.filter((h) => h.id !== saved.id)]);
+    } catch (e) {
+      console.error("Erro ao registrar lote no histórico:", e);
+    }
   };
 
-  const handleClearImport = () => {
-    setImportedBatch(null);
-    setShowAllInImport(false);
+  const handleOpenHistoricoEntry = (entry: HistoricoEntry) => {
     setSelectedProducts([]);
+    setBusca("");
+    setBuscaCodigo("");
+    setCategoriaFilter("Todas");
+    setShowAllInImport(false);
+
+    if (entry.tipo === "lote" && entry.pedidos.length > 0) {
+      const orders: ImportedOrderInfo[] = entry.pedidos.map((p) => ({
+        id: p.id,
+        numero_venda: Number.isFinite(Number(p.numero)) ? Number(p.numero) : null,
+        numero: Number.isFinite(Number(p.numero)) ? Number(p.numero) : null,
+        tipo: "VENDA",
+        status: "",
+        valor_total: p.valor_total,
+        created_at: entry.created_at,
+        cliente_nome: p.cliente_nome,
+      }));
+      const productMap: Record<string, ImportedProductAgg> = {};
+      for (const it of entry.itens) {
+        productMap[it.produto_id] = {
+          quantidade: it.quantidade,
+          subtotal: it.subtotal,
+          pedidos: it.pedidos || [],
+        };
+      }
+      setActiveView({
+        kind: "lote",
+        orders,
+        productMap,
+        title: entry.titulo,
+      });
+      return;
+    }
+
+    setActiveView({ kind: "relatorio", entry });
+  };
+
+  const handleDeleteHistorico = async (entry: HistoricoEntry) => {
+    const ok = await confirm({
+      title: "Excluir do histórico",
+      description: `Deseja remover "${entry.titulo}" do histórico de ${
+        entry.tipo === "lote" ? "pedidos importados" : "relatórios"
+      }?`,
+      variant: "destructive",
+    });
+    if (!ok) return;
+
+    try {
+      await excluirHistorico(entry);
+      setHistorico((prev) => prev.filter((item) => item.id !== entry.id));
+      toast.success("Registro removido do histórico.");
+    } catch (err: any) {
+      toast.error("Erro ao excluir registro: " + (err?.message || "Erro desconhecido"));
+    }
+  };
+
+  const handleConfirmPrint = async (comValor: boolean) => {
+    const dataEmissao = new Date().toLocaleDateString("pt-BR");
+    const horaEmissao = new Date().toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    let snapshotTitle = "RELATÓRIO DE DESEMPENHO DE PRODUTOS";
+    let snapshotSubtitle = "Visão Geral de Produtos";
+    let itemsToPrint: any[] = [];
+    let shouldSaveToHistory = true;
+    let pedidosForHistory: HistoricoEntry["pedidos"] = [];
+    let historyTitle = "";
+
+    if (pendingPrintEntry) {
+      snapshotTitle =
+        pendingPrintEntry.tipo === "lote"
+          ? "RELATÓRIO DE PRODUTOS POR PEDIDOS"
+          : "RELATÓRIO DE DESEMPENHO DE PRODUTOS";
+      snapshotSubtitle = pendingPrintEntry.titulo;
+      itemsToPrint = pendingPrintEntry.itens.map((it) => ({
+        id: it.produto_id,
+        codigo: it.codigo,
+        nome: it.nome,
+        categoria: it.categoria,
+        imagem: it.imagem,
+        valor: it.valor,
+        display_total: it.quantidade,
+        imported_subtotal: it.subtotal,
+        imported_orders: it.pedidos,
+      }));
+      pedidosForHistory = pendingPrintEntry.pedidos;
+      historyTitle = `Relatório — ${pendingPrintEntry.titulo}`;
+      shouldSaveToHistory = pendingPrintEntry.tipo === "lote";
+    } else if (activeView?.kind === "lote") {
+      const rangeSummary = formatOrderRangeSummary(activeView.orders);
+      snapshotTitle = "RELATÓRIO DE PRODUTOS POR PEDIDOS";
+      snapshotSubtitle = `Pedidos: ${rangeSummary} (${activeView.orders.length} pedido${
+        activeView.orders.length === 1 ? "" : "s"
+      }) • Categoria: ${categoriaFilter === "Todas" ? "Todas as Categorias" : categoriaFilter}`;
+      itemsToPrint = printableFromActiveView;
+      pedidosForHistory = activeView.orders.map((o) => ({
+        id: o.id,
+        numero: String(o.numero_venda ?? o.numero ?? o.id.slice(0, 6)),
+        cliente_nome: o.cliente_nome,
+        valor_total: Number(o.valor_total || 0),
+      }));
+      historyTitle = `Relatório — Pedidos ${rangeSummary}`;
+    } else if (activeView?.kind === "relatorio") {
+      snapshotTitle = "RELATÓRIO DE DESEMPENHO DE PRODUTOS";
+      snapshotSubtitle = activeView.entry.titulo;
+      itemsToPrint = printableFromActiveView;
+      shouldSaveToHistory = false;
+    } else {
+      // Impressão global a partir da tela inicial limpa
+      const globalSorted = [...products]
+        .map((p) => ({ ...p, display_total: p.total_calculado || 0 }))
+        .sort((a, b) =>
+          String(a.codigo || "").localeCompare(String(b.codigo || ""), undefined, {
+            numeric: true,
+            sensitivity: "base",
+          }),
+        );
+      snapshotTitle = "RELATÓRIO DE DESEMPENHO DE PRODUTOS";
+      snapshotSubtitle = "Todas as Categorias (Vendas Globais)";
+      itemsToPrint = globalSorted;
+      historyTitle = `Relatório Geral (${globalSorted.length} produtos)`;
+    }
+
+    setPrintSnapshot({
+      title: snapshotTitle,
+      subtitle: snapshotSubtitle,
+      items: itemsToPrint,
+      comValor,
+      dataEmissao,
+      horaEmissao,
+    });
+    setPrintModalOpen(false);
+    setPendingPrintEntry(null);
+
+    if (shouldSaveToHistory && itemsToPrint.length > 0) {
+      const histItems = buildHistoricoItensFromProducts(itemsToPrint);
+      const totalUnidades = histItems.reduce((acc, it) => acc + it.quantidade, 0);
+      const totalValor = histItems.reduce((acc, it) => acc + it.subtotal, 0);
+      salvarHistorico({
+        tipo: "relatorio",
+        titulo: historyTitle,
+        descricao: `${histItems.length} produto(s) • ${comValor ? "Com valor" : "Sem valor"}`,
+        com_valor: comValor,
+        pedidos: pedidosForHistory,
+        itens: histItems,
+        total_unidades: totalUnidades,
+        total_valor: totalValor,
+      })
+        .then((saved) => {
+          setHistorico((prev) => [saved, ...prev.filter((h) => h.id !== saved.id)]);
+        })
+        .catch((e) => console.error("Erro ao salvar relatório no histórico:", e));
+    }
+
+    setTimeout(() => {
+      window.print();
+    }, 200);
   };
 
   const toggleSelection = (id: string) => {
@@ -325,19 +631,20 @@ function VendasProdutos() {
     }
   };
 
-  const dataEmissao = new Date().toLocaleDateString("pt-BR");
-  const horaEmissao = new Date().toLocaleTimeString("pt-BR", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const totalVendasImpressao = useMemo(
+    () =>
+      (printSnapshot?.items || []).reduce((acc, p) => acc + Number(p.display_total || 0), 0),
+    [printSnapshot],
+  );
 
-  const handleConfirmPrint = (comValor: boolean) => {
-    setMostrarValorImpressao(comValor);
-    setPrintModalOpen(false);
-    setTimeout(() => {
-      window.print();
-    }, 200);
-  };
+  const loteCount = useMemo(
+    () => historico.filter((h) => h.tipo === "lote").length,
+    [historico],
+  );
+  const relatorioCount = useMemo(
+    () => historico.filter((h) => h.tipo === "relatorio").length,
+    [historico],
+  );
 
   return (
     <>
@@ -356,7 +663,7 @@ function VendasProdutos() {
 
       <PageHeader
         title="Desempenho de Produtos"
-        subtitle="Acompanhe e ajuste o número de vendas por produto ou importe um lote de pedidos"
+        subtitle="Importe lotes de pedidos, gere relatórios e consulte o histórico"
         actions={
           <div className="flex flex-wrap items-center gap-2 print:hidden">
             <Button
@@ -364,9 +671,16 @@ function VendasProdutos() {
               className="bg-gradient-brand text-primary-foreground font-bold"
             >
               <FileInput className="mr-2 h-4 w-4" />
-              {isImportMode ? "Alterar Pedidos Importados" : "Importar Pedidos"}
+              Importar Pedidos
             </Button>
-            <Button variant="outline" onClick={() => setPrintModalOpen(true)} className="font-bold">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPendingPrintEntry(null);
+                setPrintModalOpen(true);
+              }}
+              className="font-bold"
+            >
               <Printer className="mr-2 h-4 w-4" />
               Imprimir Relatório
             </Button>
@@ -377,12 +691,20 @@ function VendasProdutos() {
       <ImportarPedidosModal
         open={importModalOpen}
         onOpenChange={setImportModalOpen}
-        initialSelectedIds={importedBatch?.orders.map((o) => o.id) || []}
+        initialSelectedIds={
+          activeView?.kind === "lote" ? activeView.orders.map((o) => o.id) : []
+        }
         onImport={handleImportOrders}
       />
 
       {printModalOpen && (
-        <Dialog open={printModalOpen} onOpenChange={setPrintModalOpen}>
+        <Dialog
+          open={printModalOpen}
+          onOpenChange={(o) => {
+            setPrintModalOpen(o);
+            if (!o) setPendingPrintEntry(null);
+          }}
+        >
           <DialogContent className="sm:max-w-md print:hidden">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -390,7 +712,8 @@ function VendasProdutos() {
                 Opções de Impressão do Relatório
               </DialogTitle>
               <DialogDescription>
-                Escolha se deseja exibir a coluna com o valor unitário (Vlr. Unit.) dos produtos na impressão ou PDF.
+                Escolha se deseja exibir a coluna com o valor unitário (Vlr. Unit.) dos produtos na
+                impressão ou PDF.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-3 pt-2">
@@ -416,321 +739,486 @@ function VendasProdutos() {
         </Dialog>
       )}
 
+      {/* 3 CARDS PRINCIPAIS */}
       <div className="grid gap-4 sm:grid-cols-3 mb-6 print:hidden">
-        {isImportMode ? (
-          <>
-            <Card className="shadow-card">
-              <CardContent className="p-5">
-                <p className="text-sm text-muted-foreground font-semibold">Produtos nos Pedidos</p>
-                <p className="mt-1 font-display text-2xl font-bold text-primary">
-                  {importedProductsCount}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  de {products.length} produtos cadastrados
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="shadow-card">
-              <CardContent className="p-5">
-                <p className="text-sm text-muted-foreground font-semibold">Unidades no Lote</p>
-                <p className="mt-1 font-display text-2xl font-bold text-success">
-                  {totalImportedUnits}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Total dos itens: R$ {totalImportedValue.toFixed(2).replace(".", ",")}
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="shadow-card border-primary/30 bg-primary/5">
-              <CardContent className="p-5">
-                <p className="text-sm text-muted-foreground font-semibold">Pedidos Importados</p>
-                <p className="mt-1 font-display text-2xl font-bold text-foreground">
-                  {importedBatch!.orders.length}
-                </p>
-                <p className="text-xs font-semibold text-primary mt-0.5 truncate" title={importedRangeSummary}>
-                  {importedRangeSummary}
-                </p>
-              </CardContent>
-            </Card>
-          </>
-        ) : (
-          <>
-            <Card className="shadow-card">
-              <CardContent className="p-5">
-                <p className="text-sm text-muted-foreground font-semibold">Total de Produtos</p>
-                <p className="mt-1 font-display text-2xl font-bold text-primary">{products.length}</p>
-              </CardContent>
-            </Card>
-            <Card className="shadow-card">
-              <CardContent className="p-5">
-                <p className="text-sm text-muted-foreground font-semibold">Vendas Globais</p>
-                <p className="mt-1 font-display text-2xl font-bold text-success">
-                  {totalVendasGlobais}
-                </p>
-              </CardContent>
-            </Card>
-            <Card
-              className="shadow-card border-dashed border-primary/40 hover:border-primary/70 transition-colors cursor-pointer"
-              onClick={() => setImportModalOpen(true)}
-            >
-              <CardContent className="p-5 flex items-center justify-between gap-3 h-full">
-                <div>
-                  <p className="text-sm text-muted-foreground font-semibold">Importar Lote de Pedidos</p>
-                  <p className="mt-1 text-xs font-medium text-foreground">
-                    Filtre por faixa (ex: 150 a 161) sem procurar nos {products.length} itens
-                  </p>
-                </div>
-                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
-                  <FileInput className="h-5 w-5" />
-                </div>
-              </CardContent>
-            </Card>
-          </>
-        )}
+        <Card className="shadow-card">
+          <CardContent className="p-5">
+            <p className="text-sm text-muted-foreground font-semibold">Total de Produtos</p>
+            <p className="mt-1 font-display text-2xl font-bold text-primary">
+              {loading ? "..." : products.length}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-card">
+          <CardContent className="p-5">
+            <p className="text-sm text-muted-foreground font-semibold">Vendas Globais</p>
+            <p className="mt-1 font-display text-2xl font-bold text-success">
+              {loading ? "..." : totalVendasGlobais}
+            </p>
+          </CardContent>
+        </Card>
+        <Card
+          className="shadow-card border-dashed border-primary/40 hover:border-primary/70 transition-colors cursor-pointer"
+          onClick={() => setImportModalOpen(true)}
+        >
+          <CardContent className="p-5 flex items-center justify-between gap-3 h-full">
+            <div>
+              <p className="text-sm text-muted-foreground font-semibold">
+                Importar Lote de Pedidos
+              </p>
+              <p className="mt-1 text-xs font-medium text-foreground">
+                Filtre por faixa (ex: 150 a 161) sem procurar nos {products.length} itens
+              </p>
+            </div>
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+              <FileInput className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {isImportMode && (
-        <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 flex flex-wrap items-center justify-between gap-3 print:hidden">
-          <div className="flex flex-wrap items-center gap-2.5 min-w-0">
-            <div className="flex items-center gap-2 text-sm font-bold text-foreground">
-              <Layers className="h-4 w-4 text-primary shrink-0" />
-              <span>Filtro por Pedidos Ativo:</span>
-              <Badge className="bg-primary text-primary-foreground font-bold">
-                {importedRangeSummary} ({importedBatch!.orders.length} pedido
-                {importedBatch!.orders.length === 1 ? "" : "s"})
-              </Badge>
+      {/* ÁREA PRINCIPAL */}
+      {!activeView ? (
+        <Card className="shadow-card print:hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
+            <div className="flex items-center gap-2.5">
+              <History className="h-5 w-5 text-primary" />
+              <div>
+                <h2 className="font-display text-base font-bold leading-tight">
+                  Pedidos Importados e Relatórios Feitos
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Consulte, reabra ou reimprima lotes importados e relatórios gerados
+                </p>
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-1">
-              {importedBatch!.orders.slice(0, 10).map((ord) => (
-                <Badge
-                  key={ord.id}
-                  variant="outline"
-                  className="bg-background font-mono text-[11px] font-semibold"
-                  title={`${ord.cliente_nome} — R$ ${ord.valor_total.toFixed(2).replace(".", ",")}`}
-                >
-                  #{ord.numero_venda ?? ord.numero ?? ord.id.slice(0, 6)}
-                </Badge>
-              ))}
-              {importedBatch!.orders.length > 10 && (
-                <Badge variant="secondary" className="text-[11px] font-bold">
-                  +{importedBatch!.orders.length - 10} pedidos
-                </Badge>
-              )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={historicoFiltroTipo === "todos" ? "default" : "outline"}
+                className="h-8 font-semibold"
+                onClick={() => setHistoricoFiltroTipo("todos")}
+              >
+                Todos ({historico.length})
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={historicoFiltroTipo === "lote" ? "default" : "outline"}
+                className="h-8 font-semibold"
+                onClick={() => setHistoricoFiltroTipo("lote")}
+              >
+                Pedidos Importados ({loteCount})
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={historicoFiltroTipo === "relatorio" ? "default" : "outline"}
+                className="h-8 font-semibold"
+                onClick={() => setHistoricoFiltroTipo("relatorio")}
+              >
+                Relatórios ({relatorioCount})
+              </Button>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none">
-              <Checkbox
-                checked={showAllInImport}
-                onCheckedChange={(checked) => setShowAllInImport(checked === true)}
+          <div className="p-4 border-b bg-muted/20">
+            <div className="relative max-w-md">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Buscar no histórico por pedido, título ou produto..."
+                className="pl-9 font-medium bg-background"
+                value={historicoBusca}
+                onChange={(e) => setHistoricoBusca(e.target.value)}
               />
-              Mostrar todos os {products.length} produtos
-            </label>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-8 font-semibold"
-              onClick={() => setImportModalOpen(true)}
-            >
-              Alterar Pedidos
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="h-8 font-semibold text-destructive hover:text-destructive hover:bg-destructive/10"
-              onClick={handleClearImport}
-            >
-              <X className="mr-1 h-3.5 w-3.5" />
-              Limpar Filtro
-            </Button>
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* TELA INTERATIVA */}
-      <Card className="shadow-card print:hidden">
-        <div className="flex flex-wrap items-center gap-3 border-b p-4">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por código ou nome…"
-              className="pl-9 font-bold"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-            />
-          </div>
-          <div className="relative w-full sm:w-[240px]">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary stroke-[2.5]" />
-            <Input
-              placeholder="Buscar por código…"
-              className="pl-9 font-bold placeholder:font-bold border-2 border-primary/40 focus-visible:ring-primary"
-              value={buscaCodigo}
-              onChange={(e) => setBuscaCodigo(e.target.value)}
-            />
-          </div>
-          <Select value={categoriaFilter} onValueChange={setCategoriaFilter}>
-            <SelectTrigger className="w-[180px] h-9 font-bold">
-              <SelectValue placeholder="Categoria" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Todas">Todas categorias</SelectItem>
-              {Array.from(new Set(products.map((p) => p.categoria).filter(Boolean)))
-                .sort()
-                .map((cat: any) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={`${sortColumn}:${sortDirection}`}
-            onValueChange={(val) => {
-              const [col, dir] = val.split(":") as [SortColumn, SortDirection];
-              setSortColumn(col);
-              setSortDirection(dir);
-            }}
-          >
-            <SelectTrigger className="w-[210px] h-9 font-bold">
-              <SelectValue placeholder="Ordenar por" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="codigo:asc">Ordem: Código (Crescente)</SelectItem>
-              <SelectItem value="total_calculado:desc">Ordem: Mais Vendidos</SelectItem>
-              <SelectItem value="total_calculado:asc">Ordem: Menos Vendidos</SelectItem>
-              <SelectItem value="nome:asc">Ordem: Nome (A-Z)</SelectItem>
-              <SelectItem value="categoria:asc">Ordem: Categoria</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-                    checked={
-                      filteredProducts.length > 0 &&
-                      selectedProducts.length === filteredProducts.length
-                    }
-                    onChange={toggleSelectAll}
-                    title="Selecionar todos"
-                  />
-                </TableHead>
-                <TableHead
-                  className="font-bold cursor-pointer select-none hover:bg-muted/50"
-                  onClick={() => handleSort("codigo")}
-                >
-                  Código <SortIcon column="codigo" />
-                </TableHead>
-                <TableHead
-                  className="font-bold cursor-pointer select-none hover:bg-muted/50"
-                  onClick={() => handleSort("nome")}
-                >
-                  Produto <SortIcon column="nome" />
-                </TableHead>
-                <TableHead
-                  className="font-bold cursor-pointer select-none hover:bg-muted/50"
-                  onClick={() => handleSort("categoria")}
-                >
-                  Categoria <SortIcon column="categoria" />
-                </TableHead>
-                <TableHead
-                  className="text-right font-bold cursor-pointer select-none hover:bg-muted/50"
-                  onClick={() => handleSort("valor")}
-                >
-                  Valor <SortIcon column="valor" />
-                </TableHead>
-                {isImportMode ? (
-                  <>
-                    <TableHead className="font-bold">Pedidos no Lote</TableHead>
-                    <TableHead className="text-right font-bold">Subtotal Lote</TableHead>
-                    <TableHead
-                      className="text-right font-bold cursor-pointer select-none hover:bg-muted/50"
-                      onClick={() => handleSort("total_calculado")}
-                    >
-                      Qtd. no Lote <SortIcon column="total_calculado" />
-                    </TableHead>
-                  </>
-                ) : (
-                  <>
-                    <TableHead className="text-right font-bold">Sistema</TableHead>
-                    <TableHead className="text-right font-bold">Ajuste</TableHead>
-                    <TableHead
-                      className="text-right font-bold cursor-pointer select-none hover:bg-muted/50"
-                      onClick={() => handleSort("total_calculado")}
-                    >
-                      Total Vendas <SortIcon column="total_calculado" />
-                    </TableHead>
-                    <TableHead className="text-right font-bold">Ações</TableHead>
-                  </>
+          <div className="divide-y">
+            {loadingHistorico ? (
+              <div className="py-12 text-center text-sm text-muted-foreground">
+                Carregando histórico...
+              </div>
+            ) : filteredHistorico.length === 0 ? (
+              <div className="py-12 px-4 text-center space-y-3">
+                <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary">
+                  <Layers className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="font-bold text-foreground">
+                    {historico.length === 0
+                      ? "Nenhum pedido importado ou relatório feito ainda"
+                      : "Nenhum registro encontrado na busca"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Clique em <strong>Importar Pedidos</strong> para consolidar uma faixa (ex: 150
+                    a 161) ou em <strong>Imprimir Relatório</strong>.
+                  </p>
+                </div>
+                {historico.length === 0 && (
+                  <Button
+                    type="button"
+                    onClick={() => setImportModalOpen(true)}
+                    className="bg-gradient-brand text-primary-foreground font-bold"
+                  >
+                    <FileInput className="mr-2 h-4 w-4" />
+                    Importar Pedidos Agora
+                  </Button>
                 )}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={isImportMode ? 8 : 9} className="text-center py-8 text-muted-foreground">
-                    Carregando produtos...
-                  </TableCell>
-                </TableRow>
-              ) : filteredProducts.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={isImportMode ? 8 : 9} className="text-center py-8 text-muted-foreground">
-                    {isImportMode
-                      ? "Nenhum produto encontrado nos pedidos importados para os filtros atuais."
-                      : "Nenhum produto encontrado na busca."}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredProducts.map((p) => (
-                  <TableRow key={p.id}>
-                    <TableCell>
+              </div>
+            ) : (
+              filteredHistorico.map((entry) => {
+                const isLote = entry.tipo === "lote";
+                const dt = new Date(entry.created_at);
+                const dataBr = dt.toLocaleDateString("pt-BR");
+                const horaBr = dt.toLocaleTimeString("pt-BR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                });
+
+                return (
+                  <div
+                    key={entry.id}
+                    className="p-4 flex flex-wrap items-center justify-between gap-4 hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <div
+                        className={`mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-lg border ${
+                          isLote
+                            ? "bg-primary/10 text-primary border-primary/20"
+                            : "bg-success/10 text-success border-success/20"
+                        }`}
+                      >
+                        {isLote ? (
+                          <Layers className="h-5 w-5" />
+                        ) : (
+                          <FileSpreadsheet className="h-5 w-5" />
+                        )}
+                      </div>
+
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge
+                            variant={isLote ? "default" : "secondary"}
+                            className="text-[11px] font-bold"
+                          >
+                            {isLote ? "Lote Importado" : "Relatório PDF"}
+                          </Badge>
+                          {entry.com_valor !== undefined && (
+                            <Badge variant="outline" className="text-[11px] font-semibold">
+                              {entry.com_valor ? "Com Valor" : "Sem Valor"}
+                            </Badge>
+                          )}
+                          <span className="font-bold text-sm text-foreground">{entry.titulo}</span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          <span className="font-medium">
+                            {dataBr} às {horaBr}
+                          </span>
+                          <span>• {entry.itens.length} produto(s)</span>
+                          <span className="font-bold text-primary">
+                            • {entry.total_unidades} unidade(s)
+                          </span>
+                          {entry.total_valor > 0 && (
+                            <span className="font-semibold text-foreground">
+                              • R$ {formatBrDecimal(entry.total_valor)}
+                            </span>
+                          )}
+                        </div>
+
+                        {entry.pedidos.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                            {entry.pedidos.slice(0, 8).map((ped) => (
+                              <Badge
+                                key={ped.id}
+                                variant="outline"
+                                className="font-mono text-[10px] px-1.5 py-0"
+                                title={`${ped.cliente_nome} — R$ ${formatBrDecimal(ped.valor_total)}`}
+                              >
+                                #{ped.numero}
+                              </Badge>
+                            ))}
+                            {entry.pedidos.length > 8 && (
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                +{entry.pedidos.length - 8}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="font-semibold"
+                        onClick={() => handleOpenHistoricoEntry(entry)}
+                      >
+                        <Eye className="mr-1.5 h-4 w-4" />
+                        Abrir
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="font-semibold"
+                        onClick={() => {
+                          setPendingPrintEntry(entry);
+                          setPrintModalOpen(true);
+                        }}
+                      >
+                        <Printer className="mr-1.5 h-4 w-4" />
+                        Imprimir
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                        title="Excluir do histórico"
+                        onClick={() => handleDeleteHistorico(entry)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </Card>
+      ) : (
+        <>
+          {/* BANNER DO LOTE / RELATÓRIO ABERTO */}
+          <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 flex flex-wrap items-center justify-between gap-3 print:hidden">
+            <div className="flex flex-wrap items-center gap-2.5 min-w-0">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 font-bold bg-background"
+                onClick={() => {
+                  setActiveView(null);
+                  setSelectedProducts([]);
+                }}
+              >
+                <ArrowLeft className="mr-1.5 h-4 w-4" />
+                Voltar ao Histórico
+              </Button>
+              <div className="flex items-center gap-2 text-sm font-bold text-foreground">
+                <Layers className="h-4 w-4 text-primary shrink-0" />
+                <span>
+                  {activeView.kind === "lote" ? activeView.title : activeView.entry.titulo}
+                </span>
+                <Badge className="bg-primary text-primary-foreground font-bold">
+                  {filteredProducts.length} produto(s) •{" "}
+                  {filteredProducts.reduce((acc, p) => acc + Number(p.display_total || 0), 0)} un.
+                </Badge>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              {activeView.kind === "lote" && (
+                <>
+                  <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none">
+                    <Checkbox
+                      checked={showAllInImport}
+                      onCheckedChange={(checked) => setShowAllInImport(checked === true)}
+                    />
+                    Mostrar todos os {products.length} produtos
+                  </label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 font-semibold"
+                    onClick={() => setImportModalOpen(true)}
+                  >
+                    Alterar Pedidos
+                  </Button>
+                </>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 bg-gradient-brand text-primary-foreground font-bold"
+                onClick={() => {
+                  setPendingPrintEntry(null);
+                  setPrintModalOpen(true);
+                }}
+              >
+                <Printer className="mr-1.5 h-3.5 w-3.5" />
+                Imprimir Seleção
+              </Button>
+            </div>
+          </div>
+
+          {/* TABELA DE PRODUTOS DO LOTE / RELATÓRIO ABERTO */}
+          <Card className="shadow-card print:hidden">
+            <div className="flex flex-wrap items-center gap-3 border-b p-4">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por código ou nome…"
+                  className="pl-9 font-bold"
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                />
+              </div>
+              <div className="relative w-full sm:w-[220px]">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary stroke-[2.5]" />
+                <Input
+                  placeholder="Buscar por código…"
+                  className="pl-9 font-bold placeholder:font-bold border-2 border-primary/40 focus-visible:ring-primary"
+                  value={buscaCodigo}
+                  onChange={(e) => setBuscaCodigo(e.target.value)}
+                />
+              </div>
+              <Select value={categoriaFilter} onValueChange={setCategoriaFilter}>
+                <SelectTrigger className="w-[180px] h-9 font-bold">
+                  <SelectValue placeholder="Categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Todas">Todas categorias</SelectItem>
+                  {Array.from(
+                    new Set(activeSourceProducts.map((p) => p.categoria).filter(Boolean)),
+                  )
+                    .sort()
+                    .map((cat: any) => (
+                      <SelectItem key={cat} value={cat}>
+                        {cat}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={`${sortColumn}:${sortDirection}`}
+                onValueChange={(val) => {
+                  const [col, dir] = val.split(":") as [SortColumn, SortDirection];
+                  setSortColumn(col);
+                  setSortDirection(dir);
+                }}
+              >
+                <SelectTrigger className="w-[210px] h-9 font-bold">
+                  <SelectValue placeholder="Ordenar por" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="codigo:asc">Ordem: Código (Crescente)</SelectItem>
+                  <SelectItem value="total_calculado:desc">Ordem: Mais Vendidos</SelectItem>
+                  <SelectItem value="total_calculado:asc">Ordem: Menos Vendidos</SelectItem>
+                  <SelectItem value="nome:asc">Ordem: Nome (A-Z)</SelectItem>
+                  <SelectItem value="categoria:asc">Ordem: Categoria</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
                       <input
                         type="checkbox"
                         className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-                        checked={selectedProducts.includes(p.id)}
-                        onChange={() => toggleSelection(p.id)}
+                        checked={
+                          filteredProducts.length > 0 &&
+                          selectedProducts.length === filteredProducts.length
+                        }
+                        onChange={toggleSelectAll}
+                        title="Selecionar todos"
                       />
-                    </TableCell>
-                    <TableCell className="font-mono text-sm font-bold text-foreground">
-                      {p.codigo}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="grid h-10 w-10 overflow-hidden place-items-center rounded-lg bg-accent text-lg border">
-                          {p.imagem ? (
-                            <img
-                              src={p.imagem}
-                              alt={p.nome}
-                              decoding="async"
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <span className="opacity-50">{p.emoji || "📦"}</span>
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-bold">{p.nome}</p>
-                          <p className="text-xs font-semibold text-muted-foreground">SKU interno</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="font-bold">{p.categoria}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-bold">
-                      R$ {Number(p.valor).toFixed(2).replace(".", ",")}
-                    </TableCell>
-                    {isImportMode ? (
-                      <>
+                    </TableHead>
+                    <TableHead
+                      className="font-bold cursor-pointer select-none hover:bg-muted/50"
+                      onClick={() => handleSort("codigo")}
+                    >
+                      Código <SortIcon column="codigo" />
+                    </TableHead>
+                    <TableHead
+                      className="font-bold cursor-pointer select-none hover:bg-muted/50"
+                      onClick={() => handleSort("nome")}
+                    >
+                      Produto <SortIcon column="nome" />
+                    </TableHead>
+                    <TableHead
+                      className="font-bold cursor-pointer select-none hover:bg-muted/50"
+                      onClick={() => handleSort("categoria")}
+                    >
+                      Categoria <SortIcon column="categoria" />
+                    </TableHead>
+                    <TableHead
+                      className="text-right font-bold cursor-pointer select-none hover:bg-muted/50"
+                      onClick={() => handleSort("valor")}
+                    >
+                      Valor <SortIcon column="valor" />
+                    </TableHead>
+                    <TableHead className="font-bold">Pedidos</TableHead>
+                    <TableHead className="text-right font-bold">Subtotal</TableHead>
+                    <TableHead
+                      className="text-right font-bold cursor-pointer select-none hover:bg-muted/50"
+                      onClick={() => handleSort("total_calculado")}
+                    >
+                      Qtd. <SortIcon column="total_calculado" />
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredProducts.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                        Nenhum produto encontrado para os filtros atuais.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredProducts.map((p) => (
+                      <TableRow key={p.id}>
                         <TableCell>
-                          {p.imported_orders.length === 0 ? (
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                            checked={selectedProducts.includes(p.id)}
+                            onChange={() => toggleSelection(p.id)}
+                          />
+                        </TableCell>
+                        <TableCell className="font-mono text-sm font-bold text-foreground">
+                          {p.codigo}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <div className="grid h-10 w-10 overflow-hidden place-items-center rounded-lg bg-accent text-lg border">
+                              {p.imagem ? (
+                                <img
+                                  src={p.imagem}
+                                  alt={p.nome}
+                                  decoding="async"
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <span className="opacity-50">{p.emoji || "📦"}</span>
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-bold">{p.nome}</p>
+                              <p className="text-xs font-semibold text-muted-foreground">
+                                SKU interno
+                              </p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="font-bold">
+                            {p.categoria || "-"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-bold">
+                          R$ {formatBrDecimal(p.valor)}
+                        </TableCell>
+                        <TableCell>
+                          {!p.imported_orders || p.imported_orders.length === 0 ? (
                             <span className="text-xs text-muted-foreground">—</span>
                           ) : (
                             <div
@@ -757,89 +1245,25 @@ function VendasProdutos() {
                           )}
                         </TableCell>
                         <TableCell className="text-right font-bold text-muted-foreground">
-                          R$ {Number(p.imported_subtotal || 0).toFixed(2).replace(".", ",")}
+                          R$ {formatBrDecimal(p.imported_subtotal)}
                         </TableCell>
                         <TableCell className="text-right">
                           <span className="font-bold text-lg text-primary">
-                            {p.imported_qty || 0}
+                            {p.display_total || 0}
                           </span>
                         </TableCell>
-                      </>
-                    ) : (
-                      <>
-                        <TableCell className="text-right font-bold">
-                          <span className="text-muted-foreground">{p.vendas_sistema || 0}</span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Badge
-                            variant={
-                              p.quantidade_vendas > 0
-                                ? "default"
-                                : p.quantidade_vendas < 0
-                                  ? "destructive"
-                                  : "secondary"
-                            }
-                          >
-                            {p.quantidade_vendas > 0 ? "+" : ""}
-                            {p.quantidade_vendas || 0}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {editingId === p.id ? (
-                            <div className="flex justify-end">
-                              <Input
-                                type="number"
-                                className="w-24 text-right h-8 font-bold"
-                                value={editValue}
-                                onChange={(e) => setEditValue(parseInt(e.target.value) || 0)}
-                                min={0}
-                                autoFocus
-                              />
-                            </div>
-                          ) : (
-                            <span className="font-bold text-lg text-primary">
-                              {p.total_calculado || 0}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {editingId === p.id ? (
-                            <div className="flex justify-end gap-2">
-                              <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>
-                                Cancelar
-                              </Button>
-                              <Button size="sm" onClick={() => handleSave(p.id)}>
-                                <Save className="h-4 w-4 mr-2" />
-                                Salvar
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setEditingId(p.id);
-                                setEditValue(p.total_calculado || 0);
-                              }}
-                            >
-                              <Pencil className="h-4 w-4 mr-2" />
-                              Editar
-                            </Button>
-                          )}
-                        </TableCell>
-                      </>
-                    )}
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </Card>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </>
+      )}
 
       {/* LAYOUT EXCLUSIVO E ORGANIZADO PARA IMPRESSÃO / PDF */}
       <div className="hidden print:block bg-white text-black font-sans w-full">
-        {/* 1. CABEÇALHO EMPRESARIAL */}
         <div className="flex justify-between items-center mb-4 pb-3 border-b-2 border-[#C5A059]">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3 shrink-0">
@@ -868,7 +1292,6 @@ function VendasProdutos() {
           </div>
         </div>
 
-        {/* 2. FAIXA ESCURA DE TÍTULO E RESUMO */}
         <div className="bg-[#112321] text-white rounded-xl px-4 py-3 flex items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-3">
             <div className="p-2 border-2 border-[#C5A059] rounded-lg text-[#C5A059] flex items-center justify-center">
@@ -876,14 +1299,10 @@ function VendasProdutos() {
             </div>
             <div>
               <h1 className="text-base font-black tracking-wide uppercase text-white leading-tight">
-                {isImportMode
-                  ? "RELATÓRIO DE PRODUTOS POR PEDIDOS"
-                  : "RELATÓRIO DE DESEMPENHO DE PRODUTOS"}
+                {printSnapshot?.title || "RELATÓRIO DE DESEMPENHO DE PRODUTOS"}
               </h1>
               <p className="text-[11px] text-[#E5C378] font-bold">
-                {isImportMode
-                  ? `Pedidos: ${importedRangeSummary} (${importedBatch!.orders.length} pedido${importedBatch!.orders.length === 1 ? "" : "s"}) • Categoria: ${categoriaFilter === "Todas" ? "Todas as Categorias" : categoriaFilter}`
-                  : `Categoria: ${categoriaFilter === "Todas" ? "Todas as Categorias" : categoriaFilter}`}
+                {printSnapshot?.subtitle || "Visão Geral"}
               </p>
             </div>
           </div>
@@ -893,7 +1312,7 @@ function VendasProdutos() {
               <Package className="w-4 h-4 text-[#C5A059] stroke-[2.5]" />
               <div className="text-xs leading-tight">
                 <p className="text-[10px] text-[#E5C378] font-bold">Produtos Listados</p>
-                <p className="text-sm text-white font-black">{printableProducts.length}</p>
+                <p className="text-sm text-white font-black">{printSnapshot?.items.length || 0}</p>
               </div>
             </div>
 
@@ -914,14 +1333,13 @@ function VendasProdutos() {
               <div className="text-xs leading-tight">
                 <p className="text-[10px] text-[#E5C378] font-bold">Emissão</p>
                 <p className="text-[11px] text-white font-black">
-                  {dataEmissao} às {horaEmissao}
+                  {printSnapshot?.dataEmissao || ""} às {printSnapshot?.horaEmissao || ""}
                 </p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* 3. TABELA ORGANIZADA DE PRODUTOS */}
         <table className="print-table border border-slate-300 text-xs">
           <thead>
             <tr className="bg-[#112321] text-white">
@@ -934,22 +1352,19 @@ function VendasProdutos() {
               <th className="py-2 px-2.5 text-center font-black uppercase tracking-wider border border-slate-400 w-32">
                 Categoria
               </th>
-              {mostrarValorImpressao && (
+              {printSnapshot?.comValor && (
                 <th className="py-2 px-2.5 text-right font-black uppercase tracking-wider border border-slate-400 w-24">
                   Vlr. Unit.
                 </th>
               )}
               <th className="py-2 px-2.5 text-right font-black uppercase tracking-wider border border-slate-400 w-28 text-[#E5C378]">
-                {isImportMode ? "Qtd. Pedidos" : "Total Vendas"}
+                Qtd. Vendida
               </th>
             </tr>
           </thead>
           <tbody>
-            {printableProducts.map((p) => (
-              <tr
-                key={p.id}
-                className="bg-white"
-              >
+            {(printSnapshot?.items || []).map((p) => (
+              <tr key={p.id} className="bg-white">
                 <td className="py-1.5 px-2.5 text-center font-mono font-black text-xs text-black border border-slate-300">
                   {p.codigo}
                 </td>
@@ -957,26 +1372,20 @@ function VendasProdutos() {
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded border border-slate-300 bg-white overflow-hidden shrink-0 flex items-center justify-center">
                       {p.imagem ? (
-                        <img
-                          src={p.imagem}
-                          alt={p.nome}
-                          className="w-full h-full object-cover"
-                        />
+                        <img src={p.imagem} alt={p.nome} className="w-full h-full object-cover" />
                       ) : (
                         <span className="text-xs">📦</span>
                       )}
                     </div>
-                    <span className="font-bold text-black text-xs leading-snug">
-                      {p.nome}
-                    </span>
+                    <span className="font-bold text-black text-xs leading-snug">{p.nome}</span>
                   </div>
                 </td>
                 <td className="py-1.5 px-2.5 text-center font-bold text-[11px] text-slate-800 border border-slate-300">
                   {p.categoria || "-"}
                 </td>
-                {mostrarValorImpressao && (
+                {printSnapshot?.comValor && (
                   <td className="py-1.5 px-2.5 text-right font-bold text-xs text-black border border-slate-300 whitespace-nowrap">
-                    R$ {Number(p.valor || 0).toFixed(2).replace(".", ",")}
+                    R$ {formatBrDecimal(p.valor)}
                   </td>
                 )}
                 <td className="py-1.5 px-2.5 text-right font-black text-lg text-black border border-slate-300 whitespace-nowrap">
@@ -988,10 +1397,10 @@ function VendasProdutos() {
           <tfoot>
             <tr className="bg-[#112321] text-white">
               <td
-                colSpan={mostrarValorImpressao ? 4 : 3}
+                colSpan={printSnapshot?.comValor ? 4 : 3}
                 className="py-2.5 px-3 text-right font-black uppercase tracking-wider text-xs border border-slate-400 text-[#E5C378]"
               >
-                TOTAL GERAL ({printableProducts.length} PRODUTOS LISTADOS):
+                TOTAL GERAL ({printSnapshot?.items.length || 0} PRODUTOS LISTADOS):
               </td>
               <td className="py-2.5 px-3 text-right font-black text-xl text-white border border-slate-400">
                 {totalVendasImpressao}

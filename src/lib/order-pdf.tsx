@@ -828,7 +828,7 @@ export async function generateOrderPdfDoc(
     : [];
   const vencRowsCount = Math.max(1, Math.ceil(vencDisplayLines.length / 2));
   const summaryH = Math.max(24, 15 + vencRowsCount * 3.8 + obsLines.length * 3.6);
-  const neededBottomH = summaryH + 24;
+  const neededBottomH = summaryH + 34;
 
   if (y + neededBottomH > pageHeight - 10) {
     doc.addPage();
@@ -911,19 +911,49 @@ export async function generateOrderPdfDoc(
   doc.text("TOTAL:", rLblX, totalBarY + 5.4);
   doc.text(`R$ ${formatBrDecimal(orderTotalNum)}`, rValX, totalBarY + 5.4, { align: "right" });
 
-  // Assinaturas
-  y += summaryH + 15;
-  doc.setLineWidth(0.35);
-  doc.line(margin + 8, y, margin + 82, y);
-  doc.line(pageWidth - margin - 82, y, pageWidth - margin - 8, y);
+  // Assinaturas e Caixa de Recebimento / Data da Entrega
+  const signTopY = y + summaryH + 4;
+  const recBoxW = 104;
+  const recBoxH = 22;
+  const recBoxX = pageWidth - margin - recBoxW;
 
+  // Assinatura do Vendedor (Esquerda)
+  const vendLineY = signTopY + 15;
+  doc.setLineWidth(0.35);
+  doc.line(margin + 4, vendLineY, margin + 78, vendLineY);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
+  doc.setTextColor(0, 0, 0);
   const vendSignLabel = order.vendedor_nome
     ? `ASSINATURA DO VENDEDOR (${order.vendedor_nome.toUpperCase()})`
     : "ASSINATURA DO VENDEDOR";
-  doc.text(vendSignLabel, margin + 45, y + 4, { align: "center" });
-  doc.text("ASSINATURA DO CLIENTE", pageWidth - margin - 45, y + 4, { align: "center" });
+  doc.text(vendSignLabel, margin + 41, vendLineY + 4, { align: "center" });
+
+  // Caixa de Data da Entrega + Assinatura de quem receber (Direita)
+  doc.setLineWidth(0.35);
+  doc.rect(recBoxX, signTopY, recBoxW, recBoxH);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.8);
+  doc.text("RECEBIMENTO / ENTREGA", recBoxX + 3, signTopY + 4.8);
+
+  // Caixinha da Data da Entrega
+  doc.setFontSize(7);
+  doc.text("Data da Entrega:", recBoxX + 46, signTopY + 4.8);
+  doc.setLineWidth(0.3);
+  doc.rect(recBoxX + 68, signTopY + 1.6, 33, 4.8);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.2);
+  doc.text("____/____/________", recBoxX + 84.5, signTopY + 5.0, { align: "center" });
+
+  // Linha de assinatura dentro da caixa
+  doc.setLineWidth(0.35);
+  doc.line(recBoxX + 6, signTopY + 15.5, recBoxX + recBoxW - 6, signTopY + 15.5);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.text("ASSINATURA DO CLIENTE / RECEBEDOR", recBoxX + recBoxW / 2, signTopY + 19.5, {
+    align: "center",
+  });
 
   // Numeração de páginas e rodapé discreto
   const totalPages = doc.getNumberOfPages();

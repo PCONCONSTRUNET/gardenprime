@@ -559,15 +559,29 @@ function ImprimirDAV() {
           </div>
         </div>
 
-        {/* 5. ASSINATURAS */}
-        <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-10 text-[10px] font-bold text-center no-break">
-          <div className="px-4">
-            <div className="border-t border-black pt-1.5">
+        {/* 5. ASSINATURAS E COMPROVANTE DE ENTREGA */}
+        <div className="mt-4 grid grid-cols-12 gap-6 items-end text-[10px] font-bold no-break">
+          <div className="col-span-12 sm:col-span-5 print:col-span-5 px-2 pb-1 text-center">
+            <div className="border-t border-black pt-1.5 mt-12">
               ASSINATURA DO VENDEDOR {dav.vendedor ? `(${String(dav.vendedor).toUpperCase()})` : ""}
             </div>
           </div>
-          <div className="px-4">
-            <div className="border-t border-black pt-1.5">ASSINATURA DO CLIENTE</div>
+
+          <div className="col-span-12 sm:col-span-7 print:col-span-7 border border-black p-2.5 flex flex-col justify-between min-h-[74px]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-wide">
+                Recebimento / Entrega
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold">Data da Entrega:</span>
+                <span className="inline-block border border-black px-2.5 py-0.5 font-mono text-[10px] font-normal tracking-wider bg-white">
+                  ____/____/________
+                </span>
+              </div>
+            </div>
+            <div className="border-t border-black pt-1 mt-8 text-center">
+              ASSINATURA DO CLIENTE / RECEBEDOR
+            </div>
           </div>
         </div>
 
