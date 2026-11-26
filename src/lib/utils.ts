@@ -340,3 +340,46 @@ export function calcularVencimentosPadrao(
     { parcela: 1, data: validBase.toISOString().split("T")[0], label: "1º Vencimento" },
   ]);
 }
+
+/**
+ * Formata uma lista de pedidos agrupando números consecutivos em faixas (ex: "#150 a #161").
+ */
+export function formatOrderRangeSummary(
+  orders: { id: string; numero_venda?: number | null; numero?: number | null }[],
+): string {
+  if (!orders || orders.length === 0) return "";
+
+  const nums: number[] = [];
+  const fallbacks: string[] = [];
+
+  for (const o of orders) {
+    const raw = o.numero_venda ?? o.numero;
+    const n = raw !== undefined && raw !== null ? Number(raw) : NaN;
+    if (Number.isFinite(n)) {
+      nums.push(n);
+    } else {
+      fallbacks.push(`#${o.id.slice(0, 6).toUpperCase()}`);
+    }
+  }
+
+  const uniqueNums = Array.from(new Set(nums)).sort((a, b) => a - b);
+  const parts: string[] = [];
+
+  let i = 0;
+  while (i < uniqueNums.length) {
+    const start = uniqueNums[i];
+    let end = start;
+    while (i + 1 < uniqueNums.length && uniqueNums[i + 1] === end + 1) {
+      end = uniqueNums[i + 1];
+      i++;
+    }
+    parts.push(start === end ? `#${start}` : `#${start} a #${end}`);
+    i++;
+  }
+
+  const allParts = [...parts, ...fallbacks];
+  if (allParts.length <= 4) {
+    return allParts.join(", ");
+  }
+  return `${allParts.slice(0, 3).join(", ")} (+${allParts.length - 3} grupos)`;
+}

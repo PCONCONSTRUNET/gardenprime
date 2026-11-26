@@ -12,9 +12,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, Save, Pencil, Printer, ArrowUpDown, ArrowUp, ArrowDown, FileText, Calendar, Package, TrendingUp, DollarSign, EyeOff } from "lucide-react";
+import { Search, Save, Pencil, Printer, ArrowUpDown, ArrowUp, ArrowDown, FileText, Calendar, Package, TrendingUp, DollarSign, EyeOff, FileInput, X, Layers } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  ImportarPedidosModal,
+  type ImportedOrdersResult,
+} from "@/components/importar-pedidos-modal";
+import { formatOrderRangeSummary } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -48,6 +54,11 @@ function VendasProdutos() {
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [mostrarValorImpressao, setMostrarValorImpressao] = useState<boolean>(false);
   const [printModalOpen, setPrintModalOpen] = useState<boolean>(false);
+  const [importModalOpen, setImportModalOpen] = useState<boolean>(false);
+  const [importedBatch, setImportedBatch] = useState<ImportedOrdersResult | null>(null);
+  const [showAllInImport, setShowAllInImport] = useState<boolean>(false);
+
+  const isImportMode = Boolean(importedBatch && importedBatch.orders.length > 0);
 
   type SortColumn = "codigo" | "nome" | "categoria" | "valor" | "total_calculado";
   type SortDirection = "asc" | "desc";
@@ -75,19 +86,38 @@ function VendasProdutos() {
 
   const fetchProductsAndSales = async () => {
     try {
-      const { data: prods, error: pError } = await supabase
-        .from("produtos")
-        .select("id, nome, codigo, categoria, estoque, valor, status, created_at, emoji, quantidade_vendas, imagem")
-        .order("created_at", { ascending: false });
-      if (pError) throw pError;
+      const PAGE_SIZE = 1000;
+      const prods: any[] = [];
+      let pFrom = 0;
+      while (true) {
+        const { data: pBatch, error: pError } = await supabase
+          .from("produtos")
+          .select("id, nome, codigo, categoria, estoque, valor, status, created_at, emoji, quantidade_vendas, imagem")
+          .order("created_at", { ascending: false })
+          .range(pFrom, pFrom + PAGE_SIZE - 1);
+        if (pError) throw pError;
+        const rows = pBatch || [];
+        prods.push(...rows);
+        if (rows.length < PAGE_SIZE) break;
+        pFrom += PAGE_SIZE;
+      }
 
       // Fetch all items from valid sales to compute system sales
-      const { data: itens, error: iError } = await supabase
-        .from("vendas_itens")
-        .select("produto_id, quantidade, vendas(status)");
-      if (iError) throw iError;
+      const itens: any[] = [];
+      let iFrom = 0;
+      while (true) {
+        const { data: iBatch, error: iError } = await supabase
+          .from("vendas_itens")
+          .select("produto_id, quantidade, vendas(status)")
+          .range(iFrom, iFrom + PAGE_SIZE - 1);
+        if (iError) throw iError;
+        const rows = iBatch || [];
+        itens.push(...rows);
+        if (rows.length < PAGE_SIZE) break;
+        iFrom += PAGE_SIZE;
+      }
 
-      const validItens = (itens || []).filter((item: any) => {
+      const validItens = itens.filter((item: any) => {
         const status = item.vendas?.status;
         return status !== "Cancelado" && status !== "Rejeitado";
       });
@@ -100,7 +130,7 @@ function VendasProdutos() {
         }
       });
 
-      const mapped = (prods || []).map((p) => {
+      const mapped = prods.map((p) => {
         const vs = salesMap[p.id] || 0;
         return {
           ...p,
@@ -145,16 +175,36 @@ function VendasProdutos() {
     }
   };
 
+  const enrichedProducts = useMemo(() => {
+    return products.map((p) => {
+      const agg = isImportMode ? importedBatch?.productMap[p.id] : undefined;
+      const importedQty = agg?.quantidade || 0;
+      const importedSubtotal = agg?.subtotal || 0;
+      const importedOrders = agg?.pedidos || [];
+      return {
+        ...p,
+        imported_qty: importedQty,
+        imported_subtotal: importedSubtotal,
+        imported_orders: importedOrders,
+        display_total: isImportMode ? importedQty : p.total_calculado,
+      };
+    });
+  }, [products, isImportMode, importedBatch]);
+
   const codeQuery = buscaCodigo.trim().toLowerCase();
   const hasExactCodeMatch =
     codeQuery.length > 0 &&
-    products.some((p) => {
+    enrichedProducts.some((p) => {
       const pCode = p.codigo !== undefined && p.codigo !== null ? String(p.codigo).trim().toLowerCase() : "";
       return pCode === codeQuery || (/^\d+$/.test(codeQuery) && /^\d+$/.test(pCode) && Number(pCode) === Number(codeQuery));
     });
 
   const filteredProducts = useMemo(() => {
-    const filtered = products.filter((p) => {
+    const filtered = enrichedProducts.filter((p) => {
+      if (isImportMode && !showAllInImport && p.imported_qty <= 0) {
+        return false;
+      }
+
       const search = busca.toLowerCase().trim();
       const nome = p.nome ? String(p.nome).toLowerCase() : "";
       const codigo = p.codigo !== undefined && p.codigo !== null ? String(p.codigo).trim().toLowerCase() : "";
@@ -202,8 +252,9 @@ function VendasProdutos() {
         const cmp = strA.localeCompare(strB, "pt-BR");
         return sortDirection === "asc" ? cmp : -cmp;
       }
-      const numA = Number(a[sortColumn] || 0);
-      const numB = Number(b[sortColumn] || 0);
+      const sortKey = sortColumn === "total_calculado" ? "display_total" : sortColumn;
+      const numA = Number(a[sortKey] || 0);
+      const numB = Number(b[sortKey] || 0);
       if (numA !== numB) {
         return sortDirection === "asc" ? numA - numB : numB - numA;
       }
@@ -211,7 +262,7 @@ function VendasProdutos() {
       const codeB = b.codigo !== undefined && b.codigo !== null ? String(b.codigo).trim() : "";
       return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: "base" });
     });
-  }, [products, busca, buscaCodigo, codeQuery, hasExactCodeMatch, categoriaFilter, sortColumn, sortDirection]);
+  }, [enrichedProducts, isImportMode, showAllInImport, busca, codeQuery, hasExactCodeMatch, categoriaFilter, sortColumn, sortDirection]);
 
   const printableProducts = useMemo(() => {
     if (selectedProducts.length > 0) {
@@ -221,11 +272,44 @@ function VendasProdutos() {
   }, [filteredProducts, selectedProducts]);
 
   const totalVendasImpressao = useMemo(
-    () => printableProducts.reduce((acc, p) => acc + Number(p.total_calculado || 0), 0),
+    () => printableProducts.reduce((acc, p) => acc + Number(p.display_total || 0), 0),
     [printableProducts]
   );
 
   const totalVendasGlobais = products.reduce((acc, p) => acc + (p.total_calculado || 0), 0);
+
+  const importedRangeSummary = useMemo(
+    () => (isImportMode ? formatOrderRangeSummary(importedBatch!.orders) : ""),
+    [isImportMode, importedBatch]
+  );
+
+  const importedProductsCount = useMemo(
+    () => (isImportMode ? enrichedProducts.filter((p) => p.imported_qty > 0).length : 0),
+    [isImportMode, enrichedProducts]
+  );
+
+  const totalImportedUnits = useMemo(
+    () => (isImportMode ? enrichedProducts.reduce((acc, p) => acc + Number(p.imported_qty || 0), 0) : 0),
+    [isImportMode, enrichedProducts]
+  );
+
+  const totalImportedValue = useMemo(
+    () => (isImportMode ? enrichedProducts.reduce((acc, p) => acc + Number(p.imported_subtotal || 0), 0) : 0),
+    [isImportMode, enrichedProducts]
+  );
+
+  const handleImportOrders = (result: ImportedOrdersResult) => {
+    setImportedBatch(result);
+    setShowAllInImport(false);
+    setSelectedProducts([]);
+    setEditingId(null);
+  };
+
+  const handleClearImport = () => {
+    setImportedBatch(null);
+    setShowAllInImport(false);
+    setSelectedProducts([]);
+  };
 
   const toggleSelection = (id: string) => {
     setSelectedProducts((prev) =>
@@ -272,13 +356,29 @@ function VendasProdutos() {
 
       <PageHeader
         title="Desempenho de Produtos"
-        subtitle="Acompanhe e ajuste o número de vendas por produto"
+        subtitle="Acompanhe e ajuste o número de vendas por produto ou importe um lote de pedidos"
         actions={
-          <Button variant="outline" onClick={() => setPrintModalOpen(true)} className="print:hidden font-bold">
-            <Printer className="mr-2 h-4 w-4" />
-            Imprimir Relatório
-          </Button>
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <Button
+              onClick={() => setImportModalOpen(true)}
+              className="bg-gradient-brand text-primary-foreground font-bold"
+            >
+              <FileInput className="mr-2 h-4 w-4" />
+              {isImportMode ? "Alterar Pedidos Importados" : "Importar Pedidos"}
+            </Button>
+            <Button variant="outline" onClick={() => setPrintModalOpen(true)} className="font-bold">
+              <Printer className="mr-2 h-4 w-4" />
+              Imprimir Relatório
+            </Button>
+          </div>
         }
+      />
+
+      <ImportarPedidosModal
+        open={importModalOpen}
+        onOpenChange={setImportModalOpen}
+        initialSelectedIds={importedBatch?.orders.map((o) => o.id) || []}
+        onImport={handleImportOrders}
       />
 
       {printModalOpen && (
@@ -317,21 +417,138 @@ function VendasProdutos() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-3 mb-6 print:hidden">
-        <Card className="shadow-card">
-          <CardContent className="p-5">
-            <p className="text-sm text-muted-foreground font-semibold">Total de Produtos</p>
-            <p className="mt-1 font-display text-2xl font-bold text-primary">{products.length}</p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-card">
-          <CardContent className="p-5">
-            <p className="text-sm text-muted-foreground font-semibold">Vendas Globais</p>
-            <p className="mt-1 font-display text-2xl font-bold text-success">
-              {totalVendasGlobais}
-            </p>
-          </CardContent>
-        </Card>
+        {isImportMode ? (
+          <>
+            <Card className="shadow-card">
+              <CardContent className="p-5">
+                <p className="text-sm text-muted-foreground font-semibold">Produtos nos Pedidos</p>
+                <p className="mt-1 font-display text-2xl font-bold text-primary">
+                  {importedProductsCount}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  de {products.length} produtos cadastrados
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="shadow-card">
+              <CardContent className="p-5">
+                <p className="text-sm text-muted-foreground font-semibold">Unidades no Lote</p>
+                <p className="mt-1 font-display text-2xl font-bold text-success">
+                  {totalImportedUnits}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Total dos itens: R$ {totalImportedValue.toFixed(2).replace(".", ",")}
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="shadow-card border-primary/30 bg-primary/5">
+              <CardContent className="p-5">
+                <p className="text-sm text-muted-foreground font-semibold">Pedidos Importados</p>
+                <p className="mt-1 font-display text-2xl font-bold text-foreground">
+                  {importedBatch!.orders.length}
+                </p>
+                <p className="text-xs font-semibold text-primary mt-0.5 truncate" title={importedRangeSummary}>
+                  {importedRangeSummary}
+                </p>
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <>
+            <Card className="shadow-card">
+              <CardContent className="p-5">
+                <p className="text-sm text-muted-foreground font-semibold">Total de Produtos</p>
+                <p className="mt-1 font-display text-2xl font-bold text-primary">{products.length}</p>
+              </CardContent>
+            </Card>
+            <Card className="shadow-card">
+              <CardContent className="p-5">
+                <p className="text-sm text-muted-foreground font-semibold">Vendas Globais</p>
+                <p className="mt-1 font-display text-2xl font-bold text-success">
+                  {totalVendasGlobais}
+                </p>
+              </CardContent>
+            </Card>
+            <Card
+              className="shadow-card border-dashed border-primary/40 hover:border-primary/70 transition-colors cursor-pointer"
+              onClick={() => setImportModalOpen(true)}
+            >
+              <CardContent className="p-5 flex items-center justify-between gap-3 h-full">
+                <div>
+                  <p className="text-sm text-muted-foreground font-semibold">Importar Lote de Pedidos</p>
+                  <p className="mt-1 text-xs font-medium text-foreground">
+                    Filtre por faixa (ex: 150 a 161) sem procurar nos {products.length} itens
+                  </p>
+                </div>
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                  <FileInput className="h-5 w-5" />
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
+
+      {isImportMode && (
+        <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 flex flex-wrap items-center justify-between gap-3 print:hidden">
+          <div className="flex flex-wrap items-center gap-2.5 min-w-0">
+            <div className="flex items-center gap-2 text-sm font-bold text-foreground">
+              <Layers className="h-4 w-4 text-primary shrink-0" />
+              <span>Filtro por Pedidos Ativo:</span>
+              <Badge className="bg-primary text-primary-foreground font-bold">
+                {importedRangeSummary} ({importedBatch!.orders.length} pedido
+                {importedBatch!.orders.length === 1 ? "" : "s"})
+              </Badge>
+            </div>
+            <div className="flex flex-wrap items-center gap-1">
+              {importedBatch!.orders.slice(0, 10).map((ord) => (
+                <Badge
+                  key={ord.id}
+                  variant="outline"
+                  className="bg-background font-mono text-[11px] font-semibold"
+                  title={`${ord.cliente_nome} — R$ ${ord.valor_total.toFixed(2).replace(".", ",")}`}
+                >
+                  #{ord.numero_venda ?? ord.numero ?? ord.id.slice(0, 6)}
+                </Badge>
+              ))}
+              {importedBatch!.orders.length > 10 && (
+                <Badge variant="secondary" className="text-[11px] font-bold">
+                  +{importedBatch!.orders.length - 10} pedidos
+                </Badge>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none">
+              <Checkbox
+                checked={showAllInImport}
+                onCheckedChange={(checked) => setShowAllInImport(checked === true)}
+              />
+              Mostrar todos os {products.length} produtos
+            </label>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 font-semibold"
+              onClick={() => setImportModalOpen(true)}
+            >
+              Alterar Pedidos
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8 font-semibold text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={handleClearImport}
+            >
+              <X className="mr-1 h-3.5 w-3.5" />
+              Limpar Filtro
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* TELA INTERATIVA */}
       <Card className="shadow-card print:hidden">
@@ -429,28 +646,45 @@ function VendasProdutos() {
                 >
                   Valor <SortIcon column="valor" />
                 </TableHead>
-                <TableHead className="text-right font-bold">Sistema</TableHead>
-                <TableHead className="text-right font-bold">Ajuste</TableHead>
-                <TableHead
-                  className="text-right font-bold cursor-pointer select-none hover:bg-muted/50"
-                  onClick={() => handleSort("total_calculado")}
-                >
-                  Total Vendas <SortIcon column="total_calculado" />
-                </TableHead>
-                <TableHead className="text-right font-bold">Ações</TableHead>
+                {isImportMode ? (
+                  <>
+                    <TableHead className="font-bold">Pedidos no Lote</TableHead>
+                    <TableHead className="text-right font-bold">Subtotal Lote</TableHead>
+                    <TableHead
+                      className="text-right font-bold cursor-pointer select-none hover:bg-muted/50"
+                      onClick={() => handleSort("total_calculado")}
+                    >
+                      Qtd. no Lote <SortIcon column="total_calculado" />
+                    </TableHead>
+                  </>
+                ) : (
+                  <>
+                    <TableHead className="text-right font-bold">Sistema</TableHead>
+                    <TableHead className="text-right font-bold">Ajuste</TableHead>
+                    <TableHead
+                      className="text-right font-bold cursor-pointer select-none hover:bg-muted/50"
+                      onClick={() => handleSort("total_calculado")}
+                    >
+                      Total Vendas <SortIcon column="total_calculado" />
+                    </TableHead>
+                    <TableHead className="text-right font-bold">Ações</TableHead>
+                  </>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={isImportMode ? 8 : 9} className="text-center py-8 text-muted-foreground">
                     Carregando produtos...
                   </TableCell>
                 </TableRow>
               ) : filteredProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                    Nenhum produto encontrado na busca.
+                  <TableCell colSpan={isImportMode ? 8 : 9} className="text-center py-8 text-muted-foreground">
+                    {isImportMode
+                      ? "Nenhum produto encontrado nos pedidos importados para os filtros atuais."
+                      : "Nenhum produto encontrado na busca."}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -493,66 +727,108 @@ function VendasProdutos() {
                     <TableCell className="text-right font-bold">
                       R$ {Number(p.valor).toFixed(2).replace(".", ",")}
                     </TableCell>
-                    <TableCell className="text-right font-bold">
-                      <span className="text-muted-foreground">{p.vendas_sistema || 0}</span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Badge
-                        variant={
-                          p.quantidade_vendas > 0
-                            ? "default"
-                            : p.quantidade_vendas < 0
-                              ? "destructive"
-                              : "secondary"
-                        }
-                      >
-                        {p.quantidade_vendas > 0 ? "+" : ""}
-                        {p.quantidade_vendas || 0}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {editingId === p.id ? (
-                        <div className="flex justify-end">
-                          <Input
-                            type="number"
-                            className="w-24 text-right h-8 font-bold"
-                            value={editValue}
-                            onChange={(e) => setEditValue(parseInt(e.target.value) || 0)}
-                            min={0}
-                            autoFocus
-                          />
-                        </div>
-                      ) : (
-                        <span className="font-bold text-lg text-primary">
-                          {p.total_calculado || 0}
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {editingId === p.id ? (
-                        <div className="flex justify-end gap-2">
-                          <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>
-                            Cancelar
-                          </Button>
-                          <Button size="sm" onClick={() => handleSave(p.id)}>
-                            <Save className="h-4 w-4 mr-2" />
-                            Salvar
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setEditingId(p.id);
-                            setEditValue(p.total_calculado || 0);
-                          }}
-                        >
-                          <Pencil className="h-4 w-4 mr-2" />
-                          Editar
-                        </Button>
-                      )}
-                    </TableCell>
+                    {isImportMode ? (
+                      <>
+                        <TableCell>
+                          {p.imported_orders.length === 0 ? (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          ) : (
+                            <div
+                              className="flex flex-wrap gap-1 max-w-[260px]"
+                              title={p.imported_orders
+                                .map((o: any) => `#${o.numero}: ${o.quantidade} un.`)
+                                .join(", ")}
+                            >
+                              {p.imported_orders.slice(0, 4).map((o: any) => (
+                                <Badge
+                                  key={o.numero}
+                                  variant="outline"
+                                  className="font-mono text-[11px] px-1.5 py-0"
+                                >
+                                  #{o.numero} ({o.quantidade})
+                                </Badge>
+                              ))}
+                              {p.imported_orders.length > 4 && (
+                                <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
+                                  +{p.imported_orders.length - 4}
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-muted-foreground">
+                          R$ {Number(p.imported_subtotal || 0).toFixed(2).replace(".", ",")}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <span className="font-bold text-lg text-primary">
+                            {p.imported_qty || 0}
+                          </span>
+                        </TableCell>
+                      </>
+                    ) : (
+                      <>
+                        <TableCell className="text-right font-bold">
+                          <span className="text-muted-foreground">{p.vendas_sistema || 0}</span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge
+                            variant={
+                              p.quantidade_vendas > 0
+                                ? "default"
+                                : p.quantidade_vendas < 0
+                                  ? "destructive"
+                                  : "secondary"
+                            }
+                          >
+                            {p.quantidade_vendas > 0 ? "+" : ""}
+                            {p.quantidade_vendas || 0}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {editingId === p.id ? (
+                            <div className="flex justify-end">
+                              <Input
+                                type="number"
+                                className="w-24 text-right h-8 font-bold"
+                                value={editValue}
+                                onChange={(e) => setEditValue(parseInt(e.target.value) || 0)}
+                                min={0}
+                                autoFocus
+                              />
+                            </div>
+                          ) : (
+                            <span className="font-bold text-lg text-primary">
+                              {p.total_calculado || 0}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {editingId === p.id ? (
+                            <div className="flex justify-end gap-2">
+                              <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>
+                                Cancelar
+                              </Button>
+                              <Button size="sm" onClick={() => handleSave(p.id)}>
+                                <Save className="h-4 w-4 mr-2" />
+                                Salvar
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setEditingId(p.id);
+                                setEditValue(p.total_calculado || 0);
+                              }}
+                            >
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Editar
+                            </Button>
+                          )}
+                        </TableCell>
+                      </>
+                    )}
                   </TableRow>
                 ))
               )}
@@ -600,10 +876,14 @@ function VendasProdutos() {
             </div>
             <div>
               <h1 className="text-base font-black tracking-wide uppercase text-white leading-tight">
-                RELATÓRIO DE DESEMPENHO DE PRODUTOS
+                {isImportMode
+                  ? "RELATÓRIO DE PRODUTOS POR PEDIDOS"
+                  : "RELATÓRIO DE DESEMPENHO DE PRODUTOS"}
               </h1>
               <p className="text-[11px] text-[#E5C378] font-bold">
-                Categoria: {categoriaFilter === "Todas" ? "Todas as Categorias" : categoriaFilter}
+                {isImportMode
+                  ? `Pedidos: ${importedRangeSummary} (${importedBatch!.orders.length} pedido${importedBatch!.orders.length === 1 ? "" : "s"}) • Categoria: ${categoriaFilter === "Todas" ? "Todas as Categorias" : categoriaFilter}`
+                  : `Categoria: ${categoriaFilter === "Todas" ? "Todas as Categorias" : categoriaFilter}`}
               </p>
             </div>
           </div>
@@ -660,7 +940,7 @@ function VendasProdutos() {
                 </th>
               )}
               <th className="py-2 px-2.5 text-right font-black uppercase tracking-wider border border-slate-400 w-28 text-[#E5C378]">
-                Total Vendas
+                {isImportMode ? "Qtd. Pedidos" : "Total Vendas"}
               </th>
             </tr>
           </thead>
@@ -700,7 +980,7 @@ function VendasProdutos() {
                   </td>
                 )}
                 <td className="py-1.5 px-2.5 text-right font-black text-lg text-black border border-slate-300 whitespace-nowrap">
-                  {p.total_calculado || 0}
+                  {p.display_total || 0}
                 </td>
               </tr>
             ))}
