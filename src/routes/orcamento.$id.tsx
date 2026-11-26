@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Printer, ArrowLeft, Loader2 } from "lucide-react";
+import { Printer, ArrowLeft, Loader2, Package } from "lucide-react";
 import { WhatsAppIcon, shareOrderWhatsApp } from "@/lib/order-pdf";
 import {
   formatBrDecimal,
@@ -444,50 +444,62 @@ function ImprimirDAV() {
           </div>
         </div>
 
-        {/* 3. RELAÇÃO DE PRODUTOS / SERVIÇOS */}
-        <div className="mt-2.5">
-          <h2 className="font-bold text-xs mb-1">Relação de Produtos/Serviços</h2>
+        {/* 3. PRODUTOS (COM FOTOS) */}
+        <div className="mt-3 mb-4">
+          <h2 className="font-black text-sm mb-2 flex items-center gap-2">
+            <Package className="w-5 h-5 text-[#B89547] shrink-0" strokeWidth={2.5} />
+            <span className="text-black tracking-wider uppercase font-black">PRODUTOS</span>
+          </h2>
+
           <div className="overflow-x-auto print:overflow-visible">
-            <table className="dav-table w-full text-[11px] border-collapse">
-              <thead>
-                <tr className="bg-slate-100 border-y border-black text-black">
-                  <th className="py-1 px-1.5 text-left font-bold w-16">Código</th>
-                  <th className="py-1 px-1.5 text-left font-bold">Descrição</th>
-                  <th className="py-1 px-1.5 text-right font-bold w-16">Qtd</th>
-                  <th className="py-1 px-1.5 text-center font-bold w-10">Med</th>
-                  <th className="py-1 px-1.5 text-right font-bold w-20">Unitário</th>
-                  <th className="py-1 px-1.5 text-right font-bold w-16">Desconto</th>
-                  <th className="py-1 px-1.5 text-right font-bold w-24">Total</th>
+            <table className="dav-table w-full text-left text-xs whitespace-nowrap">
+              <thead className="bg-[#112321] text-white">
+                <tr>
+                  <th className="p-2.5 text-left pl-3 font-black text-xs uppercase tracking-wider">Código</th>
+                  <th className="p-2.5 text-left font-black text-xs uppercase tracking-wider">Produto</th>
+                  <th className="p-2.5 text-center font-black text-xs uppercase tracking-wider">Qtd</th>
+                  <th className="p-2.5 text-right font-black text-xs uppercase tracking-wider">Vlr. Unit.</th>
+                  <th className="p-2.5 text-right pr-3 font-black text-xs uppercase tracking-wider">Vlr. Total</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody>
                 {itens.map((it, idx) => {
-                  const qtdNum = Number(it.qtd || it.quantidade || 1);
-                  const unitNum = Number(it.valor_unitario || 0);
-                  const totNum = Number(it.total ?? it.subtotal ?? qtdNum * unitNum);
-                  const descItem = Math.max(0, qtdNum * unitNum - totNum);
-                  const med = formatUnidadeMedida(
-                    it.unidade_medida || it.produto?.unidade_medida || it.produtos?.unidade_medida,
-                  );
-
+                  const imgUrl =
+                    it.imagem ||
+                    it.produto?.imagem ||
+                    it.produtos?.imagem ||
+                    (it.rawVenda || it).produto?.imagem;
+                  const desc = it.descricao || (it.rawVenda || it).produto?.descricao;
                   return (
-                    <tr key={idx} className={idx % 2 === 1 ? "bg-slate-50/70" : "bg-white"}>
-                      <td className="py-1 px-1.5 font-mono font-bold whitespace-nowrap">
-                        {it.codigo || "-"}
+                    <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-[#FBFBFA]"}>
+                      <td className="p-2.5 pl-2">
+                        <div className="flex items-center gap-3">
+                          {imgUrl ? (
+                            <div className="w-10 h-10 rounded-md border border-slate-300 bg-white overflow-hidden flex items-center justify-center shrink-0">
+                              <img src={imgUrl} alt="" className="w-full h-full object-contain" />
+                            </div>
+                          ) : (
+                            <div className="w-10 h-10 rounded-md border border-slate-200 bg-slate-50 flex items-center justify-center shrink-0">
+                              <Package className="w-4 h-4 text-slate-400" />
+                            </div>
+                          )}
+                          <span className="font-black text-black text-xs">{it.codigo || "-"}</span>
+                        </div>
                       </td>
-                      <td className="py-1 px-1.5 font-medium">{it.produto}</td>
-                      <td className="py-1 px-1.5 text-right tabular-nums whitespace-nowrap">
-                        {formatBrDecimal(qtdNum)}
+                      <td className="p-2.5 whitespace-normal">
+                        <p className="font-black text-black text-xs">{it.produto}</p>
+                        {desc && (
+                          <p className="text-[10px] text-black font-extrabold max-w-[240px] sm:max-w-md truncate mt-0.5">
+                            {desc}
+                          </p>
+                        )}
                       </td>
-                      <td className="py-1 px-1.5 text-center whitespace-nowrap">{med}</td>
-                      <td className="py-1 px-1.5 text-right tabular-nums whitespace-nowrap">
-                        {formatBrDecimal(unitNum)}
+                      <td className="p-2.5 text-center font-black text-black text-xs">{it.qtd}</td>
+                      <td className="p-2.5 text-right text-black font-black text-xs whitespace-nowrap">
+                        R$ {Number(it.valor_unitario || 0).toFixed(2).replace(".", ",")}
                       </td>
-                      <td className="py-1 px-1.5 text-right tabular-nums whitespace-nowrap">
-                        {formatBrDecimal(descItem)}
-                      </td>
-                      <td className="py-1 px-1.5 text-right font-bold tabular-nums whitespace-nowrap">
-                        {formatBrDecimal(totNum)}
+                      <td className="p-2.5 pr-3 text-right font-black text-black text-xs whitespace-nowrap">
+                        R$ {Number(it.total || 0).toFixed(2).replace(".", ",")}
                       </td>
                     </tr>
                   );

@@ -523,6 +523,48 @@ export async function generateOrderPdfDoc(
     console.error("Erro ao buscar configuracoes da empresa para o PDF", e);
   }
 
+  // Pré-carregar imagens dos produtos convertidas para JPEG compatível com jsPDF
+  const toProductJpeg = (url: string): Promise<string | null> =>
+    new Promise((resolve) => {
+      if (typeof window === "undefined") return resolve(null);
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          const size = 120;
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return resolve(null);
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, size, size);
+          const ratio = Math.min(size / img.width, size / img.height);
+          const w = img.width * ratio;
+          const h = img.height * ratio;
+          ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+          resolve(canvas.toDataURL("image/jpeg", 0.85));
+        } catch {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+
+  await Promise.all(
+    items.map(async (it) => {
+      const imgUrl =
+        (it as any).imagem || (it.produto as any)?.imagem || (it.produtos as any)?.imagem;
+      if (imgUrl) {
+        const b64 = await toProductJpeg(imgUrl);
+        if (b64) {
+          (it as any)._imagemBase64 = b64;
+        }
+      }
+    }),
+  );
+
   const isDAV = isOrderDav(order);
   const num = getOrderNumber(order);
   const numDisplay = num.padStart(6, "0");
@@ -716,12 +758,12 @@ export async function generateOrderPdfDoc(
 
   y = clientStartY + clientBoxH + 4.5;
 
-  // ── 3. RELAÇÃO DE PRODUTOS / SERVIÇOS ─────────────────────────────────────────
+  // ── 3. PRODUTOS (COM FOTOS) ────────────────────────────────────────────────────
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.5);
+  doc.setFontSize(9.5);
   doc.setTextColor(0, 0, 0);
-  doc.text("Relação de Produtos/Serviços", margin, y);
-  y += 1.8;
+  doc.text("PRODUTOS", margin + 2, y + 1);
+  y += 3.5;
 
   const tableBody = items.map((it) => {
     const nome =
@@ -737,65 +779,61 @@ export async function generateOrderPdfDoc(
       (it as any).produto_codigo ||
       (it as any).cod ||
       "-";
-    const med = formatUnidadeMedida(
-      it.unidade_medida || it.produto?.unidade_medida || it.produtos?.unidade_medida,
-    );
-    const qtdNum = Number(it.quantidade || it.qtd || 1);
-    const unitNum = Number(it.valor_unitario || 0);
-    const totNum = Number(it.total ?? it.subtotal ?? qtdNum * unitNum);
-    const itemDiscount = Math.max(0, qtdNum * unitNum - totNum);
-
-    return [
-      String(codigo),
-      String(nome),
-      formatBrDecimal(qtdNum),
-      med,
-      formatBrDecimal(unitNum),
-      formatBrDecimal(itemDiscount),
-      formatBrDecimal(totNum),
-    ];
+    const qtd = Number(it.quantidade || it.qtd || 1).toString();
+    const vUnit = `R$ ${Number(it.valor_unitario || 0).toFixed(2).replace(".", ",")}`;
+    const vTotal = `R$ ${Number(it.total || it.subtotal || 0).toFixed(2).replace(".", ",")}`;
+    return [String(codigo), "", String(nome), qtd, vUnit, vTotal, (it as any)._imagemBase64 || ""];
   });
 
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin, bottom: 14 },
     tableWidth: contentW,
-    head: [["Código", "Descrição", "Qtd", "Med", "Unitário", "Desconto", "Total"]],
+    head: [["Código", "", "Produto", "Qtd", "Vlr. Unit.", "Vlr. Total"]],
     body: tableBody,
     theme: "plain",
     headStyles: {
-      fillColor: [243, 244, 246],
-      textColor: [0, 0, 0],
+      fillColor: [17, 35, 33],
+      textColor: [255, 255, 255],
       fontStyle: "bold",
+      halign: "center",
       valign: "middle",
-      fontSize: 7.5,
-      cellPadding: { top: 1.8, bottom: 1.8, left: 1.5, right: 1.5 },
-      lineWidth: { top: 0.3, bottom: 0.3 },
-      lineColor: [0, 0, 0],
+      fontSize: 8,
     },
     styles: {
       fontSize: 7.5,
-      cellPadding: { top: 1.4, bottom: 1.4, left: 1.5, right: 1.5 },
+      cellPadding: 3,
+      minCellHeight: 12,
       valign: "middle",
       overflow: "linebreak",
-      fontStyle: "normal",
+      fontStyle: "bold",
       textColor: [0, 0, 0],
     },
     columnStyles: {
-      0: { halign: "left", cellWidth: 16, fontStyle: "bold" },
-      1: { halign: "left" },
-      2: { halign: "right", cellWidth: 19 },
-      3: { halign: "center", cellWidth: 11 },
-      4: { halign: "right", cellWidth: 20 },
-      5: { halign: "right", cellWidth: 18 },
-      6: { halign: "right", cellWidth: 24, fontStyle: "bold" },
+      0: { halign: "center", cellWidth: 15, fontStyle: "bold" },
+      1: { cellWidth: 14 }, // Imagem
+      2: { halign: "left", fontStyle: "bold" }, // Produto
+      3: { halign: "center", cellWidth: 12, fontStyle: "bold" }, // Qtd
+      4: { halign: "right", cellWidth: 22, fontStyle: "bold" }, // Unit
+      5: { halign: "right", cellWidth: 27, fontStyle: "bold" }, // Total
     },
     alternateRowStyles: {
-      fillColor: [250, 250, 250],
+      fillColor: [248, 250, 252],
+    },
+    didDrawCell: (data) => {
+      if (data.section === "body" && data.column.index === 1) {
+        const rowData = data.row.raw as string[];
+        const imgBase64 = rowData[6];
+        if (imgBase64) {
+          try {
+            doc.addImage(imgBase64, "JPEG", data.cell.x + 2, data.cell.y + 1, 10, 10);
+          } catch {}
+        }
+      }
     },
   });
 
-  y = (doc as any).lastAutoTable.finalY + 4;
+  y = (doc as any).lastAutoTable.finalY + 5;
 
   // ── 4. CONDIÇÕES, VENCIMENTOS, TOTAIS E ASSINATURAS ───────────────────────────
   const orderTotalNum = Number(order.valor_total || order.total || order.subtotal || 0);
