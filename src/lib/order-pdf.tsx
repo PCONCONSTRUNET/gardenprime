@@ -1,7 +1,13 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase, supabaseParceiro } from "@/lib/supabase";
-import { calcularVencimentosPadrao, calcularValorParcela } from "@/lib/utils";
+import {
+  calcularVencimentosPadrao,
+  calcularValorParcela,
+  formatBrDecimal,
+  formatClientAddressLine,
+  formatUnidadeMedida,
+} from "@/lib/utils";
 import React from "react";
 
 export const WhatsAppIcon = ({ className }: { className?: string }) => (
@@ -21,17 +27,20 @@ export interface OrderItem {
   produto?: {
     nome?: string;
     codigo?: string;
+    unidade_medida?: string;
     emoji?: string;
     imagem?: string;
   };
   produtos?: {
     nome?: string;
     codigo?: string;
+    unidade_medida?: string;
     emoji?: string;
     imagem?: string;
   };
   produto_nome?: string;
   codigo?: string;
+  unidade_medida?: string;
   imagem?: string;
   quantidade?: number;
   qtd?: number;
@@ -239,6 +248,10 @@ export async function enrichOrderAndItems(
         order.condicao_pagamento = order.condicao_pagamento ?? v.condicao_pagamento ?? v.metodo_pagamento;
         order.total = order.total ?? v.valor_total;
         order.subtotal = order.subtotal ?? v.subtotal ?? v.valor_total;
+        order.desconto_valor = order.desconto_valor ?? v.desconto_valor;
+        order.desconto_percentual = order.desconto_percentual ?? v.desconto_percentual;
+        order.frete_valor = order.frete_valor ?? v.frete_valor;
+        order.vencimentos = order.vencimentos ?? v.vencimentos;
         order.created_at = order.created_at || v.created_at;
         if (v.vendedor) {
           order.vendedor_nome = order.vendedor_nome ?? (typeof v.vendedor === "object" ? v.vendedor?.nome : v.vendedor);
@@ -275,6 +288,10 @@ export async function enrichOrderAndItems(
           order.condicao_pagamento = order.condicao_pagamento ?? d.condicao_pagamento;
           order.frete_tipo = order.frete_tipo ?? d.frete_tipo;
           order.prazo_entrega = order.prazo_entrega ?? d.prazo_entrega;
+          order.observacoes = order.observacoes ?? d.observacoes;
+          order.desconto_valor = order.desconto_valor ?? d.desconto_valor;
+          order.frete_valor = order.frete_valor ?? d.frete_valor;
+          order.vencimentos = order.vencimentos ?? d.vencimentos;
           order.total = order.total ?? d.total;
           order.subtotal = order.subtotal ?? d.subtotal;
           order.created_at = order.created_at || d.created_at;
@@ -311,24 +328,19 @@ export async function enrichOrderAndItems(
     }
   }
 
-  // Normalizar objeto cliente
+  // Normalizar objeto cliente (mantendo CEP separado do Endereço para não duplicar)
   const rawC = order.cliente || order.clientes || (order as any).client || {};
   const cepVal = rawC.cep || (order as any).cep || (order as any).cliente_cep || "";
-  let endFormatted = rawC.endereco || (order as any).cliente_endereco || "";
-  if (rawC.numero && endFormatted && !endFormatted.includes(String(rawC.numero))) {
-    endFormatted = `${endFormatted}, Nº ${rawC.numero}`;
-  }
-  if (cepVal && endFormatted && !endFormatted.toUpperCase().includes("CEP") && !endFormatted.includes(String(cepVal))) {
-    endFormatted = `${endFormatted} - CEP: ${cepVal}`;
-  } else if (cepVal && !endFormatted) {
-    endFormatted = `CEP: ${cepVal}`;
-  }
+  const endFormatted = formatClientAddressLine(
+    rawC.endereco || (order as any).cliente_endereco || "",
+    rawC.numero || (order as any).cliente_numero || "",
+  );
 
   order.cliente = {
     nome: rawC.nome || (order as any).cliente_nome || "-",
     cpf_cnpj: rawC.cpf_cnpj || rawC.cnpj || rawC.cpf || (order as any).cliente_cnpj || "-",
     telefone: rawC.telefone || rawC.phone || (order as any).cliente_telefone || "-",
-    endereco: endFormatted || "-",
+    endereco: endFormatted,
     numero: rawC.numero || "",
     bairro: rawC.bairro || (order as any).bairro || "-",
     cidade: rawC.cidade || (order as any).cidade || "-",
@@ -344,7 +356,7 @@ export async function enrichOrderAndItems(
         const vi = await queryDb<any[]>((client) =>
           client
             .from("vendas_itens")
-            .select("*, produtos(nome, codigo, emoji, imagem)")
+            .select("*, produtos(nome, codigo, unidade_medida, emoji, imagem)")
             .eq("venda_id", order.id)
         );
 
@@ -354,6 +366,7 @@ export async function enrichOrderAndItems(
             produto_id: it.produto_id,
             produto_nome: it.produtos?.nome || it.produto_nome,
             codigo: it.produtos?.codigo || it.codigo,
+            unidade_medida: it.produtos?.unidade_medida || it.unidade_medida,
             quantidade: it.quantidade,
             valor_unitario: it.valor_unitario,
             subtotal: it.subtotal,
@@ -365,7 +378,7 @@ export async function enrichOrderAndItems(
           const di = await queryDb<any[]>((client) =>
             client
               .from("dav_items")
-              .select("*, produtos(nome, codigo, emoji, imagem)")
+              .select("*, produtos(nome, codigo, unidade_medida, emoji, imagem)")
               .eq("dav_id", order.id)
           );
 
@@ -375,6 +388,7 @@ export async function enrichOrderAndItems(
               produto_id: it.produto_id,
               produto_nome: it.produtos?.nome || it.produto,
               codigo: it.produtos?.codigo || it.codigo,
+              unidade_medida: it.produtos?.unidade_medida || it.unidade_medida,
               quantidade: it.qtd || it.quantidade,
               valor_unitario: it.valor_unitario,
               subtotal: it.total || it.subtotal,
@@ -390,21 +404,21 @@ export async function enrichOrderAndItems(
     }
   }
 
-  // 3. Garantir códigos e imagens para todos os itens passados
-  const missingCodOrImg = items.filter((it: any) => {
+  // 3. Garantir códigos e unidades de medida para todos os itens passados
+  const missingMeta = items.filter((it: any) => {
     const hasCod = Boolean(it.codigo || it.produto?.codigo || it.produtos?.codigo || it.produto_codigo || it.cod);
-    const hasImg = Boolean(it.imagem || it.produto?.imagem || it.produtos?.imagem);
-    return (!hasCod || !hasImg) && (it.produto_id || it.id);
+    const hasMed = Boolean(it.unidade_medida || it.produto?.unidade_medida || it.produtos?.unidade_medida);
+    return (!hasCod || !hasMed) && (it.produto_id || it.id);
   });
 
-  if (missingCodOrImg.length > 0) {
-    const missingIds = missingCodOrImg.map((it: any) => it.produto_id || it.id).filter(Boolean);
+  if (missingMeta.length > 0) {
+    const missingIds = missingMeta.map((it: any) => it.produto_id || it.id).filter(Boolean);
     if (missingIds.length > 0) {
       try {
         const prods = await queryDb<any[]>((client) =>
           client
             .from("produtos")
-            .select("id, codigo, imagem, nome")
+            .select("id, codigo, unidade_medida, imagem, nome")
             .in("id", missingIds)
         );
 
@@ -416,11 +430,13 @@ export async function enrichOrderAndItems(
               return {
                 ...it,
                 codigo: it.codigo || it.produtos?.codigo || it.produto?.codigo || p.codigo,
+                unidade_medida: it.unidade_medida || it.produtos?.unidade_medida || it.produto?.unidade_medida || p.unidade_medida,
                 imagem: it.imagem || it.produtos?.imagem || it.produto?.imagem || p.imagem,
                 produto_nome: it.produto_nome || it.produtos?.nome || it.produto?.nome || p.nome,
                 produtos: {
                   ...it.produtos,
                   codigo: it.produtos?.codigo || p.codigo,
+                  unidade_medida: it.produtos?.unidade_medida || p.unidade_medida,
                   imagem: it.produtos?.imagem || p.imagem,
                   nome: it.produtos?.nome || p.nome,
                 },
@@ -430,7 +446,7 @@ export async function enrichOrderAndItems(
           });
         }
       } catch (e) {
-        console.warn("Erro ao complementar códigos e imagens dos produtos:", e);
+        console.warn("Erro ao complementar códigos e unidades dos produtos:", e);
       }
     }
   }
@@ -439,6 +455,9 @@ export async function enrichOrderAndItems(
   items = items.map((it: any) => ({
     ...it,
     codigo: it.codigo || it.produtos?.codigo || it.produto?.codigo || it.produto_codigo || it.cod || "-",
+    unidade_medida: formatUnidadeMedida(
+      it.unidade_medida || it.produtos?.unidade_medida || it.produto?.unidade_medida
+    ),
     produto_nome: it.produto_nome || it.produtos?.nome || it.produto?.nome || it.produto || "Produto Indisponível",
     imagem: it.imagem || it.produtos?.imagem || it.produto?.imagem || null,
   }));
@@ -492,12 +511,8 @@ export async function preloadLogos(): Promise<{ prime: string | null; plus: stri
 export async function generateOrderPdfDoc(
   order: OrderData,
   items: OrderItem[],
-  logos?: { prime?: string | null; plus?: string | null; icons?: any },
+  _logos?: { prime?: string | null; plus?: string | null; icons?: any },
 ): Promise<{ doc: jsPDF; blob: Blob; file: File; filename: string }> {
-  if (!logos) {
-    logos = await preloadLogos();
-  }
-
   // Buscar configurações da empresa
   let config: any = null;
   try {
@@ -508,34 +523,9 @@ export async function generateOrderPdfDoc(
     console.error("Erro ao buscar configuracoes da empresa para o PDF", e);
   }
 
-  // Load images
-  const toBase64 = (url: string): Promise<string | null> =>
-    fetch(url)
-      .then((r) => r.blob())
-      .then(
-        (blob) =>
-          new Promise<string | null>((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = () => resolve(null);
-            reader.readAsDataURL(blob);
-          }),
-      )
-      .catch(() => null);
-
-  for (const it of items) {
-    const imgUrl = (it as any).imagem || (it.produto as any)?.imagem || (it.produtos as any)?.imagem;
-    if (imgUrl) {
-      const b64 = await toBase64(imgUrl);
-      if (b64) {
-        (it as any)._imagemBase64 = b64;
-      }
-    }
-  }
-
   const isDAV = isOrderDav(order);
-  const docType = isDAV ? "ORÇAMENTO" : "PEDIDO";
   const num = getOrderNumber(order);
+  const numDisplay = num.padStart(6, "0");
   const filename = `${isDAV ? "orcamento" : "pedido"}_${num}.pdf`;
 
   const doc = new jsPDF({
@@ -546,410 +536,413 @@ export async function generateOrderPdfDoc(
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 10;
+  const margin = 8;
+  const contentW = pageWidth - margin * 2;
   let y = margin;
 
-  const colorDark = [23, 31, 30] as [number, number, number]; // #171F1E
-  const colorGold = [197, 160, 89] as [number, number, number]; // #C5A059
-  const colorGray = [243, 244, 246] as [number, number, number]; // #F3F4F6
+  doc.setDrawColor(0, 0, 0);
+  doc.setTextColor(0, 0, 0);
 
-  // 1. CABEÇALHO CLARO
-  // Logo Garden Prime
-  const primeLogo = logos?.prime || cachedLogos?.prime;
-  const logo02 = logos?.plus || cachedLogos?.plus;
+  // ── 1. CABEÇALHO EMPRESARIAL COMPACTO (ESTILO DAV) ────────────────────────────
+  const headerStartY = y;
 
-  if (primeLogo) {
-    try {
-      doc.addImage(primeLogo, "PNG", margin, y, 45, 15.2);
-    } catch {}
+  // Faixa 1: Título Legal
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10.5);
+  doc.text(
+    `DOCUMENTO AUXILIAR DE VENDA - ${isDAV ? "ORÇAMENTO" : "PEDIDO DE VENDA"}`,
+    pageWidth / 2,
+    y + 4.8,
+    { align: "center" },
+  );
+  doc.setFontSize(7.2);
+  doc.text(
+    "NÃO É DOCUMENTO FISCAL - NÃO É VÁLIDO COMO RECIBO E COMO GARANTIA DE MERCADORIA - NÃO COMPROVA PAGAMENTO",
+    pageWidth / 2,
+    y + 9.2,
+    { align: "center" },
+  );
+
+  y += 11.5;
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, pageWidth - margin, y);
+
+  // Faixa 2: Dados da Empresa Emitente
+  const razaoSocial = config?.razao_social || "GARDEN PLUS LTDA";
+  const nomeFantasia = config?.nome_fantasia || "GARDEN PRIME";
+  const cnpj = config?.cnpj || "50.387.381/0001-81";
+  const ie = config?.inscricao_estadual || "266031100110";
+  const tipoLog = config?.tipo_logradouro ? `${config.tipo_logradouro} ` : "";
+  const endRua = config?.endereco || "MATEUS RODRIGUES DA COSTA";
+  const endNum = config?.numero ? `, ${config.numero}` : "";
+  const endCompl = config?.complemento ? ` ${config.complemento}` : "";
+  const endBairro = config?.bairro ? ` - ${config.bairro}` : "";
+  const empresaEndereco = `${tipoLog}${endRua}${endNum}${endCompl}${endBairro}`;
+  const empresaCep = config?.cep ? `${config.cep} - ` : "";
+  const empresaCidadeUf = `${empresaCep}${config?.municipio || "Charqueada"} - ${config?.uf || "SP"}`;
+  const empresaFone = config?.celular || config?.telefone || "(19) 99930-8784";
+  const empresaEmail = config?.email_contato || "garden-plus@hotmail.com";
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.text(`${razaoSocial} - ${nomeFantasia}`, margin + 3, y + 4.2);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.text(`CNPJ: ${cnpj} - Insc. Estadual: ${ie}`, margin + 3, y + 8.0);
+  doc.text(doc.splitTextToSize(empresaEndereco, 125)[0], margin + 3, y + 11.6);
+  doc.text(empresaCidadeUf, margin + 3, y + 15.2);
+
+  // Direita da Faixa 2: Fone + Email (Página X/Y é inserida no final em todas as páginas)
+  const pageNumberY = y + 4.2;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.text(`Fone: ${empresaFone}`, pageWidth - margin - 3, y + 11.6, { align: "right" });
+  doc.text(empresaEmail, pageWidth - margin - 3, y + 15.2, { align: "right" });
+
+  y += 17.5;
+  doc.line(margin, y, pageWidth - margin, y);
+
+  // Faixa 3: Metadados do Pedido / DAV
+  const createdDate = order.created_at ? new Date(order.created_at) : new Date();
+  const dataEmissao = createdDate.toLocaleDateString("pt-BR");
+  const horaEmissao = createdDate.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+  let validadeStr: string;
+  if ((order as any).validade) {
+    validadeStr = new Date((order as any).validade).toLocaleDateString("pt-BR");
   } else {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
-    doc.text("GARDEN PRIME", margin, y + 8);
+    const base = new Date(createdDate);
+    base.setDate(base.getDate() + 30);
+    validadeStr = base.toLocaleDateString("pt-BR");
   }
 
-  // Logo 02 embaixo da Garden Prime (tamanho médio para bem grande)
-  if (logo02) {
-    try {
-      doc.addImage(logo02, "PNG", margin + 6, y + 16, 32, 14.1);
-    } catch {}
-  }
+  const vendedorNome = order.vendedor_nome
+    ? String(order.vendedor_nome).toUpperCase()
+    : "DIRETO";
 
-  // Divisor 1
-  const div1X = margin + 58;
-  doc.setDrawColor(colorGold[0], colorGold[1], colorGold[2]);
-  doc.setLineWidth(0.4);
-  doc.line(div1X, y + 1, div1X, y + 30);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.text(`Tipo: ${isDAV ? "Orçamento (DAV)" : "Pedido de Venda"}`, margin + 3, y + 4.0);
+  doc.text(`Vendedor: ${vendedorNome}`, margin + 3, y + 7.8);
+  doc.text(`Validade: ${validadeStr}`, margin + 3, y + 11.6);
 
-  // Info Empresa (negrito e preto bem definido)
+  const metaRightX = margin + 105;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.text(`${isDAV ? "DAV" : "DAV / Pedido"}:`, metaRightX, y + 4.8);
+  doc.setFontSize(9.5);
+  doc.text(numDisplay, pageWidth - margin - 3, y + 4.8, { align: "right" });
+
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
+  doc.text(`Data: ${dataEmissao}`, metaRightX, y + 10.6);
+  doc.text(`Hora: ${horaEmissao}`, pageWidth - margin - 3, y + 10.6, { align: "right" });
+
+  y += 13.8;
+  doc.setLineWidth(0.35);
+  doc.rect(margin, headerStartY, contentW, y - headerStartY);
+
+  y += 2.2;
+
+  // ── 2. IDENTIFICAÇÃO DO SOLICITANTE (DADOS DO CLIENTE) ────────────────────────
+  const c = order.cliente || order.clientes || ({} as any);
+  const clientStartY = y;
+
+  const nomeStr = String(c.nome || "-");
+  const enderecoLimpo = formatClientAddressLine(c.endereco, c.numero);
+  const cidadeUfStr = `${c.cidade || "-"}${c.uf && c.uf !== "-" ? ` / ${c.uf}` : ""}`;
+  const freteInfo = order.frete_tipo || (order as any).frete || "Retirada";
+  const prazoInfo = order.prazo_entrega || (order as any).prazo || "Imediato";
+  const pagInfo = order.condicao_pagamento || order.metodo_pagamento || "Não informado";
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  const nomeLines = doc.splitTextToSize(nomeStr, 84).slice(0, 2);
+  const endLines = doc.splitTextToSize(enderecoLimpo, 84).slice(0, 2);
+  const extraNomeH = nomeLines.length > 1 ? 3.5 : 0;
+  const extraEndH = endLines.length > 1 ? 3.5 : 0;
+
+  const clientBoxH = 27.5 + extraNomeH + extraEndH;
+  doc.setLineWidth(0.35);
+  doc.rect(margin, clientStartY, contentW, clientBoxH);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.2);
+  doc.text("Identificação do Solicitante", margin + 3, clientStartY + 4.4);
+
+  const lblX1 = margin + 3;
+  const valX1 = margin + 21;
+  const lblX2 = margin + 110;
+  const valX2 = margin + 131;
+  const maxRightW = pageWidth - margin - 3 - valX2;
+
+  let cy = clientStartY + 9.0;
+  const drawField = (lx: number, vx: number, label: string, val: string | string[], rowY: number) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.text(label, lx, rowY);
+    doc.setFont("helvetica", "normal");
+    doc.text(val, vx, rowY);
+  };
+
+  // Linha 1
+  drawField(lblX1, valX1, "Cliente:", nomeLines, cy);
+  drawField(lblX2, valX2, "CPF/CNPJ:", doc.splitTextToSize(String(c.cpf_cnpj || "-"), maxRightW)[0], cy);
+  cy += 4.0 + extraNomeH;
+
+  // Linha 2
+  drawField(lblX1, valX1, "Endereço:", endLines, cy);
+  drawField(lblX2, valX2, "Bairro:", doc.splitTextToSize(String(c.bairro || "-"), maxRightW)[0], cy);
+  cy += 4.0 + extraEndH;
+
+  // Linha 3
+  drawField(lblX1, valX1, "CEP:", String(c.cep || "-"), cy);
+  drawField(lblX2, valX2, "Cidade/UF:", doc.splitTextToSize(cidadeUfStr, maxRightW)[0], cy);
+  cy += 4.0;
+
+  // Linha 4
+  drawField(lblX1, valX1, "Telefone:", String(c.telefone || "-"), cy);
+  drawField(lblX2, valX2, "Pagamento:", doc.splitTextToSize(pagInfo, maxRightW)[0], cy);
+  cy += 4.0;
+
+  // Linha 5
+  drawField(lblX1, valX1, "E-mail:", doc.splitTextToSize(String(c.email || "-"), 84)[0], cy);
+  drawField(lblX2, valX2, "Frete/Prazo:", doc.splitTextToSize(`${freteInfo} | ${prazoInfo}`, maxRightW)[0], cy);
+
+  y = clientStartY + clientBoxH + 4.5;
+
+  // ── 3. RELAÇÃO DE PRODUTOS / SERVIÇOS ─────────────────────────────────────────
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
   doc.setTextColor(0, 0, 0);
-  const infoX = div1X + 4;
-  doc.text(`CNPJ: ${config?.cnpj || "50.387.381/0001-81"}`, infoX, y + 5);
-  doc.text(`Inscr. Estadual: ${config?.inscricao_estadual || "266031100110"}`, infoX, y + 9);
-  
-  const tipo = config?.tipo_logradouro ? config.tipo_logradouro + " " : "";
-  const end = config?.endereco || "MATEUS RODRIGUES DA COSTA";
-  const numero = config?.numero ? ", " + config.numero : "";
-  const compl = config?.complemento ? " " + config.complemento : "";
-  const bairro = config?.bairro ? ", " + config.bairro : "";
-  doc.text(`${tipo}${end}${numero}${compl}${bairro}`, infoX, y + 13);
-  
-  const mun = config?.municipio || "Charqueada";
-  const uf = config?.uf || "SP";
-  const cep = config?.cep ? " - CEP " + config.cep : "";
-  doc.text(`${mun} - ${uf}${cep}`, infoX, y + 17);
-  
-  const cel = config?.celular || config?.telefone || "(19) 99930-8784";
-  doc.text(cel, infoX, y + 21);
-  
-  doc.text(config?.email_contato || "garden-plus@hotmail.com", infoX, y + 25);
+  doc.text("Relação de Produtos/Serviços", margin, y);
+  y += 1.8;
 
-  // Slogan Top Right
-  doc.setFont("times", "bolditalic");
-  doc.setFontSize(14);
-  doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
-  doc.text("Mais verde", pageWidth - margin - 40, y + 8);
-  doc.text("para um futuro", pageWidth - margin - 40, y + 13);
-  doc.text("melhor!", pageWidth - margin - 35, y + 18);
+  const tableBody = items.map((it) => {
+    const nome =
+      it.produto_nome ||
+      it.produto?.nome ||
+      it.produtos?.nome ||
+      (it as any).produto ||
+      "Produto Indisponível";
+    const codigo =
+      it.codigo ||
+      it.produto?.codigo ||
+      it.produtos?.codigo ||
+      (it as any).produto_codigo ||
+      (it as any).cod ||
+      "-";
+    const med = formatUnidadeMedida(
+      it.unidade_medida || it.produto?.unidade_medida || it.produtos?.unidade_medida,
+    );
+    const qtdNum = Number(it.quantidade || it.qtd || 1);
+    const unitNum = Number(it.valor_unitario || 0);
+    const totNum = Number(it.total ?? it.subtotal ?? qtdNum * unitNum);
+    const itemDiscount = Math.max(0, qtdNum * unitNum - totNum);
 
-  y += 33;
+    return [
+      String(codigo),
+      String(nome),
+      formatBrDecimal(qtdNum),
+      med,
+      formatBrDecimal(unitNum),
+      formatBrDecimal(itemDiscount),
+      formatBrDecimal(totNum),
+    ];
+  });
 
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin, bottom: 14 },
+    tableWidth: contentW,
+    head: [["Código", "Descrição", "Qtd", "Med", "Unitário", "Desconto", "Total"]],
+    body: tableBody,
+    theme: "plain",
+    headStyles: {
+      fillColor: [243, 244, 246],
+      textColor: [0, 0, 0],
+      fontStyle: "bold",
+      valign: "middle",
+      fontSize: 7.5,
+      cellPadding: { top: 1.8, bottom: 1.8, left: 1.5, right: 1.5 },
+      lineWidth: { top: 0.3, bottom: 0.3 },
+      lineColor: [0, 0, 0],
+    },
+    styles: {
+      fontSize: 7.5,
+      cellPadding: { top: 1.4, bottom: 1.4, left: 1.5, right: 1.5 },
+      valign: "middle",
+      overflow: "linebreak",
+      fontStyle: "normal",
+      textColor: [0, 0, 0],
+    },
+    columnStyles: {
+      0: { halign: "left", cellWidth: 16, fontStyle: "bold" },
+      1: { halign: "left" },
+      2: { halign: "right", cellWidth: 19 },
+      3: { halign: "center", cellWidth: 11 },
+      4: { halign: "right", cellWidth: 20 },
+      5: { halign: "right", cellWidth: 18 },
+      6: { halign: "right", cellWidth: 24, fontStyle: "bold" },
+    },
+    alternateRowStyles: {
+      fillColor: [250, 250, 250],
+    },
+  });
+
+  y = (doc as any).lastAutoTable.finalY + 4;
+
+  // ── 4. CONDIÇÕES, VENCIMENTOS, TOTAIS E ASSINATURAS ───────────────────────────
   const orderTotalNum = Number(order.valor_total || order.total || order.subtotal || 0);
+  const subtotalNum = Number(order.subtotal || orderTotalNum);
+  const descontoNum = Number(order.desconto_valor || 0);
+  const freteNum = Number(order.frete_valor || 0);
+
   let orderVenc = (order as any).vencimentos;
   if (!Array.isArray(orderVenc) || orderVenc.length === 0) {
     if (order.condicao_pagamento && order.condicao_pagamento.trim() !== "") {
       orderVenc = calcularVencimentosPadrao(
         order.condicao_pagamento,
         order.created_at,
-        orderTotalNum
+        orderTotalNum,
       );
     }
   }
-  const hasVencList = Array.isArray(orderVenc) && orderVenc.length > 0;
-  const numVenc = hasVencList ? orderVenc.length : 1;
-  const extraHeight = (numVenc > 1 ? (numVenc - 1) * 3.8 : 0) + 4.2;
+  const vencList = Array.isArray(orderVenc) ? orderVenc : [];
+  const vencDisplayLines: string[] = vencList.map((v: any, idx: number) => {
+    const d = typeof v === "object" && v !== null ? v.data : v;
+    const clean = (d || "").split("T")[0].split("-");
+    const dtBr = clean.length === 3 ? `${clean[2]}/${clean[1]}/${clean[0]}` : String(d || "");
+    const valParcela = calcularValorParcela(v, idx, vencList.length, orderTotalNum);
+    const valStr = valParcela > 0 ? ` — R$ ${formatBrDecimal(valParcela)}` : "";
+    return `${idx + 1}ª: ${dtBr}${valStr}`;
+  });
 
-  // 2. BLOCO ESCURO (TÍTULO)
-  doc.setFillColor(colorDark[0], colorDark[1], colorDark[2]);
-  doc.roundedRect(margin, y, pageWidth - margin * 2, 24.5 + extraHeight, 2, 2, "F");
+  const obsLines = order.observacoes
+    ? doc.splitTextToSize(`Obs.: ${order.observacoes}`, 114).slice(0, 3)
+    : [];
+  const vencRowsCount = Math.max(1, Math.ceil(vencDisplayLines.length / 2));
+  const summaryH = Math.max(24, 15 + vencRowsCount * 3.8 + obsLines.length * 3.6);
+  const neededBottomH = summaryH + 24;
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(15);
-  doc.setTextColor(255, 255, 255);
-  doc.text(docType, margin + 6, y + 10.5);
-  doc.setFontSize(9.5);
-  doc.setFont("helvetica", "bold");
-  doc.text(`DAV Nº: ${num}`, margin + 6, y + 16.5);
-
-  const dataEmissao = new Date(order.created_at).toLocaleDateString("pt-BR");
-  const horaEmissao = new Date(order.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  
-  // Emissão
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.5);
-  doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
-  doc.text("Emissão", margin + 64, y + 9);
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(255, 255, 255);
-  doc.text(`${dataEmissao} às ${horaEmissao}`, margin + 64, y + 14.5);
-
-  // Validade – padrão: 30 dias a partir da emissão (exibida embaixo das parcelas no mesmo modal)
-  let validadeStr: string;
-  if ((order as any).validade) {
-    validadeStr = new Date((order as any).validade).toLocaleDateString("pt-BR");
-  } else {
-    const base = order.created_at ? new Date(order.created_at) : new Date();
-    base.setDate(base.getDate() + 30);
-    validadeStr = base.toLocaleDateString("pt-BR");
+  if (y + neededBottomH > pageHeight - 10) {
+    doc.addPage();
+    y = margin + 4;
   }
 
-  // Box Preto de Condições Comerciais com campo de Vencimento, Valor da Parcela e Validade
-  const boxW = 82;
-  const boxX = pageWidth - margin - boxW;
-  doc.setFillColor(0, 0, 0);
-  doc.roundedRect(boxX, y + 1.2, boxW - 1, 22 + extraHeight, 1, 1, "F");
-  
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.5);
-  doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
-  doc.text("CONDIÇÕES COMERCIAIS", boxX + 3, y + 5.2);
-  doc.setTextColor(255, 255, 255);
-  const pagTrunc = doc.splitTextToSize(`Pagamento: ${order.condicao_pagamento || "Não informado"}`, boxW - 6)[0];
-  doc.text(pagTrunc, boxX + 3, y + 9.2);
+  const splitX = margin + 122;
+  doc.setLineWidth(0.35);
+  doc.rect(margin, y, contentW, summaryH);
+  doc.line(splitX, y, splitX, y + summaryH);
 
-  let validadeY = y + 18.0;
-
-  if (hasVencList && numVenc > 1) {
-    // Múltiplos vencimentos organizados 1 EM BAIXO DO OUTRO com valor de cada parcela
-    doc.text("Vencimentos:", boxX + 3, y + 13.5);
-    const vBoxX = boxX + 20;
-    const vBoxW = 58;
-    const vBoxH = numVenc * 3.6 + 0.8;
-    doc.setFillColor(255, 255, 255);
-    doc.roundedRect(vBoxX, y + 10.7, vBoxW, vBoxH, 0.6, 0.6, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.5);
-    doc.setTextColor(10, 10, 10);
-
-    orderVenc.forEach((v: any, idx: number) => {
-      const d = typeof v === "object" && v !== null ? v.data : v;
-      const clean = (d || "").split("T")[0].split("-");
-      const dtBr = clean.length === 3 ? `${clean[2]}/${clean[1]}/${clean[0]}` : d;
-      const valParcela = calcularValorParcela(v, idx, numVenc, orderTotalNum);
-      const valStr = valParcela > 0 ? `R$ ${valParcela.toFixed(2).replace(".", ",")}` : "";
-      const lineY = y + 13.5 + (idx * 3.6);
-      doc.text(`${idx + 1}ª: ${dtBr}`, vBoxX + 2, lineY);
-      if (valStr) {
-        doc.text(valStr, vBoxX + vBoxW - 2, lineY, { align: "right" });
-      }
-    });
-
-    validadeY = y + 10.7 + vBoxH + 3.3;
-  } else {
-    // 1 Vencimento ou campo para preenchimento a mão
-    doc.text("Vencimento:", boxX + 3, y + 13.5);
-    const vBoxX = boxX + 20;
-    const vBoxW = 58;
-    doc.setFillColor(255, 255, 255);
-    doc.roundedRect(vBoxX, y + 10.9, vBoxW, 3.8, 0.5, 0.5, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.5);
-    doc.setTextColor(20, 20, 20);
-
-    if (hasVencList && numVenc === 1) {
-      const d = typeof orderVenc[0] === "object" && orderVenc[0] !== null ? orderVenc[0].data : orderVenc[0];
-      const clean = (d || "").split("T")[0].split("-");
-      const dtBr = clean.length === 3 ? `${clean[2]}/${clean[1]}/${clean[0]}` : d;
-      const valParcela = calcularValorParcela(orderVenc[0], 0, 1, orderTotalNum);
-      const valStr = valParcela > 0 ? `R$ ${valParcela.toFixed(2).replace(".", ",")}` : "";
-      doc.text(dtBr, vBoxX + 2, y + 13.6);
-      if (valStr) {
-        doc.text(valStr, vBoxX + vBoxW - 2, y + 13.6, { align: "right" });
-      }
-    } else {
-      doc.text("___ / ___ / ______", vBoxX + vBoxW / 2, y + 13.6, { align: "center" });
-    }
-    validadeY = y + 18.0;
-  }
-
-  // Validade embaixo das parcelas no mesmo modal
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.5);
-  doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
-  doc.text(`Validade: ${validadeStr}`, boxX + 3, validadeY);
-
-  // Frete e Prazo
-  const freteY = validadeY + 3.6;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.5);
-  doc.setTextColor(255, 255, 255);
-  const freteInfo = order.frete_tipo || (order as any).frete || "Retirada";
-  const prazoInfo = order.prazo_entrega || (order as any).prazo || "Imediato";
-  doc.text(`Frete: ${freteInfo} | Prazo: ${prazoInfo}`, boxX + 3, freteY);
-
-  y += (29.5 + extraHeight);
-
-  // 3. DADOS DO CLIENTE
-  const c = order.cliente || order.clientes || ({} as any);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.2);
-  const nomeTrunc = doc.splitTextToSize(String(c.nome || "-"), 56)[0] || "-";
-  const endLines = doc.splitTextToSize(String(c.endereco || "-"), 108);
-  const extraEndLines = endLines.length > 1 ? 1 : 0;
-  const clientBoxH = 36 + extraEndLines * 4.2;
-
-  doc.setFillColor(colorGray[0], colorGray[1], colorGray[2]);
-  doc.roundedRect(margin, y, pageWidth - margin * 2, clientBoxH, 2, 2, "F");
-  
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.5);
-  doc.setTextColor(154, 116, 36);
-  doc.text("DADOS", margin + 5, y + 6);
-  const dadosTitleWidth = doc.getTextWidth("DADOS ");
-  doc.setTextColor(0, 0, 0);
-  doc.text("DO CLIENTE", margin + 5 + dadosTitleWidth, y + 6);
-  if (order.vendedor_nome) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(154, 116, 36);
-    doc.text(`VENDEDOR: ${String(order.vendedor_nome).toUpperCase()}`, pageWidth - margin - 55, y + 6, { align: "right" });
-  }
-  
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.2);
-  doc.setTextColor(0, 0, 0);
-  
-  const labelX1 = margin + 5;
-  const valX1 = margin + 25;
-  const labelX2 = margin + 85;
-  const valX2 = margin + 104;
-
-  let cy = y + 12.5;
-  doc.text("Nome:", labelX1, cy); doc.text(nomeTrunc, valX1, cy);
-  doc.text("Bairro:", labelX2, cy); doc.text(String(c.bairro || "-"), valX2, cy);
-  cy += 4.6;
-  doc.text("CNPJ/CPF:", labelX1, cy); doc.text(String(c.cpf_cnpj || "-"), valX1, cy);
-  doc.text("Cidade/UF:", labelX2, cy); doc.text(`${c.cidade || "-"}${c.uf && c.uf !== "-" ? ` / ${c.uf}` : ""}`, valX2, cy);
-  cy += 4.6;
-  doc.text("Telefone:", labelX1, cy); doc.text(String(c.telefone || "-"), valX1, cy);
-  doc.text("CEP:", labelX2, cy); doc.text(String(c.cep || "-"), valX2, cy);
-  cy += 4.6;
-  doc.text("E-mail:", labelX1, cy); doc.text(String(c.email || "-"), valX1, cy);
-  cy += 4.6;
-  doc.text("Endereço:", labelX1, cy);
-  doc.text(endLines.slice(0, 2), valX1, cy);
-
-  // Obrigado box
-  const obX = pageWidth - margin - 50;
-  doc.setFillColor(250, 250, 245);
-  doc.roundedRect(obX, y + 5, 45, 26, 1, 1, "F");
+  // Esquerda: Pagamento, Vencimentos, Frete, Obs
+  let ly = y + 4.5;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
-  doc.setTextColor(154, 116, 36);
-  doc.text("Obrigado pela", obX + 15, y + 11);
-  doc.text("sua confiança!", obX + 15, y + 15);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(6);
-  doc.setTextColor(0, 0, 0);
-  doc.text("Estamos à disposição", obX + 15, y + 21);
-  doc.text("para lhe atender sempre!", obX + 15, y + 24);
+  doc.text("Condições de Pagamento / Vencimentos", margin + 3, ly);
+  ly += 4.2;
 
-  y += clientBoxH + 6;
+  doc.setFont("helvetica", "normal");
+  doc.text(doc.splitTextToSize(`Pagamento: ${pagInfo}`, 116)[0], margin + 3, ly);
+  ly += 3.8;
 
-  // 4. PRODUTOS
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.5);
-  doc.setTextColor(0, 0, 0);
-  doc.text("PRODUTOS", margin + 10, y + 2);
-  y += 6;
-
-  const tableBody = items.map((it) => {
-    const nome = it.produto_nome || it.produto?.nome || it.produtos?.nome || (it as any).produto || "Produto Indisponível";
-    const codigo = it.codigo || it.produto?.codigo || it.produtos?.codigo || (it as any).produto_codigo || (it as any).cod || "-";
-    const qtd = Number(it.quantidade || it.qtd || 1).toString();
-    const vUnit = `R$ ${Number(it.valor_unitario || 0).toFixed(2).replace(".", ",")}`;
-    const vTotal = `R$ ${Number(it.total || it.subtotal || 0).toFixed(2).replace(".", ",")}`;
-    return [String(codigo), "", nome, qtd, vUnit, vTotal, (it as any)._imagemBase64 || ""];
-  });
-
-  autoTable(doc, {
-    startY: y,
-    margin: { left: margin, right: margin },
-    tableWidth: pageWidth - margin * 2,
-    head: [["Código", "", "Produto", "Qtd", "Vlr. Unit.", "Vlr. Total"]],
-    body: tableBody,
-    theme: "plain",
-    headStyles: {
-      fillColor: colorDark,
-      textColor: [255, 255, 255],
-      fontStyle: "bold",
-      halign: "center",
-      valign: "middle",
-      fontSize: 8,
-    },
-    styles: {
-      fontSize: 7.5,
-      cellPadding: 3,
-      valign: "middle",
-      overflow: "linebreak",
-      fontStyle: "bold",
-      textColor: [0, 0, 0],
-    },
-    columnStyles: {
-      0: { halign: "center", cellWidth: 15, fontStyle: "bold" },
-      1: { cellWidth: 14 }, // Imagem
-      2: { halign: "left", fontStyle: "bold" }, // Produto (flex - ocupa o restante)
-      3: { halign: "center", cellWidth: 12, fontStyle: "bold" }, // Qtd
-      4: { halign: "right", cellWidth: 22, fontStyle: "bold" }, // Unit
-      5: { halign: "right", cellWidth: 27, fontStyle: "bold" }, // Total
-    },
-    alternateRowStyles: {
-      fillColor: [248, 250, 252],
-    },
-    didDrawCell: (data) => {
-      // Draw image in column index 1
-      if (data.section === "body" && data.column.index === 1) {
-        const rowData = data.row.raw as string[];
-        const imgBase64 = rowData[6];
-        if (imgBase64) {
-          try {
-            doc.addImage(imgBase64, "JPEG", data.cell.x + 2, data.cell.y + 1, 10, 10);
-          } catch {}
-        }
+  if (vencDisplayLines.length > 0) {
+    for (let i = 0; i < vencDisplayLines.length; i += 2) {
+      const leftItem = vencDisplayLines[i];
+      const rightItem = vencDisplayLines[i + 1];
+      doc.setFont("helvetica", "bold");
+      doc.text(leftItem, margin + 3, ly);
+      if (rightItem) {
+        doc.text(rightItem, margin + 62, ly);
       }
-    },
-    willDrawCell: (_data) => {
-      // hook disponível para customizações futuras
-    },
-  });
+      ly += 3.7;
+    }
+  } else {
+    doc.text("Vencimento: ___ / ___ / ______", margin + 3, ly);
+    ly += 3.7;
+  }
 
-  y = (doc as any).lastAutoTable.finalY + 10;
+  doc.setFont("helvetica", "normal");
+  doc.text(`Frete: ${freteInfo}   |   Prazo: ${prazoInfo}`, margin + 3, ly);
+  if (obsLines.length > 0) {
+    ly += 3.7;
+    doc.text(obsLines, margin + 3, ly);
+  }
 
-  // 5. TOTAL
-  const totW = 60;
-  const totX = pageWidth - margin - totW;
+  // Direita: Totais
+  let ry = y + 4.8;
+  const rLblX = splitX + 3;
+  const rValX = pageWidth - margin - 3;
 
-  doc.setFillColor(colorGold[0], colorGold[1], colorGold[2]);
-  doc.rect(totX, y, totW, 9, "F");
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.text("Subtotal:", rLblX, ry);
+  doc.text(`R$ ${formatBrDecimal(subtotalNum)}`, rValX, ry, { align: "right" });
+  ry += 4.2;
+
+  if (descontoNum > 0) {
+    doc.text("Desconto:", rLblX, ry);
+    doc.text(`- R$ ${formatBrDecimal(descontoNum)}`, rValX, ry, { align: "right" });
+    ry += 4.2;
+  }
+
+  if (freteNum > 0) {
+    doc.text("Frete:", rLblX, ry);
+    doc.text(`R$ ${formatBrDecimal(freteNum)}`, rValX, ry, { align: "right" });
+    ry += 4.2;
+  }
+
+  const totalBarH = 8;
+  const totalBarY = y + summaryH - totalBarH;
+  doc.setFillColor(243, 244, 246);
+  doc.rect(splitX, totalBarY, pageWidth - margin - splitX, totalBarH, "F");
+  doc.setLineWidth(0.3);
+  doc.line(splitX, totalBarY, pageWidth - margin, totalBarY);
+  doc.setLineWidth(0.35);
+  doc.rect(margin, y, contentW, summaryH);
+
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.5);
-  doc.setTextColor(255, 255, 255);
-  doc.text("Total", totX + 2, y + 6);
-  const vTot = `R$ ${Number(order.valor_total || order.total || order.subtotal || 0).toFixed(2).replace(".", ",")}`;
-  doc.text(vTot, totX + totW - 2, y + 6, { align: "right" });
+  doc.text("TOTAL:", rLblX, totalBarY + 5.4);
+  doc.text(`R$ ${formatBrDecimal(orderTotalNum)}`, rValX, totalBarY + 5.4, { align: "right" });
 
-  y += 22;
+  // Assinaturas
+  y += summaryH + 15;
+  doc.setLineWidth(0.35);
+  doc.line(margin + 8, y, margin + 82, y);
+  doc.line(pageWidth - margin - 82, y, pageWidth - margin - 8, y);
 
-  // 6. ASSINATURAS
-  doc.setLineWidth(0.4);
-  doc.setDrawColor(0, 0, 0);
-  doc.line(margin + 5, y, margin + 65, y);
-  doc.line(margin + 80, y, margin + 140, y);
-  
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.5);
-  doc.setTextColor(0, 0, 0);
-  const vendSignLabel = order.vendedor_nome ? `ASSINATURA DO VENDEDOR (${order.vendedor_nome.toUpperCase()})` : "ASSINATURA DO VENDEDOR";
-  doc.text(vendSignLabel, margin + 35, y + 4, { align: "center" });
-  doc.text("ASSINATURA DO CLIENTE", margin + 110, y + 4, { align: "center" });
-  
-  // Caixa Este doc nao possui valor fiscal
-  doc.setFillColor(250, 250, 250);
-  doc.roundedRect(margin + 150, y - 5, 40, 12, 1, 1, "F");
-  doc.setDrawColor(colorGold[0], colorGold[1], colorGold[2]);
-  doc.roundedRect(margin + 150, y - 5, 40, 12, 1, 1, "S");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(5);
-  doc.setTextColor(50, 50, 50);
-  doc.text("Este documento não possui", margin + 155, y - 1);
-  doc.text("valor fiscal, é apenas um", margin + 155, y + 2);
-  doc.text("Documento Auxiliar de Venda.", margin + 155, y + 5);
+  doc.setFontSize(7);
+  const vendSignLabel = order.vendedor_nome
+    ? `ASSINATURA DO VENDEDOR (${order.vendedor_nome.toUpperCase()})`
+    : "ASSINATURA DO VENDEDOR";
+  doc.text(vendSignLabel, margin + 45, y + 4, { align: "center" });
+  doc.text("ASSINATURA DO CLIENTE", pageWidth - margin - 45, y + 4, { align: "center" });
 
-  // 7. RODAPÉ ESCURO
-  const footerH = 20;
-  doc.setFillColor(colorDark[0], colorDark[1], colorDark[2]);
-  doc.rect(0, pageHeight - footerH, pageWidth, footerH, "F");
-  
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.5);
-  doc.setTextColor(220, 220, 220);
-  doc.text("Qualidade em cada detalhe", 25, pageHeight - 10);
-  doc.text("Entrega rápida e segura", 75, pageHeight - 10);
-  doc.text("Produtos selecionados para o seu jardim", 125, pageHeight - 10);
-  
-  if (primeLogo) {
-    try {
-      doc.addImage(primeLogo, "PNG", pageWidth - 55, pageHeight - 16, 26, 7);
-    } catch {}
-  }
-  if (logo02) {
-    try {
-      doc.addImage(logo02, "PNG", pageWidth - 28, pageHeight - 16, 20, 8.8);
-    } catch {}
+  // Numeração de páginas e rodapé discreto
+  const totalPages = doc.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(0, 0, 0);
+    const pgY = p === 1 ? pageNumberY : margin + 3;
+    doc.text(`Página ${p}/${totalPages}`, pageWidth - margin - 3, pgY, { align: "right" });
+
+    doc.setFontSize(6.5);
+    doc.setTextColor(90, 90, 90);
+    doc.text(
+      `Documento Auxiliar de Venda — Sem valor fiscal.`,
+      pageWidth / 2,
+      pageHeight - 5,
+      { align: "center" },
+    );
   }
 
   const blob = doc.output("blob");

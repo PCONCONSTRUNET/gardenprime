@@ -1,10 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { GardenPrimeLogo } from "@/components/garden-prime-logo";
-import { Printer, ArrowLeft, Loader2, FileText, Calendar, Clock, Handshake, Package, User } from "lucide-react";
+import { Printer, ArrowLeft, Loader2 } from "lucide-react";
 import { WhatsAppIcon, shareOrderWhatsApp } from "@/lib/order-pdf";
-import { formatarVencimentosResumo, formatarDataBr, calcularVencimentosPadrao, calcularValorParcela } from "@/lib/utils";
+import {
+  formatBrDecimal,
+  formatClientAddressLine,
+  formatUnidadeMedida,
+  formatarDataBr,
+  calcularVencimentosPadrao,
+  calcularValorParcela,
+} from "@/lib/utils";
 
 export const Route = createFileRoute("/orcamento/$id")({
   head: () => ({ meta: [{ title: "Orçamento (DAV) - Impressão" }] }),
@@ -83,27 +89,21 @@ function ImprimirDAV() {
           d.cidade = cli.cidade || d.cidade;
           d.uf = cli.uf || d.uf;
           d.cep = cli.cep || d.cep;
-          d.numero = cli.numero || d.numero;
+          d.cliente_numero = cli.numero || d.cliente_numero;
           d.email = cli.email || d.cliente_email || d.email;
-          let endBase = d.cliente_endereco || cli.endereco || "";
-          if (cli.numero && endBase && !endBase.includes(String(cli.numero))) {
-            endBase = `${endBase}, Nº ${cli.numero}`;
-          }
-          if (cli.cep && endBase && !endBase.toUpperCase().includes("CEP") && !endBase.includes(String(cli.cep))) {
-            endBase = `${endBase} - CEP: ${cli.cep}`;
-          } else if (cli.cep && !endBase) {
-            endBase = `CEP: ${cli.cep}`;
-          }
-          d.cliente_endereco = endBase;
+          d.cliente_endereco = formatClientAddressLine(d.cliente_endereco || cli.endereco, d.cliente_numero);
+        } else {
+          d.cliente_endereco = formatClientAddressLine(d.cliente_endereco, d.cliente_numero);
         }
         setDav(d);
         const { data: i } = await supabase
           .from("dav_items")
-          .select("*, produto:produtos(nome, codigo, imagem)")
+          .select("*, produto:produtos(nome, codigo, unidade_medida, imagem)")
           .eq("dav_id", d.id);
         if (i) {
           itemsData = i.map((item) => ({
             codigo: item.codigo || item.produto?.codigo,
+            unidade_medida: formatUnidadeMedida(item.produto?.unidade_medida || item.unidade_medida),
             produto: item.produto?.nome || item.produto || "Produto sem nome",
             imagem: item.produto?.imagem,
             qtd: item.qtd || item.quantidade,
@@ -113,15 +113,7 @@ function ImprimirDAV() {
         }
       } else if (v) {
         const cli = v.cliente;
-        let enderecoFormatado = cli?.endereco || "";
-        if (cli?.numero && enderecoFormatado && !enderecoFormatado.includes(String(cli.numero))) {
-          enderecoFormatado = `${enderecoFormatado}, Nº ${cli.numero}`;
-        }
-        if (cli?.cep && enderecoFormatado && !enderecoFormatado.toUpperCase().includes("CEP") && !enderecoFormatado.includes(String(cli.cep))) {
-          enderecoFormatado = `${enderecoFormatado} - CEP: ${cli.cep}`;
-        } else if (cli?.cep && !enderecoFormatado) {
-          enderecoFormatado = `CEP: ${cli.cep}`;
-        }
+        const enderecoFormatado = formatClientAddressLine(cli?.endereco, cli?.numero);
 
         d = {
           id: v.id,
@@ -130,7 +122,7 @@ function ImprimirDAV() {
           cliente_nome: cli?.nome,
           cliente_cnpj: cli?.cpf_cnpj,
           cliente_telefone: cli?.telefone,
-          cliente_endereco: enderecoFormatado || null,
+          cliente_endereco: enderecoFormatado === "-" ? null : enderecoFormatado,
           bairro: cli?.bairro || null,
           cidade: cli?.cidade || null,
           uf: cli?.uf || null,
@@ -142,6 +134,9 @@ function ImprimirDAV() {
           desconto_valor: v.desconto_valor || 0,
           desconto_percentual: v.desconto_percentual || 0,
           frete_valor: v.frete_valor || 0,
+          frete_tipo: v.frete_tipo || "Retirada",
+          prazo_entrega: v.prazo_entrega || "Imediato",
+          observacoes: v.observacoes || null,
           total: v.valor_total,
           vendedor: v.vendedor?.nome || "",
           emissor_nome: "GARDEN PLUS LTDA",
@@ -152,12 +147,13 @@ function ImprimirDAV() {
 
         const { data: vi } = await supabase
           .from("vendas_itens")
-          .select("*, produto:produtos(nome, codigo, imagem)")
+          .select("*, produto:produtos(nome, codigo, unidade_medida, imagem)")
           .eq("venda_id", v.id);
 
         if (vi) {
           itemsData = vi.map((item) => ({
             codigo: item.produto?.codigo || item.codigo,
+            unidade_medida: formatUnidadeMedida(item.produto?.unidade_medida || item.unidade_medida),
             produto: item.produto?.nome || item.produto_nome || "Produto sem nome",
             imagem: item.produto?.imagem,
             qtd: item.quantidade,
@@ -187,6 +183,7 @@ function ImprimirDAV() {
   const horaDAV = new Date(dav.created_at).toLocaleTimeString("pt-BR", {
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
   });
 
   const validadeStr = dav.validade
@@ -196,6 +193,59 @@ function ImprimirDAV() {
         d.setDate(d.getDate() + 30);
         return d.toLocaleDateString("pt-BR");
       })();
+
+  const numDocDisplay =
+    dav.numero !== undefined && dav.numero !== null
+      ? String(dav.numero).padStart(6, "0")
+      : dav.id
+        ? dav.id.substring(0, 6).toUpperCase()
+        : "000001";
+
+  const razaoSocial = config?.razao_social || "GARDEN PLUS LTDA";
+  const nomeFantasia = config?.nome_fantasia || "GARDEN PRIME";
+  const empresaEndereco = [
+    [config?.tipo_logradouro, config?.endereco || "MATEUS RODRIGUES DA COSTA"]
+      .filter(Boolean)
+      .join(" "),
+    config?.numero,
+    config?.complemento,
+    config?.bairro,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const empresaCepCidadeUf = [
+    config?.cep,
+    `${config?.municipio || "Charqueada"} - ${config?.uf || "SP"}`,
+  ]
+    .filter(Boolean)
+    .join(" - ");
+  const empresaFone = config?.celular || config?.telefone || "(19) 99930-8784";
+  const empresaEmail = config?.email_contato || "garden-plus@hotmail.com";
+
+  const clienteEmail = dav.rawVenda?.cliente?.email || dav.cliente_email || dav.email || "-";
+  const clienteBairro = dav.rawVenda?.cliente?.bairro || dav.bairro || "-";
+  const clienteCidade = dav.rawVenda?.cliente?.cidade || dav.cidade || "-";
+  const clienteUf = dav.rawVenda?.cliente?.uf || dav.uf || "-";
+  const clienteCep = dav.rawVenda?.cliente?.cep || dav.cep || "-";
+  const clienteEndereco = formatClientAddressLine(
+    dav.cliente_endereco || dav.rawVenda?.cliente?.endereco,
+    dav.rawVenda?.cliente?.numero || dav.cliente_numero,
+  );
+  const freteInfo = dav.frete_tipo || "Retirada";
+  const prazoInfo = dav.prazo_entrega || "Imediato";
+  const pagInfo = dav.condicao_pagamento || "Não informado";
+
+  const totalDoc = Number(dav.total || dav.valor_total || dav.subtotal || 0);
+  const subtotalDoc = Number(dav.subtotal || totalDoc);
+  const descontoDoc = Number(dav.desconto_valor || 0);
+  const freteDoc = Number(dav.frete_valor || 0);
+
+  const vencList =
+    Array.isArray(dav.vencimentos) && dav.vencimentos.length > 0
+      ? dav.vencimentos
+      : dav.condicao_pagamento && dav.condicao_pagamento.trim() !== ""
+        ? calcularVencimentosPadrao(dav.condicao_pagamento, dav.emissao || dav.created_at, totalDoc)
+        : [];
 
   const handleVoltar = () => {
     // 1. Se foi aberto em uma nova aba com window.open e possui opener
@@ -232,22 +282,21 @@ function ImprimirDAV() {
   
   return (
     <div
-      className="bg-white min-h-screen text-black p-4 sm:p-8 print:p-0 font-sans"
+      className="bg-white min-h-screen text-black p-4 sm:p-6 print:p-0 font-sans"
       style={{ maxWidth: "850px", margin: "0 auto", WebkitFontSmoothing: "auto" }}
     >
       <style>{`
         @media print {
           @page { margin: 8mm; size: A4; }
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; font-weight: 700; -webkit-font-smoothing: auto; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #fff !important; color: #000 !important; }
           .no-print { display: none !important; }
-        }
-        .dados-cliente-bold, .dados-cliente-bold * {
-          font-weight: 900 !important;
+          .dav-table thead { display: table-header-group; }
+          .dav-table tr, .no-break { break-inside: avoid; page-break-inside: avoid; }
         }
       `}</style>
 
       {/* Botões Superiores */}
-      <div className="no-print flex gap-4 mb-6 sticky top-0 bg-white/90 backdrop-blur pb-4 z-10 border-b border-slate-100">
+      <div className="no-print flex gap-4 mb-5 sticky top-0 bg-white/95 backdrop-blur pb-3 pt-1 z-10 border-b border-slate-200">
         <button
           onClick={handleVoltar}
           className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-bold transition-colors"
@@ -277,285 +326,168 @@ function ImprimirDAV() {
         </button>
       </div>
 
-      {/* ── PDF LAYOUT INÍCIO ── */}
-      <div className="p-4 sm:p-6 print:p-0 bg-white">
-        
-        {/* 1. CABEÇALHO CLARO */}
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-5 sm:gap-6">
-            {/* Logos Garden Prime e Logo 02 (embaixo) */}
-            <div className="flex flex-col items-center justify-center gap-2 shrink-0">
-              <img src="/garden-prime-pdf.png" alt="Garden Prime" className="h-14 sm:h-16 w-auto object-contain max-w-[220px]" />
-              <img
-                src="/logo-02.png"
-                alt="Logo 02"
-                className="h-14 sm:h-16 w-auto object-contain max-w-[200px]"
-              />
+      {/* ── PDF LAYOUT COMPACTO (ESTILO DAV) ── */}
+      <div className="bg-white text-black text-[11px] leading-snug">
+        {/* 1. CABEÇALHO EMPRESARIAL E DADOS DO DOCUMENTO */}
+        <div className="border border-black">
+          <div className="border-b border-black px-3 py-2 text-center">
+            <h1 className="text-sm sm:text-base font-extrabold tracking-wide uppercase">
+              DOCUMENTO AUXILIAR DE VENDA - {dav.isVenda ? "PEDIDO DE VENDA" : "ORÇAMENTO"}
+            </h1>
+            <p className="text-[10px] font-bold uppercase leading-tight mt-0.5">
+              NÃO É DOCUMENTO FISCAL - NÃO É VÁLIDO COMO RECIBO E COMO GARANTIA DE MERCADORIA - NÃO COMPROVA PAGAMENTO
+            </p>
+          </div>
+
+          <div className="border-b border-black px-3 py-2 flex flex-wrap sm:flex-nowrap justify-between items-start gap-3">
+            <div className="space-y-0.5">
+              <p className="font-bold text-xs uppercase">
+                {razaoSocial} - {nomeFantasia}
+              </p>
+              <p>
+                CNPJ: {config?.cnpj || "50.387.381/0001-81"} - Insc. Estadual:{" "}
+                {config?.inscricao_estadual || "266031100110"}
+              </p>
+              <p>{empresaEndereco}</p>
+              <p>{empresaCepCidadeUf}</p>
             </div>
-            <div className="w-px h-28 bg-[#C5A059] mx-1 sm:mx-2 hidden sm:block"></div>
-            <div className="text-[10px] sm:text-xs text-black font-extrabold space-y-1">
-              <p>
-                <span className="font-black">CNPJ:</span> {config?.cnpj || "50.387.381/0001-81"} |{" "}
-                <span className="font-black">Inscr. Estadual:</span> {config?.inscricao_estadual || "266031100110"}
-              </p>
-              <p>
-                {config?.tipo_logradouro ? config.tipo_logradouro + " " : ""}
-                {config?.endereco || "MATEUS RODRIGUES DA COSTA"}{config?.numero ? ", " + config.numero : ""}
-                {config?.complemento ? " " + config.complemento : ""}{config?.bairro ? ", " + config.bairro : ""}
-                {", " + (config?.municipio || "Charqueada") + " - " + (config?.uf || "SP")}
-              </p>
-              <p>
-                <span className="font-black">{config?.celular || config?.telefone || "(19) 99930-8784"}</span> |{" "}
-                <span className="font-black">{config?.email_contato || "garden-plus@hotmail.com"}</span>
-              </p>
+            <div className="text-right shrink-0 flex flex-col justify-between gap-3 ml-auto">
+              <p className="font-semibold">Página 1/1</p>
+              <div>
+                <p>Fone: {empresaFone}</p>
+                <p className="text-[10px]">{empresaEmail}</p>
+              </div>
             </div>
           </div>
-          <div className="hidden sm:block text-right transform -rotate-2">
-            <p className="font-serif italic font-black text-[#C5A059] text-xl leading-tight">
-              Mais verde<br />para um futuro<br />melhor!
-            </p>
+
+          <div className="px-3 py-1.5 flex flex-wrap sm:flex-nowrap justify-between items-center gap-3">
+            <div className="space-y-0.5">
+              <p>
+                <span className="font-semibold">Tipo:</span>{" "}
+                {dav.isVenda ? "Pedido de Venda" : "Orçamento (DAV)"}
+              </p>
+              <p>
+                <span className="font-semibold">Vendedor:</span>{" "}
+                {dav.vendedor ? String(dav.vendedor).toUpperCase() : "DIRETO"}
+              </p>
+              <p>
+                <span className="font-semibold">Validade:</span> {validadeStr}
+              </p>
+            </div>
+            <div className="text-right space-y-0.5 shrink-0 ml-auto">
+              <p className="text-xs font-bold">
+                {dav.isVenda ? "DAV / Pedido:" : "DAV:"}
+                <span className="font-mono text-sm font-extrabold ml-2">{numDocDisplay}</span>
+              </p>
+              <p className="font-semibold">
+                Data: {dataDAV}
+                <span className="ml-3">Hora: {horaDAV}</span>
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* 2. BLOCO ESCURO (TÍTULO) */}
-        <div className="bg-[#112321] text-white rounded-xl px-4 py-3 sm:px-5 sm:py-3.5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 sm:gap-4 mb-6 shadow-sm overflow-hidden">
-          {/* Título e DAV */}
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="p-2 border-2 border-[#C5A059] rounded-lg text-[#C5A059] flex items-center justify-center shrink-0">
-              <FileText className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.5]" />
+        {/* 2. IDENTIFICAÇÃO DO SOLICITANTE (DADOS DO CLIENTE COMPACTOS) */}
+        <div className="border border-black mt-1.5 px-3 py-2">
+          <h2 className="font-bold text-xs mb-1.5">Identificação do Solicitante</h2>
+          <div className="grid grid-cols-12 gap-x-4 gap-y-0.5">
+            <div className="col-span-12 sm:col-span-7 print:col-span-7 space-y-0.5">
+              <div className="flex gap-1.5">
+                <span className="font-bold w-[62px] shrink-0">Cliente:</span>
+                <span className="font-semibold break-words">{dav.cliente_nome || "-"}</span>
+              </div>
+              <div className="flex gap-1.5">
+                <span className="font-bold w-[62px] shrink-0">Endereço:</span>
+                <span className="break-words">{clienteEndereco}</span>
+              </div>
+              <div className="flex gap-1.5">
+                <span className="font-bold w-[62px] shrink-0">CEP:</span>
+                <span>{clienteCep}</span>
+              </div>
+              <div className="flex gap-1.5">
+                <span className="font-bold w-[62px] shrink-0">Telefone:</span>
+                <span>{dav.cliente_telefone || "-"}</span>
+              </div>
+              <div className="flex gap-1.5">
+                <span className="font-bold w-[62px] shrink-0">E-mail:</span>
+                <span className="break-all">{clienteEmail}</span>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-black tracking-wider uppercase text-white leading-tight">
-                {dav.isVenda ? "PEDIDO DE VENDA" : "ORÇAMENTO"}
-              </h1>
-              <p className="text-xs text-white font-black leading-tight mt-0.5">
-                DAV Nº: {dav.numero !== undefined && dav.numero !== null ? String(dav.numero).padStart(3, "0") : (dav.id ? dav.id.substring(0, 6) : "001")}
-              </p>
-            </div>
-          </div>
 
-          {/* Divisor */}
-          <div className="w-px h-10 bg-white/20 shrink-0 hidden sm:block"></div>
-
-          {/* Emissão */}
-          <div className="flex items-center gap-2 shrink-0">
-            <Calendar className="w-5 h-5 text-[#C5A059] shrink-0 stroke-[2.5]" />
-            <div className="text-xs leading-tight">
-              <p className="text-[10px] text-[#E5C378] font-black leading-none mb-1">Emissão</p>
-              <p className="text-[11px] sm:text-xs text-white font-black whitespace-nowrap leading-none">
-                {dataDAV} às {horaDAV}
-              </p>
-            </div>
-          </div>
-
-          {/* Condições Comerciais */}
-          <div className="bg-black text-white rounded-lg px-3.5 py-2.5 text-xs flex flex-col justify-center shrink-0 w-full sm:w-[280px] print:w-[275px] box-border">
-            <p className="font-black text-[10px] sm:text-[11px] tracking-wider uppercase mb-1 leading-none text-[#E5C378]">
-              CONDIÇÕES COMERCIAIS
-            </p>
-            <p className="text-[10px] sm:text-[11px] text-white font-black leading-snug break-words whitespace-normal">
-              Pagamento: {dav.condicao_pagamento || "Dinheiro / Pix"}
-            </p>
-            {dav.vendedor && (
-              <p className="text-[10px] sm:text-[11px] text-[#E5C378] font-black leading-tight mt-0.5 break-words whitespace-normal">
-                Vendedor: {dav.vendedor}
-              </p>
-            )}
-            {(() => {
-              const totalDoc = Number(dav.total || dav.valor_total || dav.subtotal || 0);
-              const vencList = Array.isArray(dav.vencimentos) && dav.vencimentos.length > 0
-                ? dav.vencimentos
-                : (dav.condicao_pagamento && dav.condicao_pagamento.trim() !== ""
-                    ? calcularVencimentosPadrao(dav.condicao_pagamento, dav.emissao || dav.created_at, totalDoc)
-                    : []);
-
-              if (vencList.length > 1) {
-                return (
-                  <div className="text-xs text-white font-black leading-tight my-1.5 w-full">
-                    <span className="block mb-1 text-[10px] text-slate-300">Vencimentos:</span>
-                    <div className="bg-white text-slate-900 font-bold px-2.5 py-1.5 rounded-md border border-slate-300 shadow-2xs space-y-1 w-full box-border">
-                      {vencList.map((v: any, idx: number) => {
-                        const d = typeof v === "object" && v !== null ? v.data : v;
-                        const valParcela = calcularValorParcela(v, idx, vencList.length, totalDoc);
-                        return (
-                          <div key={idx} className="flex items-center justify-between gap-2 text-[11px] font-black">
-                            <span className="text-slate-800 font-black whitespace-nowrap">
-                              {idx + 1}ª: {formatarDataBr(d)}
-                            </span>
-                            {valParcela > 0 && (
-                              <span className="font-black text-black whitespace-nowrap">
-                                R$ {valParcela.toFixed(2).replace(".", ",")}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              }
-
-              if (vencList.length === 1) {
-                const d = typeof vencList[0] === "object" && vencList[0] !== null ? vencList[0].data : vencList[0];
-                const valParcela = calcularValorParcela(vencList[0], 0, 1, totalDoc);
-                return (
-                  <div className="text-xs text-white font-black leading-tight my-1.5 w-full">
-                    <span className="block mb-1 text-[10px] text-slate-300">Vencimento:</span>
-                    <div className="bg-white text-black font-black px-2.5 py-1 rounded-md text-[11px] border border-slate-300 shadow-2xs flex items-center justify-between gap-2 w-full box-border">
-                      <span className="whitespace-nowrap">{formatarDataBr(d)}</span>
-                      {valParcela > 0 && (
-                        <span className="whitespace-nowrap">
-                          R$ {valParcela.toFixed(2).replace(".", ",")}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-
-              return (
-                <div className="text-xs text-white font-black leading-tight flex items-center gap-2 my-1.5">
-                  <span className="text-slate-300 text-[10px]">Vencimento:</span>
-                  <span className="bg-white text-slate-700 font-black px-2.5 py-0.5 rounded text-[11px] tracking-widest font-mono border border-slate-300 shadow-2xs">
-                    ___ / ___ / ______
-                  </span>
-                </div>
-              );
-            })()}
-            <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-[#E5C378] font-black leading-tight mt-0.5">
-              <Clock className="w-3.5 h-3.5 text-[#C5A059] shrink-0 stroke-[2.5]" />
-              <span>Validade: {validadeStr}</span>
-            </div>
-            <p className="text-[10px] sm:text-[11px] text-white font-black leading-tight mt-0.5">
-              Frete: Retirada | Prazo: Imediato
-            </p>
-          </div>
-        </div>
-
-        {/* 3. DADOS DO CLIENTE */}
-        <div className="bg-white p-2 flex flex-wrap justify-between gap-6 mb-6 shadow-xs dados-cliente-bold">
-          <div className="flex-1 min-w-[250px]">
-            <h2 className="font-display font-black text-sm mb-3 flex items-center gap-2">
-              <div className="w-5 h-5 rounded-full bg-[#A57F33] flex items-center justify-center text-white shrink-0">
-                <User className="w-3.5 h-3.5 stroke-[2.5]" />
+            <div className="col-span-12 sm:col-span-5 print:col-span-5 space-y-0.5">
+              <div className="flex gap-1.5">
+                <span className="font-bold w-[72px] shrink-0">CPF/CNPJ:</span>
+                <span>{dav.cliente_cnpj || "-"}</span>
               </div>
-              <span className="tracking-wide font-black">
-                <span className="text-[#9A7424] font-black">DADOS</span>{" "}
-                <span className="text-black font-black">DO CLIENTE</span>
-              </span>
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-[13px] font-black text-black">
-              <div className="flex sm:col-span-2 print:col-span-2">
-                <span className="w-24 font-black text-black shrink-0">Nome:</span>
-                <span className="flex-1 break-words font-black text-black">{dav.cliente_nome || "-"}</span>
+              <div className="flex gap-1.5">
+                <span className="font-bold w-[72px] shrink-0">Bairro:</span>
+                <span className="break-words">{clienteBairro}</span>
               </div>
-              <div className="flex">
-                <span className="w-24 font-black text-black shrink-0">CNPJ/CPF:</span>
-                <span className="flex-1 break-words font-black text-black">{dav.cliente_cnpj || "-"}</span>
+              <div className="flex gap-1.5">
+                <span className="font-bold w-[72px] shrink-0">Cidade/UF:</span>
+                <span className="break-words">
+                  {clienteCidade}
+                  {clienteUf && clienteUf !== "-" ? ` / ${clienteUf}` : ""}
+                </span>
               </div>
-              <div className="flex">
-                <span className="w-24 font-black text-black shrink-0">Telefone:</span>
-                <span className="flex-1 break-words font-black text-black">{dav.cliente_telefone || "-"}</span>
+              <div className="flex gap-1.5">
+                <span className="font-bold w-[72px] shrink-0">Pagamento:</span>
+                <span className="break-words">{pagInfo}</span>
               </div>
-              <div className="flex">
-                <span className="w-24 font-black text-black shrink-0">E-mail:</span>
-                <span className="flex-1 break-words font-black text-black">{dav.rawVenda?.cliente?.email || dav.cliente_email || dav.email || "-"}</span>
-              </div>
-              <div className="flex">
-                <span className="w-24 font-black text-black shrink-0">Bairro:</span>
-                <span className="flex-1 break-words font-black text-black">{dav.rawVenda?.cliente?.bairro || dav.bairro || "-"}</span>
-              </div>
-              <div className="flex">
-                <span className="w-24 font-black text-black shrink-0">Cidade:</span>
-                <span className="flex-1 break-words font-black text-black">{dav.rawVenda?.cliente?.cidade || dav.cidade || "-"}</span>
-              </div>
-              <div className="flex">
-                <span className="w-24 font-black text-black shrink-0">UF:</span>
-                <span className="flex-1 break-words font-black text-black">{dav.rawVenda?.cliente?.uf || dav.uf || "-"}</span>
-              </div>
-              <div className="flex">
-                <span className="w-24 font-black text-black shrink-0">CEP:</span>
-                <span className="flex-1 break-words font-black text-black">{dav.rawVenda?.cliente?.cep || dav.cep || "-"}</span>
-              </div>
-              <div className="flex sm:col-span-2 print:col-span-2">
-                <span className="w-24 font-black text-black shrink-0">Endereço:</span>
-                <span className="flex-1 break-words whitespace-normal font-black text-black">
-                  {(() => {
-                    let end = dav.cliente_endereco || dav.rawVenda?.cliente?.endereco || "";
-                    const num = dav.rawVenda?.cliente?.numero || dav.numero;
-                    const cep = dav.rawVenda?.cliente?.cep || dav.cep;
-                    if (num && end && !end.includes(String(num))) {
-                      end = `${end}, Nº ${num}`;
-                    }
-                    if (cep && end && !end.toUpperCase().includes("CEP") && !end.includes(String(cep))) {
-                      end = `${end} - CEP: ${cep}`;
-                    } else if (cep && !end) {
-                      end = `CEP: ${cep}`;
-                    }
-                    return end || "-";
-                  })()}
+              <div className="flex gap-1.5">
+                <span className="font-bold w-[72px] shrink-0">Frete/Prazo:</span>
+                <span className="break-words">
+                  {freteInfo} | {prazoInfo}
                 </span>
               </div>
             </div>
           </div>
-          
-          <div className="bg-[#FAF7EE] border-2 border-[#EAE3D2] rounded-xl p-4 text-center w-full sm:w-[200px] flex flex-col justify-center items-center shrink-0">
-             <Handshake className="w-8 h-8 text-[#A57F33] mb-1.5 stroke-[2.2]" />
-             <p className="text-[#A57F33] font-black text-xs mb-1">Obrigado pela sua confiança!</p>
-             <p className="text-[9px] text-black font-extrabold leading-tight">Estamos à disposição para lhe atender sempre!</p>
-          </div>
         </div>
 
-        {/* 4. PRODUTOS */}
-        <div className="mb-6">
-          <h2 className="font-black text-sm mb-3 flex items-center gap-2">
-            <Package className="w-5 h-5 text-[#B89547] shrink-0" strokeWidth={2.5} />
-            <span className="text-black tracking-wider uppercase font-black">PRODUTOS</span>
-          </h2>
-          
+        {/* 3. RELAÇÃO DE PRODUTOS / SERVIÇOS */}
+        <div className="mt-2.5">
+          <h2 className="font-bold text-xs mb-1">Relação de Produtos/Serviços</h2>
           <div className="overflow-x-auto print:overflow-visible">
-            <table className="w-full text-left text-xs whitespace-nowrap">
-              <thead className="bg-[#112321] text-white">
-                <tr>
-                  <th className="p-3 text-left pl-4 font-black text-xs uppercase tracking-wider">Código</th>
-                  <th className="p-3 text-left font-black text-xs uppercase tracking-wider">Produto</th>
-                  <th className="p-3 text-center font-black text-xs uppercase tracking-wider">Qtd</th>
-                  <th className="p-3 text-right font-black text-xs uppercase tracking-wider">Vlr. Unit.</th>
-                  <th className="p-3 text-right pr-4 font-black text-xs uppercase tracking-wider">Vlr. Total</th>
+            <table className="dav-table w-full text-[11px] border-collapse">
+              <thead>
+                <tr className="bg-slate-100 border-y border-black text-black">
+                  <th className="py-1 px-1.5 text-left font-bold w-16">Código</th>
+                  <th className="py-1 px-1.5 text-left font-bold">Descrição</th>
+                  <th className="py-1 px-1.5 text-right font-bold w-16">Qtd</th>
+                  <th className="py-1 px-1.5 text-center font-bold w-10">Med</th>
+                  <th className="py-1 px-1.5 text-right font-bold w-20">Unitário</th>
+                  <th className="py-1 px-1.5 text-right font-bold w-16">Desconto</th>
+                  <th className="py-1 px-1.5 text-right font-bold w-24">Total</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-200">
                 {itens.map((it, idx) => {
-                  const imgUrl = it.imagem || it.produto?.imagem || it.produtos?.imagem || (it.rawVenda || it).produto?.imagem;
-                  const desc = it.descricao || (it.rawVenda || it).produto?.descricao;
+                  const qtdNum = Number(it.qtd || it.quantidade || 1);
+                  const unitNum = Number(it.valor_unitario || 0);
+                  const totNum = Number(it.total ?? it.subtotal ?? qtdNum * unitNum);
+                  const descItem = Math.max(0, qtdNum * unitNum - totNum);
+                  const med = formatUnidadeMedida(
+                    it.unidade_medida || it.produto?.unidade_medida || it.produtos?.unidade_medida,
+                  );
+
                   return (
-                    <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-[#FBFBFA]"}>
-                      <td className="p-3 pl-2">
-                        <div className="flex items-center gap-3">
-                          {imgUrl ? (
-                            <div className="w-10 h-10 rounded-md border border-slate-300 bg-white overflow-hidden flex items-center justify-center shrink-0">
-                              <img src={imgUrl} alt="" className="w-full h-full object-contain" />
-                            </div>
-                          ) : (
-                            <div className="w-10 h-10 rounded-md border border-slate-200 bg-slate-50 flex items-center justify-center shrink-0">
-                              <Package className="w-4 h-4 text-slate-400" />
-                            </div>
-                          )}
-                          <span className="font-black text-black text-xs">{it.codigo || "-"}</span>
-                        </div>
+                    <tr key={idx} className={idx % 2 === 1 ? "bg-slate-50/70" : "bg-white"}>
+                      <td className="py-1 px-1.5 font-mono font-bold whitespace-nowrap">
+                        {it.codigo || "-"}
                       </td>
-                      <td className="p-3">
-                        <p className="font-black text-black text-xs">{it.produto}</p>
-                        {desc && (
-                          <p className="text-[10px] text-black font-extrabold max-w-[240px] sm:max-w-md truncate mt-0.5">{desc}</p>
-                        )}
+                      <td className="py-1 px-1.5 font-medium">{it.produto}</td>
+                      <td className="py-1 px-1.5 text-right tabular-nums whitespace-nowrap">
+                        {formatBrDecimal(qtdNum)}
                       </td>
-                      <td className="p-3 text-center font-black text-black text-xs">{it.qtd}</td>
-                      <td className="p-3 text-right text-black font-black text-xs whitespace-nowrap">
-                        R$ {Number(it.valor_unitario || 0).toFixed(2).replace(".", ",")}
+                      <td className="py-1 px-1.5 text-center whitespace-nowrap">{med}</td>
+                      <td className="py-1 px-1.5 text-right tabular-nums whitespace-nowrap">
+                        {formatBrDecimal(unitNum)}
                       </td>
-                      <td className="p-3 pr-4 text-right font-black text-black text-xs whitespace-nowrap">
-                        R$ {Number(it.total || 0).toFixed(2).replace(".", ",")}
+                      <td className="py-1 px-1.5 text-right tabular-nums whitespace-nowrap">
+                        {formatBrDecimal(descItem)}
+                      </td>
+                      <td className="py-1 px-1.5 text-right font-bold tabular-nums whitespace-nowrap">
+                        {formatBrDecimal(totNum)}
                       </td>
                     </tr>
                   );
@@ -565,62 +497,83 @@ function ImprimirDAV() {
           </div>
         </div>
 
-        {/* 5. TOTAL */}
-        <div className="flex justify-end mb-8">
-          <div className="bg-[#FAF7EE] border-2 border-[#EBE4D5] rounded-xl p-3 flex items-center gap-3 min-w-[270px] shadow-xs">
-            {/* Ícone de Moeda/Cifrão à esquerda */}
-            <div className="w-8 h-8 rounded-full border-2 border-[#1B382F] flex items-center justify-center text-[#1B382F] shrink-0 ml-1">
-              <span className="font-black text-sm leading-none">$</span>
-            </div>
-            {/* Linha de Valor Total à direita */}
-            <div className="flex-1 flex flex-col">
-              <div className="bg-[#A37E36] text-white rounded-lg px-3.5 py-2 flex justify-between items-center">
-                <span className="text-xs font-black uppercase tracking-wider">Total</span>
-                <span className="text-base font-black">
-                  R$ {Number(dav.total || dav.subtotal || 0).toFixed(2).replace(".", ",")}
-                </span>
+        {/* 4. CONDIÇÕES COMERCIAIS, VENCIMENTOS E TOTAIS */}
+        <div className="border border-black mt-3 grid grid-cols-12 no-break">
+          <div className="col-span-12 sm:col-span-8 print:col-span-8 p-2.5 border-b sm:border-b-0 sm:border-r print:border-b-0 print:border-r border-black space-y-1">
+            <p className="font-bold">Condições de Pagamento / Vencimentos</p>
+            <p>
+              <span className="font-semibold">Pagamento:</span> {pagInfo}
+            </p>
+            {vencList.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-x-4 gap-y-0.5 font-bold">
+                {vencList.map((v: any, idx: number) => {
+                  const d = typeof v === "object" && v !== null ? v.data : v;
+                  const valParcela = calcularValorParcela(v, idx, vencList.length, totalDoc);
+                  return (
+                    <span key={idx} className="whitespace-nowrap">
+                      {idx + 1}ª: {formatarDataBr(d)}
+                      {valParcela > 0 ? ` — R$ ${formatBrDecimal(valParcela)}` : ""}
+                    </span>
+                  );
+                })}
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 6. ASSINATURAS */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 items-end mb-8 text-xs">
-          <div>
-            <div className="border-b-2 border-black mb-2"></div>
-            <p className="text-center font-black text-black flex items-center justify-center gap-1">
-              <span className="text-[#C5A059]">👤</span> ASSINATURA DO VENDEDOR {dav.vendedor ? `(${dav.vendedor})` : ""}
-            </p>
-          </div>
-          <div>
-            <div className="border-b-2 border-black mb-2"></div>
-            <p className="text-center font-black text-black flex items-center justify-center gap-1">
-              <span className="text-[#C5A059]">👤</span> ASSINATURA DO CLIENTE
-            </p>
-          </div>
-          <div className="flex justify-end">
-            <div className="bg-[#FAF9F5] border-2 border-[#EBE4D5] rounded-lg p-3 flex gap-3 items-center w-full max-w-[210px]">
-              <div className="text-[#C5A059] text-xl">📄</div>
-              <p className="text-[8px] text-black font-extrabold leading-tight">
-                Este documento não possui valor fiscal, é apenas um Documento Auxiliar de Venda.
+            ) : (
+              <p>
+                <span className="font-semibold">Vencimento:</span> ___ / ___ / ______
               </p>
+            )}
+            <p>
+              <span className="font-semibold">Frete:</span> {freteInfo} &nbsp;|&nbsp;{" "}
+              <span className="font-semibold">Prazo:</span> {prazoInfo}
+            </p>
+            {dav.observacoes && (
+              <p>
+                <span className="font-semibold">Obs.:</span> {dav.observacoes}
+              </p>
+            )}
+          </div>
+
+          <div className="col-span-12 sm:col-span-4 print:col-span-4 flex flex-col justify-between">
+            <div className="p-2.5 space-y-1 tabular-nums">
+              <div className="flex justify-between">
+                <span>Subtotal:</span>
+                <span>R$ {formatBrDecimal(subtotalDoc)}</span>
+              </div>
+              {descontoDoc > 0 && (
+                <div className="flex justify-between">
+                  <span>Desconto:</span>
+                  <span>- R$ {formatBrDecimal(descontoDoc)}</span>
+                </div>
+              )}
+              {freteDoc > 0 && (
+                <div className="flex justify-between">
+                  <span>Frete:</span>
+                  <span>R$ {formatBrDecimal(freteDoc)}</span>
+                </div>
+              )}
+            </div>
+            <div className="bg-slate-100 border-t border-black px-2.5 py-2 flex justify-between items-center font-extrabold text-sm tabular-nums">
+              <span>TOTAL:</span>
+              <span>R$ {formatBrDecimal(totalDoc)}</span>
             </div>
           </div>
         </div>
 
-        {/* 7. RODAPÉ */}
-        <div className="bg-[#171F1E] text-white rounded-lg p-4 flex flex-wrap items-center justify-between gap-4 mt-auto">
-           <div className="flex items-center gap-4 sm:gap-8 text-[9px] sm:text-xs font-black">
-             <div className="flex items-center gap-2"><span className="text-[#C5A059]">🛡️</span> Qualidade em cada detalhe</div>
-             <div className="flex items-center gap-2"><span className="text-[#C5A059]">🚚</span> Entrega rápida e segura</div>
-             <div className="flex items-center gap-2"><span className="text-[#C5A059]">🌱</span> Produtos selecionados</div>
-           </div>
-           <div className="flex items-center gap-3">
-             <GardenPrimeLogo size="small" />
-             <img src="/logo-02.png" alt="Logo 02" className="h-6 w-auto object-contain brightness-0 invert" />
-           </div>
+        {/* 5. ASSINATURAS */}
+        <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-10 text-[10px] font-bold text-center no-break">
+          <div className="px-4">
+            <div className="border-t border-black pt-1.5">
+              ASSINATURA DO VENDEDOR {dav.vendedor ? `(${String(dav.vendedor).toUpperCase()})` : ""}
+            </div>
+          </div>
+          <div className="px-4">
+            <div className="border-t border-black pt-1.5">ASSINATURA DO CLIENTE</div>
+          </div>
         </div>
 
+        <p className="text-center text-[9px] text-slate-600 mt-4">
+          Documento Auxiliar de Venda — Sem valor fiscal.
+        </p>
       </div>
     </div>
   );

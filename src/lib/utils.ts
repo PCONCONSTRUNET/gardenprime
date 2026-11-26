@@ -383,3 +383,49 @@ export function formatOrderRangeSummary(
   }
   return `${allParts.slice(0, 3).join(", ")} (+${allParts.length - 3} grupos)`;
 }
+
+/**
+ * Formata valor numérico no padrão brasileiro (ex: 1.188,00).
+ */
+export function formatBrDecimal(value: number | string | null | undefined, decimals = 2): string {
+  const num = Number(value || 0);
+  if (!Number.isFinite(num)) return "0,00";
+  return num.toLocaleString("pt-BR", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+/**
+ * Normaliza a unidade de medida do produto para sigla curta (ex: "Unidade" -> "UN").
+ */
+export function formatUnidadeMedida(unit?: string | null): string {
+  if (!unit) return "UN";
+  const norm = unit.trim().toLowerCase();
+  if (!norm || norm === "unidade" || norm === "unidades" || norm === "un") return "UN";
+  if (norm === "quilograma" || norm === "quilogramas" || norm === "kg") return "KG";
+  if (norm === "litro" || norm === "litros" || norm === "lt" || norm === "l") return "LT";
+  if (norm === "metro" || norm === "metros" || norm === "m") return "M";
+  if (norm === "caixa" || norm === "cx") return "CX";
+  if (norm === "fardo" || norm === "fd") return "FD";
+  if (norm === "pacote" || norm === "pct") return "PCT";
+  if (norm === "peça" || norm === "peca" || norm === "pc" || norm === "pç") return "PC";
+  return unit.trim().toUpperCase().slice(0, 4);
+}
+
+/**
+ * Formata o endereço do cliente (logradouro + número) removendo eventual CEP duplicado.
+ */
+export function formatClientAddressLine(
+  endereco?: string | null,
+  numero?: string | null,
+): string {
+  let clean = (endereco || "").trim();
+  clean = clean.replace(/\s*[-–,]?\s*CEP:\s*\d{5}-?\d{3}\s*$/i, "").trim();
+  const num = (numero || "").trim();
+  if (num && clean && !clean.includes(num)) {
+    clean = `${clean}, Nº ${num}`;
+  }
+  return clean || "-";
+}
+
