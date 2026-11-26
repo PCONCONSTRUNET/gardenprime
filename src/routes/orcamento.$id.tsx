@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Printer, ArrowLeft, Loader2, Package } from "lucide-react";
+import { GardenPrimeLogo } from "@/components/garden-prime-logo";
+import { Printer, ArrowLeft, Loader2, FileText, Calendar, Clock, Handshake, Package, User } from "lucide-react";
 import { WhatsAppIcon, shareOrderWhatsApp } from "@/lib/order-pdf";
 import {
-  formatBrDecimal,
   formatClientAddressLine,
   formatUnidadeMedida,
   formatarDataBr,
@@ -183,7 +183,6 @@ function ImprimirDAV() {
   const horaDAV = new Date(dav.created_at).toLocaleTimeString("pt-BR", {
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
   });
 
   const validadeStr = dav.validade
@@ -193,34 +192,6 @@ function ImprimirDAV() {
         d.setDate(d.getDate() + 30);
         return d.toLocaleDateString("pt-BR");
       })();
-
-  const numDocDisplay =
-    dav.numero !== undefined && dav.numero !== null
-      ? String(dav.numero).padStart(6, "0")
-      : dav.id
-        ? dav.id.substring(0, 6).toUpperCase()
-        : "000001";
-
-  const razaoSocial = config?.razao_social || "GARDEN PLUS LTDA";
-  const nomeFantasia = config?.nome_fantasia || "GARDEN PRIME";
-  const empresaEndereco = [
-    [config?.tipo_logradouro, config?.endereco || "MATEUS RODRIGUES DA COSTA"]
-      .filter(Boolean)
-      .join(" "),
-    config?.numero,
-    config?.complemento,
-    config?.bairro,
-  ]
-    .filter(Boolean)
-    .join(", ");
-  const empresaCepCidadeUf = [
-    config?.cep,
-    `${config?.municipio || "Charqueada"} - ${config?.uf || "SP"}`,
-  ]
-    .filter(Boolean)
-    .join(" - ");
-  const empresaFone = config?.celular || config?.telefone || "(19) 99930-8784";
-  const empresaEmail = config?.email_contato || "garden-plus@hotmail.com";
 
   const clienteEmail = dav.rawVenda?.cliente?.email || dav.cliente_email || dav.email || "-";
   const clienteBairro = dav.rawVenda?.cliente?.bairro || dav.bairro || "-";
@@ -233,13 +204,7 @@ function ImprimirDAV() {
   );
   const freteInfo = dav.frete_tipo || "Retirada";
   const prazoInfo = dav.prazo_entrega || "Imediato";
-  const pagInfo = dav.condicao_pagamento || "Não informado";
-
   const totalDoc = Number(dav.total || dav.valor_total || dav.subtotal || 0);
-  const subtotalDoc = Number(dav.subtotal || totalDoc);
-  const descontoDoc = Number(dav.desconto_valor || 0);
-  const freteDoc = Number(dav.frete_valor || 0);
-
   const vencList =
     Array.isArray(dav.vencimentos) && dav.vencimentos.length > 0
       ? dav.vencimentos
@@ -288,15 +253,18 @@ function ImprimirDAV() {
       <style>{`
         @media print {
           @page { margin: 8mm; size: A4; }
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #fff !important; color: #000 !important; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; font-weight: 700; -webkit-font-smoothing: auto; }
           .no-print { display: none !important; }
           .dav-table thead { display: table-header-group; }
           .dav-table tr, .no-break { break-inside: avoid; page-break-inside: avoid; }
         }
+        .dados-cliente-bold, .dados-cliente-bold * {
+          font-weight: 900 !important;
+        }
       `}</style>
 
       {/* Botões Superiores */}
-      <div className="no-print flex gap-4 mb-5 sticky top-0 bg-white/95 backdrop-blur pb-3 pt-1 z-10 border-b border-slate-200">
+      <div className="no-print flex gap-4 mb-5 sticky top-0 bg-white/90 backdrop-blur pb-3 pt-1 z-10 border-b border-slate-100">
         <button
           onClick={handleVoltar}
           className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-bold transition-colors"
@@ -326,126 +294,207 @@ function ImprimirDAV() {
         </button>
       </div>
 
-      {/* ── PDF LAYOUT COMPACTO (ESTILO DAV) ── */}
-      <div className="bg-white text-black text-[11px] leading-snug">
-        {/* 1. CABEÇALHO EMPRESARIAL E DADOS DO DOCUMENTO */}
-        <div className="border border-black">
-          <div className="border-b border-black px-3 py-2 text-center">
-            <h1 className="text-sm sm:text-base font-extrabold tracking-wide uppercase">
-              DOCUMENTO AUXILIAR DE VENDA - {dav.isVenda ? "PEDIDO DE VENDA" : "ORÇAMENTO"}
-            </h1>
-            <p className="text-[10px] font-bold uppercase leading-tight mt-0.5">
-              NÃO É DOCUMENTO FISCAL - NÃO É VÁLIDO COMO RECIBO E COMO GARANTIA DE MERCADORIA - NÃO COMPROVA PAGAMENTO
+      {/* ── PDF LAYOUT ORIGINAL OTIMIZADO ── */}
+      <div className="p-2 sm:p-4 print:p-0 bg-white">
+        {/* 1. CABEÇALHO CLARO */}
+        <div className="flex justify-between items-center mb-3.5">
+          <div className="flex items-center gap-4 sm:gap-5">
+            <div className="flex flex-col items-center justify-center gap-1.5 shrink-0">
+              <img src="/garden-prime-pdf.png" alt="Garden Prime" className="h-12 sm:h-14 w-auto object-contain max-w-[200px]" />
+              <img
+                src="/logo-02.png"
+                alt="Logo 02"
+                className="h-12 sm:h-14 w-auto object-contain max-w-[180px]"
+              />
+            </div>
+            <div className="w-px h-24 bg-[#C5A059] mx-1 hidden sm:block print:block"></div>
+            <div className="text-[10px] sm:text-xs text-black font-extrabold space-y-0.5">
+              <p>
+                <span className="font-black">CNPJ:</span> {config?.cnpj || "50.387.381/0001-81"} |{" "}
+                <span className="font-black">Inscr. Estadual:</span> {config?.inscricao_estadual || "266031100110"}
+              </p>
+              <p>
+                {config?.tipo_logradouro ? config.tipo_logradouro + " " : ""}
+                {config?.endereco || "MATEUS RODRIGUES DA COSTA"}{config?.numero ? ", " + config.numero : ""}
+                {config?.complemento ? " " + config.complemento : ""}{config?.bairro ? ", " + config.bairro : ""}
+                {", " + (config?.municipio || "Charqueada") + " - " + (config?.uf || "SP")}
+              </p>
+              <p>
+                <span className="font-black">{config?.celular || config?.telefone || "(19) 99930-8784"}</span> |{" "}
+                <span className="font-black">{config?.email_contato || "garden-plus@hotmail.com"}</span>
+              </p>
+            </div>
+          </div>
+          <div className="hidden sm:block print:block text-right transform -rotate-2">
+            <p className="font-serif italic font-black text-[#C5A059] text-lg leading-tight">
+              Mais verde<br />para um futuro<br />melhor!
             </p>
           </div>
+        </div>
 
-          <div className="border-b border-black px-3 py-2 flex flex-wrap sm:flex-nowrap justify-between items-start gap-3">
-            <div className="space-y-0.5">
-              <p className="font-bold text-xs uppercase">
-                {razaoSocial} - {nomeFantasia}
-              </p>
-              <p>
-                CNPJ: {config?.cnpj || "50.387.381/0001-81"} - Insc. Estadual:{" "}
-                {config?.inscricao_estadual || "266031100110"}
-              </p>
-              <p>{empresaEndereco}</p>
-              <p>{empresaCepCidadeUf}</p>
+        {/* 2. BLOCO ESCURO (MAIS FINO E COMPACTO) */}
+        <div className="bg-[#112321] text-white rounded-xl px-4 py-2 sm:px-5 sm:py-2.5 flex flex-wrap sm:flex-nowrap print:flex-nowrap items-center justify-between gap-3 mb-3.5 shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-1.5 border-2 border-[#C5A059] rounded-lg text-[#C5A059] flex items-center justify-center shrink-0">
+              <FileText className="w-5 h-5 stroke-[2.5]" />
             </div>
-            <div className="text-right shrink-0 flex flex-col justify-between gap-3 ml-auto">
-              <p className="font-semibold">Página 1/1</p>
-              <div>
-                <p>Fone: {empresaFone}</p>
-                <p className="text-[10px]">{empresaEmail}</p>
-              </div>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-black tracking-wider uppercase text-white leading-tight">
+                {dav.isVenda ? "PEDIDO DE VENDA" : "ORÇAMENTO"}
+              </h1>
+              <p className="text-[11px] text-white font-black leading-tight mt-0.5">
+                DAV Nº: {dav.numero !== undefined && dav.numero !== null ? String(dav.numero).padStart(3, "0") : (dav.id ? dav.id.substring(0, 6) : "001")}
+              </p>
             </div>
           </div>
 
-          <div className="px-3 py-1.5 flex flex-wrap sm:flex-nowrap justify-between items-center gap-3">
-            <div className="space-y-0.5">
-              <p>
-                <span className="font-semibold">Tipo:</span>{" "}
-                {dav.isVenda ? "Pedido de Venda" : "Orçamento (DAV)"}
-              </p>
-              <p>
-                <span className="font-semibold">Vendedor:</span>{" "}
-                {dav.vendedor ? String(dav.vendedor).toUpperCase() : "DIRETO"}
-              </p>
-              <p>
-                <span className="font-semibold">Validade:</span> {validadeStr}
+          <div className="w-px h-8 bg-white/20 shrink-0 hidden sm:block print:block"></div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <Calendar className="w-4 h-4 text-[#C5A059] shrink-0 stroke-[2.5]" />
+            <div className="text-xs leading-tight">
+              <p className="text-[10px] text-[#E5C378] font-black leading-none mb-0.5">Emissão</p>
+              <p className="text-[11px] text-white font-black whitespace-nowrap leading-none">
+                {dataDAV} às {horaDAV}
               </p>
             </div>
-            <div className="text-right space-y-0.5 shrink-0 ml-auto">
-              <p className="text-xs font-bold">
-                {dav.isVenda ? "DAV / Pedido:" : "DAV:"}
-                <span className="font-mono text-sm font-extrabold ml-2">{numDocDisplay}</span>
+          </div>
+
+          <div className="bg-black text-white rounded-lg px-3 py-1.5 text-[10px] flex flex-col justify-center shrink-0 w-full sm:w-[295px] print:w-[290px] box-border">
+            <p className="font-black text-[10px] tracking-wider uppercase mb-0.5 leading-none text-[#E5C378]">
+              CONDIÇÕES COMERCIAIS
+            </p>
+            <p className="text-[10px] text-white font-black leading-tight break-words whitespace-normal">
+              Pagamento: {dav.condicao_pagamento || "Dinheiro / Pix"}
+            </p>
+            {dav.vendedor && (
+              <p className="text-[10px] text-[#E5C378] font-black leading-tight mt-0.5 break-words whitespace-normal">
+                Vendedor: {dav.vendedor}
               </p>
-              <p className="font-semibold">
-                Data: {dataDAV}
-                <span className="ml-3">Hora: {horaDAV}</span>
-              </p>
+            )}
+            {vencList.length > 1 ? (
+              <div className="text-[10px] text-white font-black leading-tight my-1 w-full">
+                <div
+                  className={`bg-white text-slate-900 font-bold px-2 py-1 rounded border border-slate-300 w-full box-border ${
+                    vencList.length > 2 ? "grid grid-cols-2 gap-x-2 gap-y-0.5" : "space-y-0.5"
+                  }`}
+                >
+                  {vencList.map((v: any, idx: number) => {
+                    const d = typeof v === "object" && v !== null ? v.data : v;
+                    const valParcela = calcularValorParcela(v, idx, vencList.length, totalDoc);
+                    return (
+                      <div key={idx} className="flex items-center justify-between gap-1 text-[10px] font-black">
+                        <span className="text-slate-800 font-black whitespace-nowrap">
+                          {idx + 1}ª: {formatarDataBr(d)}
+                        </span>
+                        {valParcela > 0 && (
+                          <span className="font-black text-black whitespace-nowrap">
+                            R$ {valParcela.toFixed(2).replace(".", ",")}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : vencList.length === 1 ? (
+              <div className="text-[10px] text-white font-black leading-tight my-1 w-full flex items-center gap-1.5">
+                <span className="text-slate-300 shrink-0">Venc.:</span>
+                <div className="bg-white text-black font-black px-2 py-0.5 rounded text-[10px] border border-slate-300 flex items-center justify-between gap-2 flex-1">
+                  <span className="whitespace-nowrap">
+                    {formatarDataBr(typeof vencList[0] === "object" && vencList[0] !== null ? vencList[0].data : vencList[0])}
+                  </span>
+                  {calcularValorParcela(vencList[0], 0, 1, totalDoc) > 0 && (
+                    <span className="whitespace-nowrap">
+                      R$ {calcularValorParcela(vencList[0], 0, 1, totalDoc).toFixed(2).replace(".", ",")}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="text-[10px] text-white font-black leading-tight flex items-center gap-1.5 my-1">
+                <span className="text-slate-300">Venc.:</span>
+                <span className="bg-white text-slate-700 font-black px-2 py-0.5 rounded text-[10px] tracking-widest font-mono border border-slate-300">
+                  ___ / ___ / ______
+                </span>
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-2 text-[10px] leading-tight mt-0.5">
+              <span className="flex items-center gap-1 text-[#E5C378] font-black">
+                <Clock className="w-3 h-3 text-[#C5A059] shrink-0 stroke-[2.5]" />
+                Validade: {validadeStr}
+              </span>
+              <span className="text-white font-black whitespace-nowrap">
+                {freteInfo} | {prazoInfo}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* 2. IDENTIFICAÇÃO DO SOLICITANTE (DADOS DO CLIENTE COMPACTOS) */}
-        <div className="border border-black mt-1.5 px-3 py-2">
-          <h2 className="font-bold text-xs mb-1.5">Identificação do Solicitante</h2>
-          <div className="grid grid-cols-12 gap-x-4 gap-y-0.5">
-            <div className="col-span-12 sm:col-span-7 print:col-span-7 space-y-0.5">
-              <div className="flex gap-1.5">
-                <span className="font-bold w-[62px] shrink-0">Cliente:</span>
-                <span className="font-semibold break-words">{dav.cliente_nome || "-"}</span>
+        {/* 3. DADOS DO CLIENTE (ENDEREÇO E CAMPOS ORGANIZADOS EM 2 COLUNAS COMPACTAS) */}
+        <div className="bg-[#F8F9FA] border border-slate-200 rounded-xl p-3 flex flex-wrap sm:flex-nowrap print:flex-nowrap justify-between gap-4 mb-4 dados-cliente-bold">
+          <div className="flex-1 min-w-[250px]">
+            <h2 className="font-display font-black text-xs mb-2 flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full bg-[#A57F33] flex items-center justify-center text-white shrink-0">
+                <User className="w-3 h-3 stroke-[2.5]" />
               </div>
-              <div className="flex gap-1.5">
-                <span className="font-bold w-[62px] shrink-0">Endereço:</span>
-                <span className="break-words">{clienteEndereco}</span>
+              <span className="tracking-wide font-black">
+                <span className="text-[#9A7424] font-black">DADOS</span>{" "}
+                <span className="text-black font-black">DO CLIENTE</span>
+              </span>
+            </h2>
+            <div className="grid grid-cols-12 gap-x-4 gap-y-1 text-[11px] font-black text-black leading-snug">
+              <div className="col-span-12 sm:col-span-7 print:col-span-7 space-y-1">
+                <div className="flex gap-1.5">
+                  <span className="w-[62px] text-black shrink-0">Cliente:</span>
+                  <span className="flex-1 break-words text-black">{dav.cliente_nome || "-"}</span>
+                </div>
+                <div className="flex gap-1.5">
+                  <span className="w-[62px] text-black shrink-0">Endereço:</span>
+                  <span className="flex-1 break-words whitespace-normal text-black">{clienteEndereco}</span>
+                </div>
+                <div className="flex gap-1.5">
+                  <span className="w-[62px] text-black shrink-0">CEP:</span>
+                  <span className="flex-1 text-black">{clienteCep}</span>
+                </div>
+                <div className="flex gap-1.5">
+                  <span className="w-[62px] text-black shrink-0">Telefone:</span>
+                  <span className="flex-1 text-black">{dav.cliente_telefone || "-"}</span>
+                </div>
               </div>
-              <div className="flex gap-1.5">
-                <span className="font-bold w-[62px] shrink-0">CEP:</span>
-                <span>{clienteCep}</span>
-              </div>
-              <div className="flex gap-1.5">
-                <span className="font-bold w-[62px] shrink-0">Telefone:</span>
-                <span>{dav.cliente_telefone || "-"}</span>
-              </div>
-              <div className="flex gap-1.5">
-                <span className="font-bold w-[62px] shrink-0">E-mail:</span>
-                <span className="break-all">{clienteEmail}</span>
-              </div>
-            </div>
 
-            <div className="col-span-12 sm:col-span-5 print:col-span-5 space-y-0.5">
-              <div className="flex gap-1.5">
-                <span className="font-bold w-[72px] shrink-0">CPF/CNPJ:</span>
-                <span>{dav.cliente_cnpj || "-"}</span>
-              </div>
-              <div className="flex gap-1.5">
-                <span className="font-bold w-[72px] shrink-0">Bairro:</span>
-                <span className="break-words">{clienteBairro}</span>
-              </div>
-              <div className="flex gap-1.5">
-                <span className="font-bold w-[72px] shrink-0">Cidade/UF:</span>
-                <span className="break-words">
-                  {clienteCidade}
-                  {clienteUf && clienteUf !== "-" ? ` / ${clienteUf}` : ""}
-                </span>
-              </div>
-              <div className="flex gap-1.5">
-                <span className="font-bold w-[72px] shrink-0">Pagamento:</span>
-                <span className="break-words">{pagInfo}</span>
-              </div>
-              <div className="flex gap-1.5">
-                <span className="font-bold w-[72px] shrink-0">Frete/Prazo:</span>
-                <span className="break-words">
-                  {freteInfo} | {prazoInfo}
-                </span>
+              <div className="col-span-12 sm:col-span-5 print:col-span-5 space-y-1">
+                <div className="flex gap-1.5">
+                  <span className="w-[68px] text-black shrink-0">CPF/CNPJ:</span>
+                  <span className="flex-1 break-words text-black">{dav.cliente_cnpj || "-"}</span>
+                </div>
+                <div className="flex gap-1.5">
+                  <span className="w-[68px] text-black shrink-0">Bairro:</span>
+                  <span className="flex-1 break-words text-black">{clienteBairro}</span>
+                </div>
+                <div className="flex gap-1.5">
+                  <span className="w-[68px] text-black shrink-0">Cidade/UF:</span>
+                  <span className="flex-1 break-words text-black">
+                    {clienteCidade}{clienteUf && clienteUf !== "-" ? ` / ${clienteUf}` : ""}
+                  </span>
+                </div>
+                <div className="flex gap-1.5">
+                  <span className="w-[68px] text-black shrink-0">E-mail:</span>
+                  <span className="flex-1 break-all text-black">{clienteEmail}</span>
+                </div>
               </div>
             </div>
           </div>
+
+          <div className="bg-[#FAF7EE] border border-[#EAE3D2] rounded-xl p-2.5 text-center w-full sm:w-[165px] print:w-[160px] flex flex-col justify-center items-center shrink-0">
+            <Handshake className="w-6 h-6 text-[#A57F33] mb-1 stroke-[2.2]" />
+            <p className="text-[#A57F33] font-black text-[11px] mb-0.5 leading-tight">Obrigado pela sua confiança!</p>
+            <p className="text-[8.5px] text-black font-extrabold leading-tight">Estamos à disposição para lhe atender sempre!</p>
+          </div>
         </div>
 
-        {/* 3. PRODUTOS (COM FOTOS) */}
-        <div className="mt-3 mb-4">
+        {/* 4. PRODUTOS (ORIGINAL COM FOTOS) */}
+        <div className="mb-5">
           <h2 className="font-black text-sm mb-2 flex items-center gap-2">
             <Package className="w-5 h-5 text-[#B89547] shrink-0" strokeWidth={2.5} />
             <span className="text-black tracking-wider uppercase font-black">PRODUTOS</span>
@@ -509,97 +558,65 @@ function ImprimirDAV() {
           </div>
         </div>
 
-        {/* 4. CONDIÇÕES COMERCIAIS, VENCIMENTOS E TOTAIS */}
-        <div className="border border-black mt-3 grid grid-cols-12 no-break">
-          <div className="col-span-12 sm:col-span-8 print:col-span-8 p-2.5 border-b sm:border-b-0 sm:border-r print:border-b-0 print:border-r border-black space-y-1">
-            <p className="font-bold">Condições de Pagamento / Vencimentos</p>
-            <p>
-              <span className="font-semibold">Pagamento:</span> {pagInfo}
-            </p>
-            {vencList.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-x-4 gap-y-0.5 font-bold">
-                {vencList.map((v: any, idx: number) => {
-                  const d = typeof v === "object" && v !== null ? v.data : v;
-                  const valParcela = calcularValorParcela(v, idx, vencList.length, totalDoc);
-                  return (
-                    <span key={idx} className="whitespace-nowrap">
-                      {idx + 1}ª: {formatarDataBr(d)}
-                      {valParcela > 0 ? ` — R$ ${formatBrDecimal(valParcela)}` : ""}
-                    </span>
-                  );
-                })}
-              </div>
-            ) : (
-              <p>
-                <span className="font-semibold">Vencimento:</span> ___ / ___ / ______
-              </p>
-            )}
-            <p>
-              <span className="font-semibold">Frete:</span> {freteInfo} &nbsp;|&nbsp;{" "}
-              <span className="font-semibold">Prazo:</span> {prazoInfo}
-            </p>
-            {dav.observacoes && (
-              <p>
-                <span className="font-semibold">Obs.:</span> {dav.observacoes}
-              </p>
-            )}
-          </div>
-
-          <div className="col-span-12 sm:col-span-4 print:col-span-4 flex flex-col justify-between">
-            <div className="p-2.5 space-y-1 tabular-nums">
-              <div className="flex justify-between">
-                <span>Subtotal:</span>
-                <span>R$ {formatBrDecimal(subtotalDoc)}</span>
-              </div>
-              {descontoDoc > 0 && (
-                <div className="flex justify-between">
-                  <span>Desconto:</span>
-                  <span>- R$ {formatBrDecimal(descontoDoc)}</span>
-                </div>
-              )}
-              {freteDoc > 0 && (
-                <div className="flex justify-between">
-                  <span>Frete:</span>
-                  <span>R$ {formatBrDecimal(freteDoc)}</span>
-                </div>
-              )}
+        {/* 5. TOTAL (ORIGINAL) */}
+        <div className="flex justify-end mb-6 no-break">
+          <div className="bg-[#FAF7EE] border-2 border-[#EBE4D5] rounded-xl p-2.5 flex items-center gap-3 min-w-[260px] shadow-xs">
+            <div className="w-8 h-8 rounded-full border-2 border-[#1B382F] flex items-center justify-center text-[#1B382F] shrink-0 ml-1">
+              <span className="font-black text-sm leading-none">$</span>
             </div>
-            <div className="bg-slate-100 border-t border-black px-2.5 py-2 flex justify-between items-center font-extrabold text-sm tabular-nums">
-              <span>TOTAL:</span>
-              <span>R$ {formatBrDecimal(totalDoc)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* 5. ASSINATURAS E COMPROVANTE DE ENTREGA */}
-        <div className="mt-4 grid grid-cols-12 gap-6 items-end text-[10px] font-bold no-break">
-          <div className="col-span-12 sm:col-span-5 print:col-span-5 px-2 pb-1 text-center">
-            <div className="border-t border-black pt-1.5 mt-12">
-              ASSINATURA DO VENDEDOR {dav.vendedor ? `(${String(dav.vendedor).toUpperCase()})` : ""}
-            </div>
-          </div>
-
-          <div className="col-span-12 sm:col-span-7 print:col-span-7 border border-black p-2.5 flex flex-col justify-between min-h-[74px]">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[10px] font-extrabold uppercase tracking-wide">
-                Recebimento / Entrega
-              </span>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-bold">Data da Entrega:</span>
-                <span className="inline-block border border-black px-2.5 py-0.5 font-mono text-[10px] font-normal tracking-wider bg-white">
-                  ____/____/________
+            <div className="flex-1 flex flex-col">
+              <div className="bg-[#A37E36] text-white rounded-lg px-3.5 py-2 flex justify-between items-center">
+                <span className="text-xs font-black uppercase tracking-wider">Total</span>
+                <span className="text-base font-black">
+                  R$ {Number(dav.total || dav.subtotal || 0).toFixed(2).replace(".", ",")}
                 </span>
               </div>
             </div>
-            <div className="border-t border-black pt-1 mt-8 text-center">
-              ASSINATURA DO CLIENTE / RECEBEDOR
+          </div>
+        </div>
+
+        {/* 6. ASSINATURAS + CAIXA DE DATA DA ENTREGA */}
+        <div className="grid grid-cols-1 sm:grid-cols-12 print:grid-cols-12 gap-4 items-end mb-6 text-xs no-break">
+          <div className="sm:col-span-4 print:col-span-4 pb-1">
+            <div className="border-b-2 border-black mb-1.5 mt-8"></div>
+            <p className="text-center text-[10px] font-black text-black flex items-center justify-center gap-1">
+              <span className="text-[#C5A059]">👤</span> ASSINATURA DO VENDEDOR {dav.vendedor ? `(${dav.vendedor})` : ""}
+            </p>
+          </div>
+          <div className="sm:col-span-5 print:col-span-5 border-2 border-slate-800 rounded-lg p-2.5 bg-white">
+            <div className="flex items-center justify-between gap-2 mb-5">
+              <span className="text-[10px] font-black text-black">Data da Entrega:</span>
+              <span className="border border-black rounded px-2 py-0.5 text-[10px] font-mono font-bold tracking-wider bg-white">
+                ___ / ___ / ______
+              </span>
+            </div>
+            <div className="border-b-2 border-black mb-1.5"></div>
+            <p className="text-center text-[10px] font-black text-black flex items-center justify-center gap-1">
+              <span className="text-[#C5A059]">👤</span> ASSINATURA DO CLIENTE / RECEBEDOR
+            </p>
+          </div>
+          <div className="sm:col-span-3 print:col-span-3 flex justify-end">
+            <div className="bg-[#FAF9F5] border-2 border-[#EBE4D5] rounded-lg p-2.5 flex gap-2 items-center w-full">
+              <div className="text-[#C5A059] text-lg shrink-0">📄</div>
+              <p className="text-[8px] text-black font-extrabold leading-tight">
+                Este documento não possui valor fiscal, é apenas um Documento Auxiliar de Venda.
+              </p>
             </div>
           </div>
         </div>
 
-        <p className="text-center text-[9px] text-slate-600 mt-4">
-          Documento Auxiliar de Venda — Sem valor fiscal.
-        </p>
+        {/* 7. RODAPÉ ESCURO (ORIGINAL) */}
+        <div className="bg-[#171F1E] text-white rounded-lg p-3.5 flex flex-wrap items-center justify-between gap-4 mt-auto no-break">
+          <div className="flex items-center gap-4 sm:gap-7 text-[9px] sm:text-xs font-black">
+            <div className="flex items-center gap-1.5"><span className="text-[#C5A059]">🛡️</span> Qualidade em cada detalhe</div>
+            <div className="flex items-center gap-1.5"><span className="text-[#C5A059]">🚚</span> Entrega rápida e segura</div>
+            <div className="flex items-center gap-1.5"><span className="text-[#C5A059]">🌱</span> Produtos selecionados</div>
+          </div>
+          <div className="flex items-center gap-3">
+            <GardenPrimeLogo size="small" />
+            <img src="/logo-02.png" alt="Logo 02" className="h-6 w-auto object-contain brightness-0 invert" />
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -511,8 +511,12 @@ export async function preloadLogos(): Promise<{ prime: string | null; plus: stri
 export async function generateOrderPdfDoc(
   order: OrderData,
   items: OrderItem[],
-  _logos?: { prime?: string | null; plus?: string | null; icons?: any },
+  logos?: { prime?: string | null; plus?: string | null; icons?: any },
 ): Promise<{ doc: jsPDF; blob: Blob; file: File; filename: string }> {
+  if (!logos) {
+    logos = await preloadLogos();
+  }
+
   // Buscar configurações da empresa
   let config: any = null;
   try {
@@ -566,8 +570,8 @@ export async function generateOrderPdfDoc(
   );
 
   const isDAV = isOrderDav(order);
+  const docType = isDAV ? "ORÇAMENTO" : "PEDIDO DE VENDA";
   const num = getOrderNumber(order);
-  const numDisplay = num.padStart(6, "0");
   const filename = `${isDAV ? "orcamento" : "pedido"}_${num}.pdf`;
 
   const doc = new jsPDF({
@@ -578,192 +582,348 @@ export async function generateOrderPdfDoc(
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 8;
+  const margin = 10;
   const contentW = pageWidth - margin * 2;
   let y = margin;
 
-  doc.setDrawColor(0, 0, 0);
+  const colorDark = [23, 31, 30] as [number, number, number]; // #171F1E
+  const colorGold = [197, 160, 89] as [number, number, number]; // #C5A059
+  const colorGray = [243, 244, 246] as [number, number, number]; // #F3F4F6
+
+  // ── 1. CABEÇALHO CLARO (ORIGINAL) ─────────────────────────────────────────────
+  const primeLogo = logos?.prime || cachedLogos?.prime;
+  const logo02 = logos?.plus || cachedLogos?.plus;
+
+  if (primeLogo) {
+    try {
+      doc.addImage(primeLogo, "PNG", margin, y, 42, 14.2);
+    } catch {}
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
+    doc.text("GARDEN PRIME", margin, y + 8);
+  }
+
+  if (logo02) {
+    try {
+      doc.addImage(logo02, "PNG", margin + 5, y + 14.8, 30, 13.2);
+    } catch {}
+  }
+
+  // Divisor 1
+  const div1X = margin + 54;
+  doc.setDrawColor(colorGold[0], colorGold[1], colorGold[2]);
+  doc.setLineWidth(0.4);
+  doc.line(div1X, y + 1, div1X, y + 27);
+
+  // Info Empresa
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
   doc.setTextColor(0, 0, 0);
+  const infoX = div1X + 4;
+  doc.text(`CNPJ: ${config?.cnpj || "50.387.381/0001-81"}`, infoX, y + 4.5);
+  doc.text(`Inscr. Estadual: ${config?.inscricao_estadual || "266031100110"}`, infoX, y + 8.3);
 
-  // ── 1. CABEÇALHO EMPRESARIAL COMPACTO (ESTILO DAV) ────────────────────────────
-  const headerStartY = y;
+  const tipo = config?.tipo_logradouro ? config.tipo_logradouro + " " : "";
+  const end = config?.endereco || "MATEUS RODRIGUES DA COSTA";
+  const numero = config?.numero ? ", " + config.numero : "";
+  const compl = config?.complemento ? " " + config.complemento : "";
+  const bairro = config?.bairro ? ", " + config.bairro : "";
+  doc.text(`${tipo}${end}${numero}${compl}${bairro}`, infoX, y + 12.1);
 
-  // Faixa 1: Título Legal
+  const mun = config?.municipio || "Charqueada";
+  const uf = config?.uf || "SP";
+  const cep = config?.cep ? " - CEP " + config.cep : "";
+  doc.text(`${mun} - ${uf}${cep}`, infoX, y + 15.9);
+
+  const cel = config?.celular || config?.telefone || "(19) 99930-8784";
+  doc.text(cel, infoX, y + 19.7);
+  doc.text(config?.email_contato || "garden-plus@hotmail.com", infoX, y + 23.5);
+
+  // Slogan Top Right
+  doc.setFont("times", "bolditalic");
+  doc.setFontSize(13.5);
+  doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
+  doc.text("Mais verde", pageWidth - margin - 38, y + 7.5);
+  doc.text("para um futuro", pageWidth - margin - 38, y + 12.5);
+  doc.text("melhor!", pageWidth - margin - 33, y + 17.5);
+
+  y += 29.5;
+
+  // ── 2. BLOCO ESCURO (ORIGINAL, PORÉM MAIS FINO) ───────────────────────────────
+  const orderTotalNum = Number(order.valor_total || order.total || order.subtotal || 0);
+  let orderVenc = (order as any).vencimentos;
+  if (!Array.isArray(orderVenc) || orderVenc.length === 0) {
+    if (order.condicao_pagamento && order.condicao_pagamento.trim() !== "") {
+      orderVenc = calcularVencimentosPadrao(
+        order.condicao_pagamento,
+        order.created_at,
+        orderTotalNum,
+      );
+    }
+  }
+  const hasVencList = Array.isArray(orderVenc) && orderVenc.length > 0;
+  const numVenc = hasVencList ? orderVenc.length : 1;
+  // Parcelas organizadas em 2 colunas quando > 2 para deixar o bloco escuro mais fino
+  const vencRows = numVenc > 2 ? Math.ceil(numVenc / 2) : numVenc;
+  const extraHeight = (vencRows > 1 ? (vencRows - 1) * 3.4 : 0) + 2.2;
+  const darkBannerH = 19.5 + extraHeight;
+
+  doc.setFillColor(colorDark[0], colorDark[1], colorDark[2]);
+  doc.roundedRect(margin, y, contentW, darkBannerH, 2, 2, "F");
+
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.5);
-  doc.text(
-    `DOCUMENTO AUXILIAR DE VENDA - ${isDAV ? "ORÇAMENTO" : "PEDIDO DE VENDA"}`,
-    pageWidth / 2,
-    y + 4.8,
-    { align: "center" },
-  );
-  doc.setFontSize(7.2);
-  doc.text(
-    "NÃO É DOCUMENTO FISCAL - NÃO É VÁLIDO COMO RECIBO E COMO GARANTIA DE MERCADORIA - NÃO COMPROVA PAGAMENTO",
-    pageWidth / 2,
-    y + 9.2,
-    { align: "center" },
-  );
-
-  y += 11.5;
-  doc.setLineWidth(0.3);
-  doc.line(margin, y, pageWidth - margin, y);
-
-  // Faixa 2: Dados da Empresa Emitente
-  const razaoSocial = config?.razao_social || "GARDEN PLUS LTDA";
-  const nomeFantasia = config?.nome_fantasia || "GARDEN PRIME";
-  const cnpj = config?.cnpj || "50.387.381/0001-81";
-  const ie = config?.inscricao_estadual || "266031100110";
-  const tipoLog = config?.tipo_logradouro ? `${config.tipo_logradouro} ` : "";
-  const endRua = config?.endereco || "MATEUS RODRIGUES DA COSTA";
-  const endNum = config?.numero ? `, ${config.numero}` : "";
-  const endCompl = config?.complemento ? ` ${config.complemento}` : "";
-  const endBairro = config?.bairro ? ` - ${config.bairro}` : "";
-  const empresaEndereco = `${tipoLog}${endRua}${endNum}${endCompl}${endBairro}`;
-  const empresaCep = config?.cep ? `${config.cep} - ` : "";
-  const empresaCidadeUf = `${empresaCep}${config?.municipio || "Charqueada"} - ${config?.uf || "SP"}`;
-  const empresaFone = config?.celular || config?.telefone || "(19) 99930-8784";
-  const empresaEmail = config?.email_contato || "garden-plus@hotmail.com";
-
-  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13.5);
+  doc.setTextColor(255, 255, 255);
+  doc.text(docType, margin + 5, y + 8.5);
   doc.setFontSize(8.5);
-  doc.text(`${razaoSocial} - ${nomeFantasia}`, margin + 3, y + 4.2);
+  doc.text(`DAV Nº: ${num}`, margin + 5, y + 13.8);
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.text(`CNPJ: ${cnpj} - Insc. Estadual: ${ie}`, margin + 3, y + 8.0);
-  doc.text(doc.splitTextToSize(empresaEndereco, 125)[0], margin + 3, y + 11.6);
-  doc.text(empresaCidadeUf, margin + 3, y + 15.2);
-
-  // Direita da Faixa 2: Fone + Email (Página X/Y é inserida no final em todas as páginas)
-  const pageNumberY = y + 4.2;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.text(`Fone: ${empresaFone}`, pageWidth - margin - 3, y + 11.6, { align: "right" });
-  doc.text(empresaEmail, pageWidth - margin - 3, y + 15.2, { align: "right" });
-
-  y += 17.5;
-  doc.line(margin, y, pageWidth - margin, y);
-
-  // Faixa 3: Metadados do Pedido / DAV
-  const createdDate = order.created_at ? new Date(order.created_at) : new Date();
-  const dataEmissao = createdDate.toLocaleDateString("pt-BR");
-  const horaEmissao = createdDate.toLocaleTimeString("pt-BR", {
+  const dataEmissao = new Date(order.created_at).toLocaleDateString("pt-BR");
+  const horaEmissao = new Date(order.created_at).toLocaleTimeString("pt-BR", {
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
   });
+
+  // Emissão
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.5);
+  doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
+  doc.text("Emissão", margin + 62, y + 7.5);
+  doc.setFontSize(7.8);
+  doc.setTextColor(255, 255, 255);
+  doc.text(`${dataEmissao} às ${horaEmissao}`, margin + 62, y + 12.2);
 
   let validadeStr: string;
   if ((order as any).validade) {
     validadeStr = new Date((order as any).validade).toLocaleDateString("pt-BR");
   } else {
-    const base = new Date(createdDate);
+    const base = order.created_at ? new Date(order.created_at) : new Date();
     base.setDate(base.getDate() + 30);
     validadeStr = base.toLocaleDateString("pt-BR");
   }
 
-  const vendedorNome = order.vendedor_nome
-    ? String(order.vendedor_nome).toUpperCase()
-    : "DIRETO";
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.text(`Tipo: ${isDAV ? "Orçamento (DAV)" : "Pedido de Venda"}`, margin + 3, y + 4.0);
-  doc.text(`Vendedor: ${vendedorNome}`, margin + 3, y + 7.8);
-  doc.text(`Validade: ${validadeStr}`, margin + 3, y + 11.6);
-
-  const metaRightX = margin + 105;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.5);
-  doc.text(`${isDAV ? "DAV" : "DAV / Pedido"}:`, metaRightX, y + 4.8);
-  doc.setFontSize(9.5);
-  doc.text(numDisplay, pageWidth - margin - 3, y + 4.8, { align: "right" });
+  // Box Preto de Condições Comerciais compacto
+  const boxW = 88;
+  const boxX = pageWidth - margin - boxW;
+  doc.setFillColor(0, 0, 0);
+  doc.roundedRect(boxX, y + 1.0, boxW - 1, darkBannerH - 2.0, 1, 1, "F");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
-  doc.text(`Data: ${dataEmissao}`, metaRightX, y + 10.6);
-  doc.text(`Hora: ${horaEmissao}`, pageWidth - margin - 3, y + 10.6, { align: "right" });
+  doc.setFontSize(6.2);
+  doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
+  doc.text("CONDIÇÕES COMERCIAIS", boxX + 2.5, y + 4.3);
+  doc.setTextColor(255, 255, 255);
+  const pagTrunc = doc.splitTextToSize(
+    `Pagamento: ${order.condicao_pagamento || "Não informado"}`,
+    boxW - 5,
+  )[0];
+  doc.text(pagTrunc, boxX + 2.5, y + 7.8);
 
-  y += 13.8;
-  doc.setLineWidth(0.35);
-  doc.rect(margin, headerStartY, contentW, y - headerStartY);
+  let validadeY = y + 15.3;
 
-  y += 2.2;
+  if (hasVencList && numVenc > 1) {
+    const vBoxX = boxX + 2.5;
+    const vBoxW = boxW - 6;
+    const vBoxH = vencRows * 3.4 + 0.8;
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(vBoxX, y + 9.2, vBoxW, vBoxH, 0.5, 0.5, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.0);
+    doc.setTextColor(10, 10, 10);
 
-  // ── 2. IDENTIFICAÇÃO DO SOLICITANTE (DADOS DO CLIENTE) ────────────────────────
+    if (numVenc > 2) {
+      const colW = vBoxW / 2;
+      orderVenc.forEach((v: any, idx: number) => {
+        const d = typeof v === "object" && v !== null ? v.data : v;
+        const clean = (d || "").split("T")[0].split("-");
+        const dtBr = clean.length === 3 ? `${clean[2]}/${clean[1]}/${clean[0]}` : d;
+        const valParcela = calcularValorParcela(v, idx, numVenc, orderTotalNum);
+        const valStr = valParcela > 0 ? `R$ ${valParcela.toFixed(2).replace(".", ",")}` : "";
+        const rowIdx = Math.floor(idx / 2);
+        const colIdx = idx % 2;
+        const cx = vBoxX + 1.5 + colIdx * colW;
+        const lineY = y + 11.8 + rowIdx * 3.4;
+        doc.text(`${idx + 1}ª: ${dtBr}${valStr ? ` (${valStr})` : ""}`, cx, lineY);
+      });
+    } else {
+      orderVenc.forEach((v: any, idx: number) => {
+        const d = typeof v === "object" && v !== null ? v.data : v;
+        const clean = (d || "").split("T")[0].split("-");
+        const dtBr = clean.length === 3 ? `${clean[2]}/${clean[1]}/${clean[0]}` : d;
+        const valParcela = calcularValorParcela(v, idx, numVenc, orderTotalNum);
+        const valStr = valParcela > 0 ? `R$ ${valParcela.toFixed(2).replace(".", ",")}` : "";
+        const lineY = y + 11.8 + idx * 3.4;
+        doc.text(`${idx + 1}ª: ${dtBr}`, vBoxX + 2, lineY);
+        if (valStr) {
+          doc.text(valStr, vBoxX + vBoxW - 2, lineY, { align: "right" });
+        }
+      });
+    }
+
+    validadeY = y + 9.2 + vBoxH + 2.9;
+  } else {
+    doc.text("Vencimento:", boxX + 2.5, y + 11.7);
+    const vBoxX = boxX + 18;
+    const vBoxW = boxW - 21.5;
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(vBoxX, y + 9.2, vBoxW, 3.6, 0.5, 0.5, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.2);
+    doc.setTextColor(20, 20, 20);
+
+    if (hasVencList && numVenc === 1) {
+      const d =
+        typeof orderVenc[0] === "object" && orderVenc[0] !== null ? orderVenc[0].data : orderVenc[0];
+      const clean = (d || "").split("T")[0].split("-");
+      const dtBr = clean.length === 3 ? `${clean[2]}/${clean[1]}/${clean[0]}` : d;
+      const valParcela = calcularValorParcela(orderVenc[0], 0, 1, orderTotalNum);
+      const valStr = valParcela > 0 ? `R$ ${valParcela.toFixed(2).replace(".", ",")}` : "";
+      doc.text(dtBr, vBoxX + 2, y + 11.8);
+      if (valStr) {
+        doc.text(valStr, vBoxX + vBoxW - 2, y + 11.8, { align: "right" });
+      }
+    } else {
+      doc.text("___ / ___ / ______", vBoxX + vBoxW / 2, y + 11.8, { align: "center" });
+    }
+    validadeY = y + 15.6;
+  }
+
+  // Validade + Frete/Prazo
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.2);
+  doc.setTextColor(colorGold[0], colorGold[1], colorGold[2]);
+  doc.text(`Validade: ${validadeStr}`, boxX + 2.5, validadeY);
+
+  const freteInfo = order.frete_tipo || (order as any).frete || "Retirada";
+  const prazoInfo = order.prazo_entrega || (order as any).prazo || "Imediato";
+  doc.setTextColor(255, 255, 255);
+  doc.text(`Frete: ${freteInfo} | Prazo: ${prazoInfo}`, boxX + 2.5, validadeY + 3.2);
+
+  y += darkBannerH + 3.5;
+
+  // ── 3. DADOS DO CLIENTE (ESTILO ORIGINAL, ENDEREÇO ORGANIZADO EM 2 COLUNAS) ──
   const c = order.cliente || order.clientes || ({} as any);
-  const clientStartY = y;
-
   const nomeStr = String(c.nome || "-");
   const enderecoLimpo = formatClientAddressLine(c.endereco, c.numero);
   const cidadeUfStr = `${c.cidade || "-"}${c.uf && c.uf !== "-" ? ` / ${c.uf}` : ""}`;
-  const freteInfo = order.frete_tipo || (order as any).frete || "Retirada";
-  const prazoInfo = order.prazo_entrega || (order as any).prazo || "Imediato";
-  const pagInfo = order.condicao_pagamento || order.metodo_pagamento || "Não informado";
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  const nomeLines = doc.splitTextToSize(nomeStr, 84).slice(0, 2);
-  const endLines = doc.splitTextToSize(enderecoLimpo, 84).slice(0, 2);
+  doc.setFontSize(7.6);
+  const nomeLines = doc.splitTextToSize(nomeStr, 56).slice(0, 2);
+  const endLines = doc.splitTextToSize(enderecoLimpo, 56).slice(0, 2);
   const extraNomeH = nomeLines.length > 1 ? 3.5 : 0;
   const extraEndH = endLines.length > 1 ? 3.5 : 0;
+  const clientBoxH = 29 + extraNomeH + extraEndH;
 
-  const clientBoxH = 27.5 + extraNomeH + extraEndH;
-  doc.setLineWidth(0.35);
-  doc.rect(margin, clientStartY, contentW, clientBoxH);
+  doc.setFillColor(colorGray[0], colorGray[1], colorGray[2]);
+  doc.roundedRect(margin, y, contentW, clientBoxH, 2, 2, "F");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.2);
-  doc.text("Identificação do Solicitante", margin + 3, clientStartY + 4.4);
+  doc.setFontSize(9);
+  doc.setTextColor(154, 116, 36);
+  doc.text("DADOS", margin + 4, y + 5.2);
+  const dadosTitleWidth = doc.getTextWidth("DADOS ");
+  doc.setTextColor(0, 0, 0);
+  doc.text("DO CLIENTE", margin + 4 + dadosTitleWidth, y + 5.2);
 
-  const lblX1 = margin + 3;
-  const valX1 = margin + 21;
-  const lblX2 = margin + 110;
-  const valX2 = margin + 131;
-  const maxRightW = pageWidth - margin - 3 - valX2;
-
-  let cy = clientStartY + 9.0;
-  const drawField = (lx: number, vx: number, label: string, val: string | string[], rowY: number) => {
+  if (order.vendedor_nome) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.5);
+    doc.setTextColor(154, 116, 36);
+    doc.text(
+      `VENDEDOR: ${String(order.vendedor_nome).toUpperCase()}`,
+      pageWidth - margin - 46,
+      y + 5.2,
+      { align: "right" },
+    );
+  }
+
+  const lblX1 = margin + 4;
+  const valX1 = margin + 21;
+  const lblX2 = margin + 80;
+  const valX2 = margin + 99;
+  const obBoxW = 42;
+  const maxCol2W = pageWidth - margin - obBoxW - 4 - valX2;
+
+  const drawClientField = (
+    lx: number,
+    vx: number,
+    label: string,
+    val: string | string[],
+    rowY: number,
+  ) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(0, 0, 0);
     doc.text(label, lx, rowY);
-    doc.setFont("helvetica", "normal");
+    doc.setFont("helvetica", "bold");
     doc.text(val, vx, rowY);
   };
 
-  // Linha 1
-  drawField(lblX1, valX1, "Cliente:", nomeLines, cy);
-  drawField(lblX2, valX2, "CPF/CNPJ:", doc.splitTextToSize(String(c.cpf_cnpj || "-"), maxRightW)[0], cy);
-  cy += 4.0 + extraNomeH;
+  let cy = y + 10.2;
+  drawClientField(lblX1, valX1, "Cliente:", nomeLines, cy);
+  drawClientField(
+    lblX2,
+    valX2,
+    "CPF/CNPJ:",
+    doc.splitTextToSize(String(c.cpf_cnpj || "-"), maxCol2W)[0],
+    cy,
+  );
+  cy += 4.2 + extraNomeH;
 
-  // Linha 2
-  drawField(lblX1, valX1, "Endereço:", endLines, cy);
-  drawField(lblX2, valX2, "Bairro:", doc.splitTextToSize(String(c.bairro || "-"), maxRightW)[0], cy);
-  cy += 4.0 + extraEndH;
+  drawClientField(lblX1, valX1, "Endereço:", endLines, cy);
+  drawClientField(
+    lblX2,
+    valX2,
+    "Bairro:",
+    doc.splitTextToSize(String(c.bairro || "-"), maxCol2W)[0],
+    cy,
+  );
+  cy += 4.2 + extraEndH;
 
-  // Linha 3
-  drawField(lblX1, valX1, "CEP:", String(c.cep || "-"), cy);
-  drawField(lblX2, valX2, "Cidade/UF:", doc.splitTextToSize(cidadeUfStr, maxRightW)[0], cy);
-  cy += 4.0;
+  drawClientField(lblX1, valX1, "CEP:", String(c.cep || "-"), cy);
+  drawClientField(
+    lblX2,
+    valX2,
+    "Cidade/UF:",
+    doc.splitTextToSize(cidadeUfStr, maxCol2W)[0],
+    cy,
+  );
+  cy += 4.2;
 
-  // Linha 4
-  drawField(lblX1, valX1, "Telefone:", String(c.telefone || "-"), cy);
-  drawField(lblX2, valX2, "Pagamento:", doc.splitTextToSize(pagInfo, maxRightW)[0], cy);
-  cy += 4.0;
+  drawClientField(lblX1, valX1, "Telefone:", String(c.telefone || "-"), cy);
+  drawClientField(
+    lblX2,
+    valX2,
+    "E-mail:",
+    doc.splitTextToSize(String(c.email || "-"), maxCol2W)[0],
+    cy,
+  );
 
-  // Linha 5
-  drawField(lblX1, valX1, "E-mail:", doc.splitTextToSize(String(c.email || "-"), 84)[0], cy);
-  drawField(lblX2, valX2, "Frete/Prazo:", doc.splitTextToSize(`${freteInfo} | ${prazoInfo}`, maxRightW)[0], cy);
+  // Obrigado box compacto à direita
+  const obX = pageWidth - margin - obBoxW - 2;
+  doc.setFillColor(250, 250, 245);
+  doc.roundedRect(obX, y + 3.5, obBoxW, clientBoxH - 7, 1, 1, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.2);
+  doc.setTextColor(154, 116, 36);
+  doc.text("Obrigado pela", obX + obBoxW / 2, y + 10, { align: "center" });
+  doc.text("sua confiança!", obX + obBoxW / 2, y + 14, { align: "center" });
+  doc.setFontSize(5.8);
+  doc.setTextColor(0, 0, 0);
+  doc.text("Estamos à disposição", obX + obBoxW / 2, y + 19.5, { align: "center" });
+  doc.text("para lhe atender sempre!", obX + obBoxW / 2, y + 22.5, { align: "center" });
 
-  y = clientStartY + clientBoxH + 4.5;
+  y += clientBoxH + 5;
 
-  // ── 3. PRODUTOS (COM FOTOS) ────────────────────────────────────────────────────
+  // ── 4. PRODUTOS (ORIGINAL COM FOTOS) ──────────────────────────────────────────
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.5);
   doc.setTextColor(0, 0, 0);
-  doc.text("PRODUTOS", margin + 2, y + 1);
-  y += 3.5;
+  doc.text("PRODUTOS", margin + 4, y + 1);
+  y += 4.5;
 
   const tableBody = items.map((it) => {
     const nome =
@@ -787,13 +947,13 @@ export async function generateOrderPdfDoc(
 
   autoTable(doc, {
     startY: y,
-    margin: { left: margin, right: margin, bottom: 14 },
+    margin: { left: margin, right: margin, bottom: 24 },
     tableWidth: contentW,
     head: [["Código", "", "Produto", "Qtd", "Vlr. Unit.", "Vlr. Total"]],
     body: tableBody,
     theme: "plain",
     headStyles: {
-      fillColor: [17, 35, 33],
+      fillColor: colorDark,
       textColor: [255, 255, 255],
       fontStyle: "bold",
       halign: "center",
@@ -833,184 +993,99 @@ export async function generateOrderPdfDoc(
     },
   });
 
-  y = (doc as any).lastAutoTable.finalY + 5;
-
-  // ── 4. CONDIÇÕES, VENCIMENTOS, TOTAIS E ASSINATURAS ───────────────────────────
-  const orderTotalNum = Number(order.valor_total || order.total || order.subtotal || 0);
-  const subtotalNum = Number(order.subtotal || orderTotalNum);
-  const descontoNum = Number(order.desconto_valor || 0);
-  const freteNum = Number(order.frete_valor || 0);
-
-  let orderVenc = (order as any).vencimentos;
-  if (!Array.isArray(orderVenc) || orderVenc.length === 0) {
-    if (order.condicao_pagamento && order.condicao_pagamento.trim() !== "") {
-      orderVenc = calcularVencimentosPadrao(
-        order.condicao_pagamento,
-        order.created_at,
-        orderTotalNum,
-      );
-    }
-  }
-  const vencList = Array.isArray(orderVenc) ? orderVenc : [];
-  const vencDisplayLines: string[] = vencList.map((v: any, idx: number) => {
-    const d = typeof v === "object" && v !== null ? v.data : v;
-    const clean = (d || "").split("T")[0].split("-");
-    const dtBr = clean.length === 3 ? `${clean[2]}/${clean[1]}/${clean[0]}` : String(d || "");
-    const valParcela = calcularValorParcela(v, idx, vencList.length, orderTotalNum);
-    const valStr = valParcela > 0 ? ` — R$ ${formatBrDecimal(valParcela)}` : "";
-    return `${idx + 1}ª: ${dtBr}${valStr}`;
-  });
-
-  const obsLines = order.observacoes
-    ? doc.splitTextToSize(`Obs.: ${order.observacoes}`, 114).slice(0, 3)
-    : [];
-  const vencRowsCount = Math.max(1, Math.ceil(vencDisplayLines.length / 2));
-  const summaryH = Math.max(24, 15 + vencRowsCount * 3.8 + obsLines.length * 3.6);
-  const neededBottomH = summaryH + 34;
-
-  if (y + neededBottomH > pageHeight - 10) {
+  y = (doc as any).lastAutoTable.finalY + 6;
+  const footerH = 18;
+  if (y + 38 > pageHeight - footerH - 4) {
     doc.addPage();
     y = margin + 4;
   }
 
-  const splitX = margin + 122;
-  doc.setLineWidth(0.35);
-  doc.rect(margin, y, contentW, summaryH);
-  doc.line(splitX, y, splitX, y + summaryH);
+  // ── 5. TOTAL (ORIGINAL DOURADO) ───────────────────────────────────────────────
+  const totW = 60;
+  const totX = pageWidth - margin - totW;
 
-  // Esquerda: Pagamento, Vencimentos, Frete, Obs
-  let ly = y + 4.5;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
-  doc.text("Condições de Pagamento / Vencimentos", margin + 3, ly);
-  ly += 4.2;
-
-  doc.setFont("helvetica", "normal");
-  doc.text(doc.splitTextToSize(`Pagamento: ${pagInfo}`, 116)[0], margin + 3, ly);
-  ly += 3.8;
-
-  if (vencDisplayLines.length > 0) {
-    for (let i = 0; i < vencDisplayLines.length; i += 2) {
-      const leftItem = vencDisplayLines[i];
-      const rightItem = vencDisplayLines[i + 1];
-      doc.setFont("helvetica", "bold");
-      doc.text(leftItem, margin + 3, ly);
-      if (rightItem) {
-        doc.text(rightItem, margin + 62, ly);
-      }
-      ly += 3.7;
-    }
-  } else {
-    doc.text("Vencimento: ___ / ___ / ______", margin + 3, ly);
-    ly += 3.7;
-  }
-
-  doc.setFont("helvetica", "normal");
-  doc.text(`Frete: ${freteInfo}   |   Prazo: ${prazoInfo}`, margin + 3, ly);
-  if (obsLines.length > 0) {
-    ly += 3.7;
-    doc.text(obsLines, margin + 3, ly);
-  }
-
-  // Direita: Totais
-  let ry = y + 4.8;
-  const rLblX = splitX + 3;
-  const rValX = pageWidth - margin - 3;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.text("Subtotal:", rLblX, ry);
-  doc.text(`R$ ${formatBrDecimal(subtotalNum)}`, rValX, ry, { align: "right" });
-  ry += 4.2;
-
-  if (descontoNum > 0) {
-    doc.text("Desconto:", rLblX, ry);
-    doc.text(`- R$ ${formatBrDecimal(descontoNum)}`, rValX, ry, { align: "right" });
-    ry += 4.2;
-  }
-
-  if (freteNum > 0) {
-    doc.text("Frete:", rLblX, ry);
-    doc.text(`R$ ${formatBrDecimal(freteNum)}`, rValX, ry, { align: "right" });
-    ry += 4.2;
-  }
-
-  const totalBarH = 8;
-  const totalBarY = y + summaryH - totalBarH;
-  doc.setFillColor(243, 244, 246);
-  doc.rect(splitX, totalBarY, pageWidth - margin - splitX, totalBarH, "F");
-  doc.setLineWidth(0.3);
-  doc.line(splitX, totalBarY, pageWidth - margin, totalBarY);
-  doc.setLineWidth(0.35);
-  doc.rect(margin, y, contentW, summaryH);
-
+  doc.setFillColor(colorGold[0], colorGold[1], colorGold[2]);
+  doc.rect(totX, y, totW, 9, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.5);
-  doc.text("TOTAL:", rLblX, totalBarY + 5.4);
-  doc.text(`R$ ${formatBrDecimal(orderTotalNum)}`, rValX, totalBarY + 5.4, { align: "right" });
+  doc.setTextColor(255, 255, 255);
+  doc.text("Total", totX + 2, y + 6);
+  const vTot = `R$ ${Number(order.valor_total || order.total || order.subtotal || 0)
+    .toFixed(2)
+    .replace(".", ",")}`;
+  doc.text(vTot, totX + totW - 2, y + 6, { align: "right" });
 
-  // Assinaturas e Caixa de Recebimento / Data da Entrega
-  const signTopY = y + summaryH + 4;
-  const recBoxW = 104;
-  const recBoxH = 22;
-  const recBoxX = pageWidth - margin - recBoxW;
+  y += 14;
 
-  // Assinatura do Vendedor (Esquerda)
-  const vendLineY = signTopY + 15;
-  doc.setLineWidth(0.35);
-  doc.line(margin + 4, vendLineY, margin + 78, vendLineY);
+  // ── 6. ASSINATURAS + CAIXA DE DATA DA ENTREGA ─────────────────────────────────
+  // Assinatura do Vendedor
+  doc.setLineWidth(0.4);
+  doc.setDrawColor(0, 0, 0);
+  doc.line(margin, y + 13, margin + 54, y + 13);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7);
+  doc.setFontSize(6.2);
   doc.setTextColor(0, 0, 0);
   const vendSignLabel = order.vendedor_nome
     ? `ASSINATURA DO VENDEDOR (${order.vendedor_nome.toUpperCase()})`
     : "ASSINATURA DO VENDEDOR";
-  doc.text(vendSignLabel, margin + 41, vendLineY + 4, { align: "center" });
+  doc.text(vendSignLabel, margin + 27, y + 16.5, { align: "center" });
 
-  // Caixa de Data da Entrega + Assinatura de quem receber (Direita)
+  // Caixa de Recebimento / Assinatura do Cliente com Data da Entrega
+  const recX = margin + 60;
+  const recW = 86;
+  const recH = 18;
   doc.setLineWidth(0.35);
-  doc.rect(recBoxX, signTopY, recBoxW, recBoxH);
-
+  doc.setDrawColor(0, 0, 0);
+  doc.rect(recX, y, recW, recH);
+  doc.setFontSize(6.2);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.8);
-  doc.text("RECEBIMENTO / ENTREGA", recBoxX + 3, signTopY + 4.8);
-
-  // Caixinha da Data da Entrega
-  doc.setFontSize(7);
-  doc.text("Data da Entrega:", recBoxX + 46, signTopY + 4.8);
-  doc.setLineWidth(0.3);
-  doc.rect(recBoxX + 68, signTopY + 1.6, 33, 4.8);
+  doc.text("Data da Entrega:", recX + 2.5, y + 4.2);
+  doc.setLineWidth(0.25);
+  doc.rect(recX + 23, y + 1.4, 28, 4.2);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.2);
-  doc.text("____/____/________", recBoxX + 84.5, signTopY + 5.0, { align: "center" });
+  doc.text("___ / ___ / ______", recX + 37, y + 4.3, { align: "center" });
 
-  // Linha de assinatura dentro da caixa
-  doc.setLineWidth(0.35);
-  doc.line(recBoxX + 6, signTopY + 15.5, recBoxX + recBoxW - 6, signTopY + 15.5);
+  doc.setLineWidth(0.4);
+  doc.line(recX + 4, y + 13, recX + recW - 4, y + 13);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7);
-  doc.text("ASSINATURA DO CLIENTE / RECEBEDOR", recBoxX + recBoxW / 2, signTopY + 19.5, {
+  doc.setFontSize(6.2);
+  doc.text("ASSINATURA DO CLIENTE / RECEBEDOR", recX + recW / 2, y + 16.5, {
     align: "center",
   });
 
-  // Numeração de páginas e rodapé discreto
-  const totalPages = doc.getNumberOfPages();
-  for (let p = 1; p <= totalPages; p++) {
-    doc.setPage(p);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(0, 0, 0);
-    const pgY = p === 1 ? pageNumberY : margin + 3;
-    doc.text(`Página ${p}/${totalPages}`, pageWidth - margin - 3, pgY, { align: "right" });
+  // Caixa Este doc nao possui valor fiscal
+  const noteX = margin + 150;
+  doc.setFillColor(250, 250, 250);
+  doc.roundedRect(noteX, y + 2, 40, 13, 1, 1, "F");
+  doc.setDrawColor(colorGold[0], colorGold[1], colorGold[2]);
+  doc.roundedRect(noteX, y + 2, 40, 13, 1, 1, "S");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(5);
+  doc.setTextColor(50, 50, 50);
+  doc.text("Este documento não possui", noteX + 4, y + 6);
+  doc.text("valor fiscal, é apenas um", noteX + 4, y + 9);
+  doc.text("Documento Auxiliar de Venda.", noteX + 4, y + 12);
 
-    doc.setFontSize(6.5);
-    doc.setTextColor(90, 90, 90);
-    doc.text(
-      `Documento Auxiliar de Venda — Sem valor fiscal.`,
-      pageWidth / 2,
-      pageHeight - 5,
-      { align: "center" },
-    );
+  // ── 7. RODAPÉ ESCURO (ORIGINAL) ───────────────────────────────────────────────
+  doc.setFillColor(colorDark[0], colorDark[1], colorDark[2]);
+  doc.rect(0, pageHeight - footerH, pageWidth, footerH, "F");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.5);
+  doc.setTextColor(220, 220, 220);
+  doc.text("Qualidade em cada detalhe", 20, pageHeight - 8);
+  doc.text("Entrega rápida e segura", 68, pageHeight - 8);
+  doc.text("Produtos selecionados para o seu jardim", 112, pageHeight - 8);
+
+  if (primeLogo) {
+    try {
+      doc.addImage(primeLogo, "PNG", pageWidth - 54, pageHeight - 13.5, 24, 6.5);
+    } catch {}
+  }
+  if (logo02) {
+    try {
+      doc.addImage(logo02, "PNG", pageWidth - 27, pageHeight - 14.5, 19, 8.3);
+    } catch {}
   }
 
   const blob = doc.output("blob");
